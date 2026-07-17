@@ -14,6 +14,7 @@ export type TableKey =
 
 type Row = Record<string, string | number | null>;
 type SortState = { column: string; direction: "asc" | "desc" };
+type EditingCell = { rowId: string; column: string; value: string } | null;
 
 const tableLabels: Record<TableKey, string> = {
   courses: "课程",
@@ -110,6 +111,8 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
   const [sort, setSort] = useState<SortState>({ column: tableColumns[activeTable][0], direction: "asc" });
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [savingCell, setSavingCell] = useState<string | null>(null);
 
   const columns = tableColumns[activeTable];
 
@@ -118,6 +121,7 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
     setFilter("");
     setVisibleColumns(Object.fromEntries(tableColumns[activeTable].map((column) => [column, true])));
     setMenuOpen(false);
+    setEditingCell(null);
   }, [activeTable]);
 
   async function loadData() {
@@ -174,6 +178,44 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
       body: JSON.stringify({ table: activeTable }),
     });
     await loadData();
+  }
+
+  async function saveCell() {
+    if (!editingCell) return;
+    const cellKey = `${editingCell.rowId}-${editingCell.column}`;
+    setSavingCell(cellKey);
+    const response = await fetch("/api/admin-data", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        table: activeTable,
+        id: editingCell.rowId,
+        column: editingCell.column,
+        value: editingCell.value,
+      }),
+    });
+    const payload = (await response.json()) as Partial<Record<TableKey, Row[]>> & { error?: string };
+    if (!payload.error) {
+      setData({
+        courses: payload.courses ?? [],
+        sessions: payload.sessions ?? [],
+        classrooms: payload.classrooms ?? [],
+        students: payload.students ?? [],
+        teachers: payload.teachers ?? [],
+        teacherBookings: payload.teacherBookings ?? [],
+        studentBookings: payload.studentBookings ?? [],
+      });
+    }
+    setEditingCell(null);
+    setSavingCell(null);
+  }
+
+  function startEdit(row: Row, column: string) {
+    setEditingCell({
+      rowId: String(row.id),
+      column,
+      value: String(row[column] ?? ""),
+    });
   }
 
   return (
@@ -253,7 +295,37 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
                   <tr key={String(row.id ?? index)}>
                     {visible.map((column) => (
                       <td key={column}>
-                        <span className={column.includes("status") ? "status-cell" : ""}>{String(row[column] ?? "")}</span>
+                        {editingCell?.rowId === String(row.id) && editingCell.column === column ? (
+                          <input
+                            autoFocus
+                            className="cell-input"
+                            onBlur={saveCell}
+                            onChange={(event) =>
+                              setEditingCell((current) =>
+                                current ? { ...current, value: event.target.value } : current,
+                              )
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                saveCell();
+                              }
+                              if (event.key === "Escape") {
+                                setEditingCell(null);
+                              }
+                            }}
+                            value={editingCell.value}
+                          />
+                        ) : (
+                          <button
+                            className={column.includes("status") ? "editable-cell status-cell" : "editable-cell"}
+                            disabled={savingCell === `${String(row.id)}-${column}`}
+                            onClick={() => startEdit(row, column)}
+                            type="button"
+                          >
+                            {savingCell === `${String(row.id)}-${column}` ? "保存中" : String(row[column] ?? "")}
+                          </button>
+                        )}
                       </td>
                     ))}
                   </tr>

@@ -46,6 +46,16 @@ const tableColumns: Record<TableKey, string[]> = {
   studentBookings: ["course", "session", "student", "starts_at", "ends_at", "fee_amount", "payment_status", "status"],
 };
 
+const editableColumns: Record<TableKey, Set<string>> = {
+  courses: new Set(["code", "name", "level", "total_sessions", "price", "status"]),
+  sessions: new Set(["session_no", "title", "starts_at", "ends_at", "status"]),
+  classrooms: new Set(["code", "name", "location", "capacity", "status"]),
+  students: new Set(["code", "name", "level", "guardian_phone", "status"]),
+  teachers: new Set(["code", "name", "subject", "phone", "status"]),
+  teacherBookings: new Set(["compensation_amount", "compensation_status", "status"]),
+  studentBookings: new Set(["fee_amount", "payment_status", "status"]),
+};
+
 const columnLabels: Record<string, string> = {
   code: "编号",
   name: "名称",
@@ -211,6 +221,7 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
   }
 
   function startEdit(row: Row, column: string) {
+    if (!editableColumns[activeTable].has(column)) return;
     setEditingCell({
       rowId: String(row.id),
       column,
@@ -317,14 +328,20 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
                             value={editingCell.value}
                           />
                         ) : (
-                          <button
-                            className={column.includes("status") ? "editable-cell status-cell" : "editable-cell"}
-                            disabled={savingCell === `${String(row.id)}-${column}`}
-                            onClick={() => startEdit(row, column)}
-                            type="button"
-                          >
-                            {savingCell === `${String(row.id)}-${column}` ? "保存中" : String(row[column] ?? "")}
-                          </button>
+                          editableColumns[activeTable].has(column) ? (
+                            <button
+                              className={column.includes("status") ? "editable-cell status-cell" : "editable-cell"}
+                              disabled={savingCell === `${String(row.id)}-${column}`}
+                              onClick={() => startEdit(row, column)}
+                              type="button"
+                            >
+                              {savingCell === `${String(row.id)}-${column}` ? "保存中" : String(row[column] ?? "")}
+                            </button>
+                          ) : (
+                            <span className={column.includes("status") ? "readonly-cell status-cell" : "readonly-cell"}>
+                              {String(row[column] ?? "")}
+                            </span>
+                          )
                         )}
                       </td>
                     ))}

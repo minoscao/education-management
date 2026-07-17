@@ -183,13 +183,13 @@ function nextId(prefix: string) {
 }
 
 const directColumnMap = {
-  courses: new Set(["code", "name", "level", "total_sessions", "price", "status", "created_at"]),
-  classrooms: new Set(["code", "name", "location", "capacity", "status", "created_at"]),
-  students: new Set(["code", "name", "level", "guardian_phone", "status", "created_at"]),
-  teachers: new Set(["code", "name", "subject", "phone", "status", "created_at"]),
+  courses: new Set(["code", "name", "level", "total_sessions", "price", "status"]),
+  classrooms: new Set(["code", "name", "location", "capacity", "status"]),
+  students: new Set(["code", "name", "level", "guardian_phone", "status"]),
+  teachers: new Set(["code", "name", "subject", "phone", "status"]),
   sessions: new Set(["session_no", "title", "starts_at", "ends_at", "status"]),
-  teacherBookings: new Set(["starts_at", "ends_at", "compensation_amount", "compensation_status", "status"]),
-  studentBookings: new Set(["starts_at", "ends_at", "fee_amount", "payment_status", "status"]),
+  teacherBookings: new Set(["compensation_amount", "compensation_status", "status"]),
+  studentBookings: new Set(["fee_amount", "payment_status", "status"]),
 } satisfies Record<TableKey, Set<string>>;
 
 const directTableMap = {
@@ -320,117 +320,7 @@ export async function PATCH(request: Request) {
       return GET();
     }
 
-    if (table === "sessions" && column === "course") {
-      await db
-        .prepare(
-          `UPDATE courses
-          SET name = ?
-          WHERE id = (SELECT course_id FROM course_sessions WHERE id = ?)`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "sessions" && column === "classroom") {
-      await db
-        .prepare(
-          `UPDATE classrooms
-          SET name = ?
-          WHERE id = (
-            SELECT resource_id FROM resource_bookings
-            WHERE course_session_id = ? AND resource_type = 'classroom'
-            LIMIT 1
-          )`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "teacherBookings" && column === "course") {
-      await db
-        .prepare(
-          `UPDATE courses
-          SET name = ?
-          WHERE id = (
-            SELECT course_sessions.course_id
-            FROM teacher_bookings
-            JOIN course_sessions ON course_sessions.id = teacher_bookings.course_session_id
-            WHERE teacher_bookings.id = ?
-          )`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "teacherBookings" && column === "session") {
-      await db
-        .prepare(
-          `UPDATE course_sessions
-          SET title = ?
-          WHERE id = (SELECT course_session_id FROM teacher_bookings WHERE id = ?)`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "teacherBookings" && column === "teacher") {
-      await db
-        .prepare(
-          `UPDATE teachers
-          SET name = ?
-          WHERE id = (SELECT teacher_id FROM teacher_bookings WHERE id = ?)`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "studentBookings" && column === "course") {
-      await db
-        .prepare(
-          `UPDATE courses
-          SET name = ?
-          WHERE id = (
-            SELECT course_sessions.course_id
-            FROM student_bookings
-            JOIN course_sessions ON course_sessions.id = student_bookings.course_session_id
-            WHERE student_bookings.id = ?
-          )`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "studentBookings" && column === "session") {
-      await db
-        .prepare(
-          `UPDATE course_sessions
-          SET title = ?
-          WHERE id = (SELECT course_session_id FROM student_bookings WHERE id = ?)`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    if (table === "studentBookings" && column === "student") {
-      await db
-        .prepare(
-          `UPDATE students
-          SET name = ?
-          WHERE id = (SELECT student_id FROM student_bookings WHERE id = ?)`,
-        )
-        .bind(value, id)
-        .run();
-      return GET();
-    }
-
-    return Response.json({ error: "这个字段暂时不能修改" }, { status: 400 });
+    return Response.json({ error: "这个字段来自其他表，请到来源表修改" }, { status: 400 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "修改失败" }, { status: 500 });
   }

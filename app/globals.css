@@ -329,6 +329,16 @@ td {
   text-underline-offset: 3px;
 }
 
+.readonly-cell {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  color: #263644;
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 .cell-input {
   width: 100%;
   min-height: 30px;

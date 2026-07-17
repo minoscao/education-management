@@ -1,8 +1,15 @@
 import { env } from "cloudflare:workers";
 
-type TableKey = "courses" | "sessions" | "classrooms" | "students" | "teachers" | "bookings";
+type TableKey =
+  | "courses"
+  | "sessions"
+  | "classrooms"
+  | "students"
+  | "teachers"
+  | "teacherBookings"
+  | "studentBookings";
 
-const tableNames: Record<Exclude<TableKey, "sessions" | "bookings">, string> = {
+const tableNames: Record<Extract<TableKey, "courses" | "classrooms" | "students" | "teachers">, string> = {
   courses: "courses",
   classrooms: "classrooms",
   students: "students",
@@ -75,23 +82,23 @@ const seedStatements = [
     ],
   },
   {
-    sql: "INSERT OR IGNORE INTO teacher_bookings (id, course_session_id, teacher_id, starts_at, ends_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    sql: "INSERT OR IGNORE INTO teacher_bookings (id, course_session_id, teacher_id, starts_at, ends_at, compensation_amount, compensation_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     rows: [
-      ["tb-cn-01", "session-cn-01", "teacher-zhang", "2026-07-18 09:00", "2026-07-18 10:30", "reserved", now],
-      ["tb-cn-02", "session-cn-02", "teacher-zhang", "2026-07-25 09:00", "2026-07-25 10:30", "reserved", now],
-      ["tb-math-01", "session-math-01", "teacher-sophia", "2026-07-18 10:30", "2026-07-18 12:00", "reserved", now],
-      ["tb-violin-01", "session-violin-01", "teacher-lim", "2026-07-22 18:00", "2026-07-22 19:00", "reserved", now],
+      ["tb-cn-01", "session-cn-01", "teacher-zhang", "2026-07-18 09:00", "2026-07-18 10:30", 90, "unpaid", "reserved", now],
+      ["tb-cn-02", "session-cn-02", "teacher-zhang", "2026-07-25 09:00", "2026-07-25 10:30", 90, "unpaid", "reserved", now],
+      ["tb-math-01", "session-math-01", "teacher-sophia", "2026-07-18 10:30", "2026-07-18 12:00", 80, "unpaid", "reserved", now],
+      ["tb-violin-01", "session-violin-01", "teacher-lim", "2026-07-22 18:00", "2026-07-22 19:00", 120, "unpaid", "reserved", now],
     ],
   },
   {
-    sql: "INSERT OR IGNORE INTO student_bookings (id, course_session_id, student_id, enrollment_id, starts_at, ends_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    sql: "INSERT OR IGNORE INTO student_bookings (id, course_session_id, student_id, enrollment_id, starts_at, ends_at, fee_amount, payment_status, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     rows: [
-      ["sb-allen-cn-01", "session-cn-01", "student-allen", "enroll-allen-cn", "2026-07-18 09:00", "2026-07-18 10:30", "reserved", now],
-      ["sb-may-cn-01", "session-cn-01", "student-may", "enroll-may-cn", "2026-07-18 09:00", "2026-07-18 10:30", "reserved", now],
-      ["sb-jerry-cn-01", "session-cn-01", "student-jerry", "enroll-jerry-cn", "2026-07-18 09:00", "2026-07-18 10:30", "reserved", now],
-      ["sb-lina-cn-01", "session-cn-01", "student-lina", "enroll-lina-cn", "2026-07-18 09:00", "2026-07-18 10:30", "reserved", now],
-      ["sb-allen-math-01", "session-math-01", "student-allen", "enroll-allen-math", "2026-07-18 10:30", "2026-07-18 12:00", "reserved", now],
-      ["sb-may-violin-01", "session-violin-01", "student-may", "enroll-may-violin", "2026-07-22 18:00", "2026-07-22 19:00", "reserved", now],
+      ["sb-allen-cn-01", "session-cn-01", "student-allen", "enroll-allen-cn", "2026-07-18 09:00", "2026-07-18 10:30", 25, "paid", "reserved", now],
+      ["sb-may-cn-01", "session-cn-01", "student-may", "enroll-may-cn", "2026-07-18 09:00", "2026-07-18 10:30", 25, "paid", "reserved", now],
+      ["sb-jerry-cn-01", "session-cn-01", "student-jerry", "enroll-jerry-cn", "2026-07-18 09:00", "2026-07-18 10:30", 25, "unpaid", "reserved", now],
+      ["sb-lina-cn-01", "session-cn-01", "student-lina", "enroll-lina-cn", "2026-07-18 09:00", "2026-07-18 10:30", 25, "paid", "reserved", now],
+      ["sb-allen-math-01", "session-math-01", "student-allen", "enroll-allen-math", "2026-07-18 10:30", "2026-07-18 12:00", 37.5, "paid", "reserved", now],
+      ["sb-may-violin-01", "session-violin-01", "student-may", "enroll-may-violin", "2026-07-22 18:00", "2026-07-22 19:00", 56.25, "paid", "reserved", now],
     ],
   },
 ];
@@ -110,6 +117,13 @@ async function seed() {
       await db.prepare(statement.sql).bind(...row).run();
     }
   }
+
+  await db.prepare("UPDATE teacher_bookings SET compensation_amount = 90 WHERE id IN ('tb-cn-01', 'tb-cn-02') AND compensation_amount = 0").run();
+  await db.prepare("UPDATE teacher_bookings SET compensation_amount = 80 WHERE id = 'tb-math-01' AND compensation_amount = 0").run();
+  await db.prepare("UPDATE teacher_bookings SET compensation_amount = 120 WHERE id = 'tb-violin-01' AND compensation_amount = 0").run();
+  await db.prepare("UPDATE student_bookings SET fee_amount = 25 WHERE course_session_id IN ('session-cn-01', 'session-cn-02') AND fee_amount = 0").run();
+  await db.prepare("UPDATE student_bookings SET fee_amount = 37.5 WHERE course_session_id = 'session-math-01' AND fee_amount = 0").run();
+  await db.prepare("UPDATE student_bookings SET fee_amount = 56.25 WHERE course_session_id = 'session-violin-01' AND fee_amount = 0").run();
 }
 
 async function listTable(table: TableKey) {
@@ -119,43 +133,44 @@ async function listTable(table: TableKey) {
     return db
       .prepare(
         `SELECT course_sessions.id, courses.name AS course, course_sessions.session_no, course_sessions.title,
-          course_sessions.starts_at, course_sessions.ends_at, course_sessions.status
+          course_sessions.starts_at, course_sessions.ends_at, classrooms.name AS classroom, course_sessions.status
         FROM course_sessions
         JOIN courses ON courses.id = course_sessions.course_id
+        LEFT JOIN resource_bookings ON resource_bookings.course_session_id = course_sessions.id
+        LEFT JOIN classrooms ON classrooms.id = resource_bookings.resource_id
         ORDER BY course_sessions.starts_at ASC`,
       )
       .all();
   }
 
-  if (table === "bookings") {
+  if (table === "teacherBookings") {
     return db
       .prepare(
-        `SELECT * FROM (
-          SELECT resource_bookings.id AS id, '教室' AS booking_type, courses.name AS course, course_sessions.title AS session,
-            classrooms.name AS target, resource_bookings.starts_at AS starts_at, resource_bookings.ends_at AS ends_at,
-            resource_bookings.status AS status
-          FROM resource_bookings
-          JOIN course_sessions ON course_sessions.id = resource_bookings.course_session_id
-          JOIN courses ON courses.id = course_sessions.course_id
-          JOIN classrooms ON classrooms.id = resource_bookings.resource_id
-          UNION ALL
-          SELECT teacher_bookings.id AS id, '老师' AS booking_type, courses.name AS course, course_sessions.title AS session,
-            teachers.name AS target, teacher_bookings.starts_at AS starts_at, teacher_bookings.ends_at AS ends_at,
-            teacher_bookings.status AS status
-          FROM teacher_bookings
-          JOIN course_sessions ON course_sessions.id = teacher_bookings.course_session_id
-          JOIN courses ON courses.id = course_sessions.course_id
-          JOIN teachers ON teachers.id = teacher_bookings.teacher_id
-          UNION ALL
-          SELECT student_bookings.id AS id, '学生' AS booking_type, courses.name AS course, course_sessions.title AS session,
-            students.name AS target, student_bookings.starts_at AS starts_at, student_bookings.ends_at AS ends_at,
-            student_bookings.status AS status
-          FROM student_bookings
-          JOIN course_sessions ON course_sessions.id = student_bookings.course_session_id
-          JOIN courses ON courses.id = course_sessions.course_id
-          JOIN students ON students.id = student_bookings.student_id
-        ) AS booking_rows
-        ORDER BY booking_rows.starts_at ASC`,
+        `SELECT teacher_bookings.id, courses.name AS course, course_sessions.title AS session,
+          teachers.name AS teacher, teacher_bookings.starts_at, teacher_bookings.ends_at,
+          teacher_bookings.compensation_amount, teacher_bookings.compensation_status,
+          teacher_bookings.status
+        FROM teacher_bookings
+        JOIN course_sessions ON course_sessions.id = teacher_bookings.course_session_id
+        JOIN courses ON courses.id = course_sessions.course_id
+        JOIN teachers ON teachers.id = teacher_bookings.teacher_id
+        ORDER BY teacher_bookings.starts_at ASC`,
+      )
+      .all();
+  }
+
+  if (table === "studentBookings") {
+    return db
+      .prepare(
+        `SELECT student_bookings.id, courses.name AS course, course_sessions.title AS session,
+          students.name AS student, student_bookings.starts_at, student_bookings.ends_at,
+          student_bookings.fee_amount, student_bookings.payment_status,
+          student_bookings.status
+        FROM student_bookings
+        JOIN course_sessions ON course_sessions.id = student_bookings.course_session_id
+        JOIN courses ON courses.id = course_sessions.course_id
+        JOIN students ON students.id = student_bookings.student_id
+        ORDER BY student_bookings.starts_at ASC`,
       )
       .all();
   }
@@ -167,16 +182,33 @@ function nextId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}`;
 }
 
+async function getCourseSessionFee(courseSessionId: string) {
+  const db = getBinding();
+  const result = await db
+    .prepare(
+      `SELECT courses.price, courses.total_sessions
+      FROM course_sessions
+      JOIN courses ON courses.id = course_sessions.course_id
+      WHERE course_sessions.id = ?`,
+    )
+    .bind(courseSessionId)
+    .first<{ price: number; total_sessions: number }>();
+
+  if (!result || !result.total_sessions) return 0;
+  return Math.round((Number(result.price) / Number(result.total_sessions)) * 100) / 100;
+}
+
 export async function GET() {
   try {
     await seed();
-    const [courses, sessions, classrooms, students, teachers, bookings] = await Promise.all([
+    const [courses, sessions, classrooms, students, teachers, teacherBookings, studentBookings] = await Promise.all([
       listTable("courses"),
       listTable("sessions"),
       listTable("classrooms"),
       listTable("students"),
       listTable("teachers"),
-      listTable("bookings"),
+      listTable("teacherBookings"),
+      listTable("studentBookings"),
     ]);
 
     return Response.json({
@@ -185,7 +217,8 @@ export async function GET() {
       classrooms: classrooms.results,
       students: students.results,
       teachers: teachers.results,
-      bookings: bookings.results,
+      teacherBookings: teacherBookings.results,
+      studentBookings: studentBookings.results,
     });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "读取失败" }, { status: 500 });
@@ -200,46 +233,40 @@ export async function POST(request: Request) {
     const db = getBinding();
 
     if (table === "courses") {
-      const id = nextId("course");
       await db
-        .prepare(
-          "INSERT INTO courses (id, code, name, level, total_sessions, price, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id, `CRS-${Date.now().toString().slice(-4)}`, "新课程", "Year 7", 8, 0, "draft")
+        .prepare("INSERT INTO courses (id, code, name, level, total_sessions, price, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(nextId("course"), `CRS-${Date.now().toString().slice(-4)}`, "新课程", "Year 7", 8, 0, "draft")
         .run();
     } else if (table === "sessions") {
-      const id = nextId("session");
       await db
-        .prepare(
-          "INSERT INTO course_sessions (id, course_id, session_no, title, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id, "course-cn-y7", 1, "新课节", "待安排", "待安排", "draft")
+        .prepare("INSERT INTO course_sessions (id, course_id, session_no, title, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(nextId("session"), "course-cn-y7", 1, "新课节", "待安排", "待安排", "draft")
         .run();
     } else if (table === "classrooms") {
-      const id = nextId("room");
       await db
         .prepare("INSERT INTO classrooms (id, code, name, location, capacity, status) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(id, `R-${Date.now().toString().slice(-4)}`, "新教室", "待设置", 10, "active")
+        .bind(nextId("room"), `R-${Date.now().toString().slice(-4)}`, "新教室", "待设置", 10, "active")
         .run();
     } else if (table === "students") {
-      const id = nextId("student");
       await db
         .prepare("INSERT INTO students (id, code, name, level, guardian_phone, status) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(id, `STU-${Date.now().toString().slice(-4)}`, "新学生", "Year 7", "", "active")
+        .bind(nextId("student"), `STU-${Date.now().toString().slice(-4)}`, "新学生", "Year 7", "", "active")
         .run();
     } else if (table === "teachers") {
-      const id = nextId("teacher");
       await db
         .prepare("INSERT INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(id, `TCH-${Date.now().toString().slice(-4)}`, "新老师", "待设置", "", "available")
+        .bind(nextId("teacher"), `TCH-${Date.now().toString().slice(-4)}`, "新老师", "待设置", "", "available")
         .run();
-    } else if (table === "bookings") {
-      const id = nextId("booking");
+    } else if (table === "teacherBookings") {
       await db
-        .prepare(
-          "INSERT INTO resource_bookings (id, course_session_id, resource_type, resource_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id, "session-cn-01", "classroom", "room-a201", "待安排", "待安排", "draft")
+        .prepare("INSERT INTO teacher_bookings (id, course_session_id, teacher_id, starts_at, ends_at, compensation_amount, compensation_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(nextId("tb"), "session-cn-01", "teacher-zhang", "待安排", "待安排", 0, "unpaid", "draft")
+        .run();
+    } else if (table === "studentBookings") {
+      const feeAmount = await getCourseSessionFee("session-cn-01");
+      await db
+        .prepare("INSERT INTO student_bookings (id, course_session_id, student_id, enrollment_id, starts_at, ends_at, fee_amount, payment_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(nextId("sb"), "session-cn-01", "student-allen", "enroll-allen-cn", "待安排", "待安排", feeAmount, "unpaid", "draft")
         .run();
     } else {
       return Response.json({ error: "未知表格" }, { status: 400 });

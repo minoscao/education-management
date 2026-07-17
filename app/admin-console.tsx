@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-export type TableKey = "courses" | "sessions" | "classrooms" | "students" | "teachers" | "bookings";
+export type TableKey =
+  | "courses"
+  | "sessions"
+  | "classrooms"
+  | "students"
+  | "teachers"
+  | "teacherBookings"
+  | "studentBookings";
+
 type Row = Record<string, string | number | null>;
 type SortState = { column: string; direction: "asc" | "desc" };
 
@@ -13,25 +21,28 @@ const tableLabels: Record<TableKey, string> = {
   classrooms: "课堂资源",
   students: "学生",
   teachers: "老师",
-  bookings: "Booking",
+  teacherBookings: "老师 Booking",
+  studentBookings: "学生 Booking",
 };
 
 const tableDescriptions: Record<TableKey, string> = {
   courses: "课程是可售卖的教学产品，可以预先生成课节和占用资源。",
-  sessions: "课节是课程下面的一次具体上课计划。",
+  sessions: "课节是课程下面的一次具体上课计划，教室资源通过资源占用锁定。",
   classrooms: "课堂资源只是房间或空间，不承载学生老师数据。",
-  students: "学生基础资料，后续通过报名和 student booking 进入课节。",
-  teachers: "老师基础资料，后续通过 teacher booking 占用老师时间。",
-  bookings: "Booking 是核心占用层，统一查看教室、老师、学生被哪节课占用。",
+  students: "学生基础资料，后续通过报名和学生 Booking 进入课节。",
+  teachers: "老师基础资料，后续通过老师 Booking 占用老师时间。",
+  teacherBookings: "老师 Booking 记录老师被哪一节课占用，以及对应报酬。",
+  studentBookings: "学生 Booking 记录学生被安排到哪一节课，以及课程费用平摊到该课节的金额。",
 };
 
 const tableColumns: Record<TableKey, string[]> = {
   courses: ["code", "name", "level", "total_sessions", "price", "status", "created_at"],
-  sessions: ["course", "session_no", "title", "starts_at", "ends_at", "status"],
+  sessions: ["course", "session_no", "title", "starts_at", "ends_at", "classroom", "status"],
   classrooms: ["code", "name", "location", "capacity", "status", "created_at"],
   students: ["code", "name", "level", "guardian_phone", "status", "created_at"],
   teachers: ["code", "name", "subject", "phone", "status", "created_at"],
-  bookings: ["booking_type", "course", "session", "target", "starts_at", "ends_at", "status"],
+  teacherBookings: ["course", "session", "teacher", "starts_at", "ends_at", "compensation_amount", "compensation_status", "status"],
+  studentBookings: ["course", "session", "student", "starts_at", "ends_at", "fee_amount", "payment_status", "status"],
 };
 
 const columnLabels: Record<string, string> = {
@@ -47,27 +58,53 @@ const columnLabels: Record<string, string> = {
   title: "标题",
   starts_at: "开始时间",
   ends_at: "结束时间",
+  classroom: "课堂资源",
   location: "位置",
   capacity: "容量",
   guardian_phone: "家长电话",
   subject: "科目",
   phone: "电话",
-  booking_type: "Booking 类型",
   session: "课节",
-  target: "占用对象",
+  teacher: "老师",
+  student: "学生",
+  compensation_amount: "老师报酬",
+  compensation_status: "报酬状态",
+  fee_amount: "课节费用",
+  payment_status: "付款状态",
 };
 
-const navItems: TableKey[] = ["courses", "sessions", "classrooms", "students", "teachers", "bookings"];
+const routeByTable: Record<TableKey, string> = {
+  courses: "/courses",
+  sessions: "/sessions",
+  classrooms: "/classrooms",
+  students: "/students",
+  teachers: "/teachers",
+  teacherBookings: "/teacher-bookings",
+  studentBookings: "/student-bookings",
+};
+
+const navItems: TableKey[] = [
+  "courses",
+  "sessions",
+  "classrooms",
+  "students",
+  "teachers",
+  "teacherBookings",
+  "studentBookings",
+];
+
+const emptyData: Record<TableKey, Row[]> = {
+  courses: [],
+  sessions: [],
+  classrooms: [],
+  students: [],
+  teachers: [],
+  teacherBookings: [],
+  studentBookings: [],
+};
 
 export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
-  const [data, setData] = useState<Record<TableKey, Row[]>>({
-    courses: [],
-    sessions: [],
-    classrooms: [],
-    students: [],
-    teachers: [],
-    bookings: [],
-  });
+  const [data, setData] = useState<Record<TableKey, Row[]>>(emptyData);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortState>({ column: tableColumns[activeTable][0], direction: "asc" });
@@ -83,28 +120,26 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
     setMenuOpen(false);
   }, [activeTable]);
 
-  useEffect(() => {
-    let mounted = true;
-    async function loadData() {
-      setLoading(true);
-      const response = await fetch("/api/admin-data", { cache: "no-store" });
-      const payload = (await response.json()) as Record<TableKey, Row[]> & { error?: string };
-      if (mounted && !payload.error) {
-        setData({
-          courses: payload.courses ?? [],
-          sessions: payload.sessions ?? [],
-          classrooms: payload.classrooms ?? [],
-          students: payload.students ?? [],
-          teachers: payload.teachers ?? [],
-          bookings: payload.bookings ?? [],
-        });
-      }
-      setLoading(false);
+  async function loadData() {
+    setLoading(true);
+    const response = await fetch("/api/admin-data", { cache: "no-store" });
+    const payload = (await response.json()) as Partial<Record<TableKey, Row[]>> & { error?: string };
+    if (!payload.error) {
+      setData({
+        courses: payload.courses ?? [],
+        sessions: payload.sessions ?? [],
+        classrooms: payload.classrooms ?? [],
+        students: payload.students ?? [],
+        teachers: payload.teachers ?? [],
+        teacherBookings: payload.teacherBookings ?? [],
+        studentBookings: payload.studentBookings ?? [],
+      });
     }
+    setLoading(false);
+  }
+
+  useEffect(() => {
     loadData().catch(() => setLoading(false));
-    return () => {
-      mounted = false;
-    };
   }, []);
 
   const visible = columns.filter((column) => visibleColumns[column] !== false);
@@ -133,21 +168,12 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
 
   async function createRow() {
     setLoading(true);
-    const response = await fetch("/api/admin-data", {
+    await fetch("/api/admin-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: activeTable }),
     });
-    const payload = (await response.json()) as Record<TableKey, Row[]>;
-    setData({
-      courses: payload.courses ?? [],
-      sessions: payload.sessions ?? [],
-      classrooms: payload.classrooms ?? [],
-      students: payload.students ?? [],
-      teachers: payload.teachers ?? [],
-      bookings: payload.bookings ?? [],
-    });
-    setLoading(false);
+    await loadData();
   }
 
   return (
@@ -156,7 +182,7 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
         <div className="brand">P</div>
         <nav>
           {navItems.map((item) => (
-            <Link className={item === activeTable ? "active" : ""} href={`/${item}`} key={item}>
+            <Link className={item === activeTable ? "active" : ""} href={routeByTable[item]} key={item}>
               {tableLabels[item]}
               <span>{data[item].length}</span>
             </Link>
@@ -227,7 +253,7 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
                   <tr key={String(row.id ?? index)}>
                     {visible.map((column) => (
                       <td key={column}>
-                        <span className={column === "status" ? "status-cell" : ""}>{String(row[column] ?? "")}</span>
+                        <span className={column.includes("status") ? "status-cell" : ""}>{String(row[column] ?? "")}</span>
                       </td>
                     ))}
                   </tr>
@@ -236,9 +262,7 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
             </table>
           </div>
 
-          <footer className="table-footer">
-            {loading ? "读取中" : `共 ${rows.length} 条`}
-          </footer>
+          <footer className="table-footer">{loading ? "读取中" : `共 ${rows.length} 条`}</footer>
         </section>
       </section>
     </main>

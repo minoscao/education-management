@@ -78,6 +78,8 @@ export const teacherBookings = sqliteTable("teacher_bookings", {
   teacherId: text("teacher_id").notNull().references(() => teachers.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
+  compensationAmount: real("compensation_amount").notNull().default(0),
+  compensationStatus: text("compensation_status").notNull().default("unpaid"),
   status: text("status").notNull().default("reserved"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -89,6 +91,8 @@ export const studentBookings = sqliteTable("student_bookings", {
   enrollmentId: text("enrollment_id").references(() => enrollments.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
+  feeAmount: real("fee_amount").notNull().default(0),
+  paymentStatus: text("payment_status").notNull().default("unpaid"),
   status: text("status").notNull().default("reserved"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

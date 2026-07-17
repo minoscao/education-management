@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AusCareer Skill Board</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-theme="dark">
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">AC</div>
+          <div>
+            <p class="eyebrow">Australia career development system</p>
+            <h1>Occupation Skills Board</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="ghost-button" id="adminButton" type="button">Admin panel</button>
+          <button class="ghost-button" id="themeToggle" type="button">Light mode</button>
+          <button class="ghost-button" id="resetProfile">Reset profile</button>
+          <button class="primary-button" id="exportPlan">Export roadmap</button>
+        </div>
+      </header>
+
+      <main class="board">
+        <section class="controlbar" aria-label="Occupation filters">
+          <div class="search-panel">
+            <label for="searchInput">Search occupation or skill</label>
+            <input id="searchInput" type="search" placeholder="Business analyst, SQL, leadership" />
+          </div>
+
+          <label class="select-panel" for="majorSelect">
+            <span>Classification</span>
+            <select id="majorSelect"></select>
+          </label>
+
+          <label class="select-panel" for="subMajorSelect">
+            <span>Sub-major group</span>
+            <select id="subMajorSelect"></select>
+          </label>
+
+          <label class="select-panel compact-select" for="visaSelect">
+            <span>Migration need</span>
+            <select id="visaSelect">
+              <option value="482">482</option>
+              <option value="186">186</option>
+              <option value="190">190</option>
+              <option value="189">189</option>
+              <option value="491">491</option>
+              <option value="494">494</option>
+              <option value="all">All visas</option>
+            </select>
+          </label>
+
+          <label class="select-panel" for="sortSelect">
+            <span>Sort by</span>
+            <select id="sortSelect">
+              <option value="fit">My suitability</option>
+              <option value="salary">Salary estimate</option>
+              <option value="invite">Latest invited score</option>
+              <option value="offers">Open job offers</option>
+            </select>
+          </label>
+
+          <label class="toggle-panel">
+            <span class="mini-icon">◆</span>
+            <input type="checkbox" id="offerOnly" />
+            <span>Job offer only</span>
+          </label>
+        </section>
+
+        <aside class="filters" aria-label="Student profile filters">
+
+          <div class="filter-group">
+            <div class="filter-heading">Entry profile</div>
+            <label class="check-row"><input type="checkbox" id="studentFriendly" /><span>Student friendly</span></label>
+            <label class="check-row"><input type="checkbox" id="shortageOnly" /><span>Priority or shortage signal</span></label>
+          </div>
+
+          <section class="profile-card" aria-label="Student evidenced profile">
+            <div class="section-title">
+              <span>Student profile</span>
+              <strong>Evidence based</strong>
+            </div>
+            <div id="profileScores" class="profile-list"></div>
+            <button class="primary-button revaluation-button" id="revaluationButton" type="button">Revaluation</button>
+          </section>
+        </aside>
+
+        <section class="results" aria-label="Occupation results">
+          <div class="search-strip">
+            <div>
+              <p class="eyebrow">Occupation reference target</p>
+              <h2 id="resultTitle">Recommended Australian roles</h2>
+            </div>
+            <div class="result-count" id="resultCount">0 roles</div>
+          </div>
+          <div id="occupationList" class="occupation-list"></div>
+        </section>
+
+        <dialog class="detail-modal" id="occupationModal" aria-labelledby="modalTitle">
+          <div class="modal-shell">
+            <header class="modal-header">
+              <div>
+                <p class="eyebrow" id="modalCode">OSCA</p>
+                <h2 id="modalTitle">Occupation detail</h2>
+              </div>
+              <button class="icon-button" id="closeModal" type="button" aria-label="Close detail">×</button>
+            </header>
+
+            <div class="market-snapshot modal-metrics">
+              <div><span>Suitability</span><strong id="modalFit">--</strong></div>
+              <div><span>Visa options</span><strong id="modalVisas">--</strong></div>
+              <div><span>Salary est.</span><strong id="modalSalary">--</strong></div>
+              <div><span>Latest invited</span><strong id="modalInvite">--</strong></div>
+              <div><span>Open offers</span><strong id="modalOffers">--</strong></div>
+              <div><span>Skill level</span><strong id="modalEntry">--</strong></div>
+            </div>
+
+            <section class="modal-section">
+              <div class="section-title"><span>OSCA classification</span><strong>official</strong></div>
+              <p id="modalClassification" class="detail-text"></p>
+            </section>
+
+            <div class="modal-content-grid">
+              <div>
+                <div class="detail-tabs" role="tablist" aria-label="Occupation detail">
+                  <button class="detail-tab active" data-detail-tab="skills" type="button">Skills</button>
+                  <button class="detail-tab" data-detail-tab="tasks" type="button">Task</button>
+                </div>
+
+                <section class="modal-section detail-panel active" id="skillsDetailPanel">
+                  <div class="section-title"><span>Skill requirements</span><strong id="modalSkillStatus">mapped</strong></div>
+                  <div id="modalSkills" class="skill-list"></div>
+                </section>
+
+                <section class="modal-section detail-panel" id="tasksDetailPanel">
+                  <div class="section-title"><span>Occupation tasks</span><strong>OSCA</strong></div>
+                  <div id="modalTasks" class="task-list"></div>
+                </section>
+              </div>
+
+              <aside class="project-hub-panel" aria-label="Project Hub recommendations">
+                <div class="section-title"><span>Project Hub list</span><strong>pathways</strong></div>
+                <div id="modalProjects" class="hub-list"></div>
+              </aside>
+            </div>
+
+            <footer class="modal-actionbar">
+              <button class="ghost-button" type="button">Consult a advisor</button>
+              <button class="primary-button" type="button">Apply project hub</button>
+            </footer>
+          </div>
+        </dialog>
+
+        <dialog class="skill-modal" id="skillRubricModal" aria-labelledby="skillRubricTitle">
+          <div class="skill-rubric-shell">
+            <header class="modal-header">
+              <div>
+                <p class="eyebrow">ASC 10-point evidenced score</p>
+                <h2 id="skillRubricTitle">Skill standard</h2>
+              </div>
+              <button class="icon-button" id="closeSkillRubric" type="button" aria-label="Close skill standard">×</button>
+            </header>
+            <p class="detail-text" id="skillRubricIntro"></p>
+            <div class="rubric-grid" id="skillRubricGrid"></div>
+            <footer class="sources">
+              <span>Basis:</span>
+              <a href="https://www.jobsandskills.gov.au/consultations/draft-australian-skills-classification-occupation-profiles" target="_blank" rel="noreferrer">Australian Skills Classification</a>
+              <a href="https://www.dewr.gov.au/foundation-skills/australian-core-skills-framework-acsf" target="_blank" rel="noreferrer">ACSF</a>
+              <a href="https://www.dewr.gov.au/skills-information-training-providers/core-skills-work-developmental-framework/key-features-core-skills-work-developmental-framework" target="_blank" rel="noreferrer">Core Skills for Work</a>
+            </footer>
+          </div>
+        </dialog>
+
+        <dialog class="skill-modal" id="revaluationModal" aria-labelledby="revaluationTitle">
+          <div class="skill-rubric-shell">
+            <header class="modal-header">
+              <div>
+                <p class="eyebrow">Temporary assessment editor</p>
+                <h2 id="revaluationTitle">Revaluation</h2>
+              </div>
+              <button class="icon-button" id="closeRevaluation" type="button" aria-label="Close revaluation">×</button>
+            </header>
+            <p class="detail-text">Adjust evidenced scores for this prototype. Later this will connect to the assessment system.</p>
+            <div class="revaluation-list" id="revaluationList"></div>
+            <footer class="modal-form-actions">
+              <button class="ghost-button" id="cancelRevaluation" type="button">Cancel</button>
+              <button class="primary-button" id="saveRevaluation" type="button">Save scores</button>
+            </footer>
+          </div>
+        </dialog>
+
+        <dialog class="admin-modal" id="adminModal" aria-labelledby="adminTitle">
+          <div class="admin-shell">
+            <header class="modal-header">
+              <div>
+                <p class="eyebrow">Operations workspace</p>
+                <h2 id="adminTitle">Admin panel</h2>
+              </div>
+              <button class="icon-button" id="closeAdmin" type="button" aria-label="Close admin panel">×</button>
+            </header>
+
+            <div class="admin-grid">
+              <section class="admin-card">
+                <div class="section-title"><span>Bulk last invited</span><strong>CSV/XLSX</strong></div>
+                <input class="file-input" id="inviteUpload" type="file" accept=".csv,.xlsx" />
+                <p class="skill-note">Columns: occupation code, last invited points, invitation date, source.</p>
+                <div id="invitePreview" class="admin-preview">No file selected.</div>
+              </section>
+
+              <section class="admin-card">
+                <div class="section-title"><span>Project Hub editor</span><strong>task mapping</strong></div>
+                <label class="admin-label">Project name<input id="adminProjectName" type="text" placeholder="Client Discovery Simulation" /></label>
+                <div class="admin-two">
+                  <label class="admin-label">Cycle<input id="adminProjectCycle" type="text" placeholder="2 weeks · 14 hours" /></label>
+                  <label class="admin-label">Review count<input id="adminProjectReviews" type="number" min="0" value="0" /></label>
+                </div>
+                <label class="admin-label">Main objective question<textarea id="adminProjectQuestion" rows="2" placeholder="Can the student produce evidence for stakeholder communication?"></textarea></label>
+                <label class="admin-label">Match occupation or task<input id="taskMatchInput" type="text" placeholder="ICT Business Analyst, requirements, stakeholder" /></label>
+                <div id="taskMatchResults" class="match-results"></div>
+                <div class="admin-two">
+                  <label class="admin-label">Skill<input id="adminSkillName" type="text" placeholder="Requirements analysis" /></label>
+                  <label class="admin-label">From → To<input id="adminSkillMove" type="text" placeholder="4→5" /></label>
+                </div>
+                <label class="admin-label">Level task description<textarea id="adminTaskDescription" rows="3" placeholder="To move from 4 to 5, complete..."></textarea></label>
+                <button class="primary-button" id="addProjectTask" type="button">Add task to project</button>
+                <div id="projectTaskList" class="admin-preview">No project tasks yet.</div>
+              </section>
+
+            </div>
+          </div>
+        </dialog>
+      </main>
+    </div>
+
+    <script src="data/processed/occupations-osca.js"></script>
+    <script src="data/processed/skills-taxonomy.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

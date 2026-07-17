@@ -130,27 +130,32 @@ async function listTable(table: TableKey) {
   if (table === "bookings") {
     return db
       .prepare(
-        `SELECT resource_bookings.id, '教室' AS booking_type, courses.name AS course, course_sessions.title AS session,
-          classrooms.name AS target, resource_bookings.starts_at, resource_bookings.ends_at, resource_bookings.status
-        FROM resource_bookings
-        JOIN course_sessions ON course_sessions.id = resource_bookings.course_session_id
-        JOIN courses ON courses.id = course_sessions.course_id
-        JOIN classrooms ON classrooms.id = resource_bookings.resource_id
-        UNION ALL
-        SELECT teacher_bookings.id, '老师' AS booking_type, courses.name AS course, course_sessions.title AS session,
-          teachers.name AS target, teacher_bookings.starts_at, teacher_bookings.ends_at, teacher_bookings.status
-        FROM teacher_bookings
-        JOIN course_sessions ON course_sessions.id = teacher_bookings.course_session_id
-        JOIN courses ON courses.id = course_sessions.course_id
-        JOIN teachers ON teachers.id = teacher_bookings.teacher_id
-        UNION ALL
-        SELECT student_bookings.id, '学生' AS booking_type, courses.name AS course, course_sessions.title AS session,
-          students.name AS target, student_bookings.starts_at, student_bookings.ends_at, student_bookings.status
-        FROM student_bookings
-        JOIN course_sessions ON course_sessions.id = student_bookings.course_session_id
-        JOIN courses ON courses.id = course_sessions.course_id
-        JOIN students ON students.id = student_bookings.student_id
-        ORDER BY starts_at ASC`,
+        `SELECT * FROM (
+          SELECT resource_bookings.id AS id, '教室' AS booking_type, courses.name AS course, course_sessions.title AS session,
+            classrooms.name AS target, resource_bookings.starts_at AS starts_at, resource_bookings.ends_at AS ends_at,
+            resource_bookings.status AS status
+          FROM resource_bookings
+          JOIN course_sessions ON course_sessions.id = resource_bookings.course_session_id
+          JOIN courses ON courses.id = course_sessions.course_id
+          JOIN classrooms ON classrooms.id = resource_bookings.resource_id
+          UNION ALL
+          SELECT teacher_bookings.id AS id, '老师' AS booking_type, courses.name AS course, course_sessions.title AS session,
+            teachers.name AS target, teacher_bookings.starts_at AS starts_at, teacher_bookings.ends_at AS ends_at,
+            teacher_bookings.status AS status
+          FROM teacher_bookings
+          JOIN course_sessions ON course_sessions.id = teacher_bookings.course_session_id
+          JOIN courses ON courses.id = course_sessions.course_id
+          JOIN teachers ON teachers.id = teacher_bookings.teacher_id
+          UNION ALL
+          SELECT student_bookings.id AS id, '学生' AS booking_type, courses.name AS course, course_sessions.title AS session,
+            students.name AS target, student_bookings.starts_at AS starts_at, student_bookings.ends_at AS ends_at,
+            student_bookings.status AS status
+          FROM student_bookings
+          JOIN course_sessions ON course_sessions.id = student_bookings.course_session_id
+          JOIN courses ON courses.id = course_sessions.course_id
+          JOIN students ON students.id = student_bookings.student_id
+        ) AS booking_rows
+        ORDER BY booking_rows.starts_at ASC`,
       )
       .all();
   }

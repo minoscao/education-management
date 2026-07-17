@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AdminConsole } from "./admin-console";
+import { ManagementPortal } from "./management-portal";
 
 export const metadata: Metadata = {
   title: "Teaching Portal Admin",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <AdminConsole activeTable="courses" />;
+  return <ManagementPortal />;
 }

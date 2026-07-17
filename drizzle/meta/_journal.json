@@ -15,6 +15,13 @@
       "when": 1784285289007,
       "tag": "0001_married_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784311085916,
+      "tag": "0002_safe_scalphunter",
+      "breakpoints": true
     }
   ]
 }

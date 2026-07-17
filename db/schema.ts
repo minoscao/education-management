@@ -96,3 +96,14 @@ export const studentBookings = sqliteTable("student_bookings", {
   status: text("status").notNull().default("reserved"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const attendanceRecords = sqliteTable("attendance_records", {
+  id: text("id").primaryKey(),
+  courseSessionId: text("course_session_id").notNull().references(() => courseSessions.id),
+  studentId: text("student_id").notNull().references(() => students.id),
+  studentBookingId: text("student_booking_id").references(() => studentBookings.id),
+  status: text("status").notNull().default("pending"),
+  note: text("note").notNull().default(""),
+  markedAt: text("marked_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

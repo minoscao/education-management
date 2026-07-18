@@ -23,11 +23,22 @@ export const courseSessions = sqliteTable("course_sessions", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const campuses = sqliteTable("campuses", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  address: text("address").notNull().default(""),
+  mapLabel: text("map_label").notNull().default("Level 1"),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const classrooms = sqliteTable("classrooms", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   location: text("location").notNull(),
+  campusId: text("campus_id").references(() => campuses.id),
   capacity: integer("capacity").notNull(),
   roomType: text("room_type").notNull().default("classroom"),
   resources: text("resources").notNull().default(""),

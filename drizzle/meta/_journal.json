@@ -43,6 +43,13 @@
       "when": 1784367757337,
       "tag": "0005_course-display-color",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784370774545,
+      "tag": "0006_gorgeous_micromacro",
+      "breakpoints": true
     }
   ]
 }

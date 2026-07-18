@@ -31,6 +31,9 @@ type ActionPayload = {
   note?: string;
   phone?: string;
   location?: string;
+  campusId?: string;
+  address?: string;
+  mapLabel?: string;
   roomType?: string;
   resources?: string;
   mapX?: number | string;
@@ -114,6 +117,7 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 async function seedDatabase() {
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
   if (seeded) {
+    await ensureCampuses();
     await ensureClassroomLayouts();
     await ensureCourseColours();
     await ensureOperationalSampleData();
@@ -153,6 +157,7 @@ async function seedDatabase() {
   for (const classroom of classrooms) {
     await execute("INSERT OR IGNORE INTO classrooms (id, code, name, location, capacity, status) VALUES (?, ?, ?, ?, ?, ?)", classroom);
   }
+  await ensureCampuses();
   await ensureClassroomLayouts();
   await execute(
     "INSERT OR IGNORE INTO academic_terms (id, code, name, starts_on, ends_on, status) VALUES (?, ?, ?, ?, ?, ?)",
@@ -219,6 +224,14 @@ async function ensureClassroomLayouts() {
       layout,
     );
   }
+}
+
+async function ensureCampuses() {
+  await execute(
+    "INSERT OR IGNORE INTO campuses (id, code, name, address, map_label, status) VALUES (?, ?, ?, ?, ?, ?)",
+    ["campus-one", "CAMPUS-ONE", "Campus One", "Main campus", "Level 2", "active"],
+  );
+  await execute("UPDATE classrooms SET campus_id = ? WHERE campus_id IS NULL OR campus_id = ''", ["campus-one"]);
 }
 
 async function ensureCourseColours() {
@@ -496,11 +509,31 @@ async function createBaseRecord(payload: ActionPayload) {
     );
   }
   if (payload.action === "createClassroom") {
+    const campus = payload.campusId
+      ? await row<{ id: string; name: string }>("SELECT id, name FROM campuses WHERE id = ?", [payload.campusId])
+      : await row<{ id: string; name: string }>("SELECT id, name FROM campuses WHERE status = 'active' ORDER BY code LIMIT 1");
+    if (!campus) throw new Error("Create a campus before adding a classroom.");
     await execute(
-      "INSERT INTO classrooms (id, code, name, location, capacity, room_type, resources, map_x, map_y, map_width, map_height, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [id("room"), `ROOM-${Date.now().toString().slice(-5)}`, label, payload.location?.trim() || "Main campus", Math.max(1, Math.floor(number(payload.capacity, 12))), payload.roomType?.trim() || "classroom", payload.resources?.trim() || "", 80, 80, 180, 110, "active"],
+      "INSERT INTO classrooms (id, code, name, location, campus_id, capacity, room_type, resources, map_x, map_y, map_width, map_height, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [id("room"), `ROOM-${Date.now().toString().slice(-5)}`, label, payload.location?.trim() || campus.name, campus.id, Math.max(1, Math.floor(number(payload.capacity, 12))), payload.roomType?.trim() || "classroom", payload.resources?.trim() || "", 80, 80, 180, 110, "active"],
     );
   }
+}
+
+async function createCampus(payload: ActionPayload) {
+  const name = payload.name?.trim() || "New campus";
+  await execute(
+    "INSERT INTO campuses (id, code, name, address, map_label, status) VALUES (?, ?, ?, ?, ?, ?)",
+    [id("campus"), `CAMPUS-${Date.now().toString().slice(-6)}`, name, payload.address?.trim() || "", payload.mapLabel?.trim() || "Level 1", "active"],
+  );
+}
+
+async function updateCampus(payload: ActionPayload) {
+  if (!payload.campusId) throw new Error("Campus not found.");
+  await execute(
+    "UPDATE campuses SET name = ?, address = ?, map_label = ? WHERE id = ?",
+    [payload.name?.trim() || "Untitled campus", payload.address?.trim() || "", payload.mapLabel?.trim() || "Level 1", payload.campusId],
+  );
 }
 
 async function updateClassroomMap(payload: ActionPayload) {
@@ -528,7 +561,7 @@ async function updateBusinessHours(payload: ActionPayload) {
 
 async function readPortal() {
   await seedDatabase();
-  const [terms, courses, runs, sessions, students, teachers, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, businessHoursSetting] = await Promise.all([
+  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, businessHoursSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, academic_terms.name AS term_name, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
@@ -542,7 +575,10 @@ async function readPortal() {
           ORDER BY class_sessions.starts_at ASC`),
     rows("SELECT * FROM students ORDER BY code"),
     rows("SELECT * FROM teachers ORDER BY code"),
-    rows("SELECT * FROM classrooms ORDER BY code"),
+    rows("SELECT * FROM campuses ORDER BY code"),
+    rows(`SELECT classrooms.*, campuses.name AS campus_name, campuses.map_label AS campus_map_label
+          FROM classrooms LEFT JOIN campuses ON campuses.id = classrooms.campus_id
+          ORDER BY campuses.code, classrooms.code`),
     rows(`SELECT class_enrollments.*, students.name AS student_name, students.guardian_phone, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, student_invoices.id AS invoice_id, student_invoices.invoice_no, student_invoices.total_amount, student_invoices.paid_amount, student_invoices.status AS invoice_status
           FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id
           LEFT JOIN student_invoices ON student_invoices.enrollment_id = class_enrollments.id ORDER BY class_enrollments.enrolled_at DESC`),
@@ -578,7 +614,7 @@ async function readPortal() {
     businessHours = { start: starts[0] ?? "08:00", end: ends.at(-1) ?? "20:00", source: "bookings" };
   }
   return Response.json({
-    terms, courses, runs, sessions, students, teachers, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
     settings: { businessHours },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
@@ -623,6 +659,8 @@ export async function POST(request: Request) {
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "setAttendance") await setAttendance(payload);
     if (payload.action === "updateCourse" || payload.action === "updateRun") await updateEntity(payload);
+    if (payload.action === "createCampus") await createCampus(payload);
+    if (payload.action === "updateCampus") await updateCampus(payload);
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
     if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);

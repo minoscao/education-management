@@ -104,6 +104,7 @@ async function seedDatabase() {
   if (seeded) {
     await ensureClassroomLayouts();
     await ensureCourseColours();
+    await ensureOperationalSampleData();
     return;
   }
 
@@ -111,7 +112,7 @@ async function seedDatabase() {
   const termId = "term-current";
   const products = [
     ["course-chinese-y7", "CHN-Y7", "Chinese Year 7", "Chinese", "Year 7", 12, 90, 360, "#0F766E", "active"],
-    ["course-math-y7", "MTH-Y7", "Mathematics Year 7", "Mathematics", "Year 7", 10, 90, 420, "#2563EB", "active"],
+    ["course-math-y7", "MTH-Y7", "Mathematics Year 7", "Mathematics", "Year 7", 12, 90, 420, "#2563EB", "active"],
     ["course-violin-beg", "VIO-BEG", "Violin Beginner", "Music", "Beginner", 8, 60, 480, "#7C3AED", "active"],
   ];
   const teachers = [
@@ -190,6 +191,7 @@ async function seedDatabase() {
   await enrollStudent("run-math-y7-a", "student-allen", 420, false);
   await enrollStudent("run-violin-beg-a", "student-may", 480, false);
   await ensureCourseColours();
+  await ensureOperationalSampleData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
 }
 
@@ -215,6 +217,127 @@ async function ensureCourseColours() {
   ];
   for (const [color, courseId] of presets) {
     await execute("UPDATE course_catalogs SET display_color = ? WHERE id = ? AND display_color = ?", [color, courseId, defaultCourseColour]);
+  }
+}
+
+async function ensureOperationalSampleData() {
+  const termId = "term-current";
+  const teachers = [
+    ["teacher-olivia", "TCH-004", "Ms Olivia", "English", "014-5550134", "available"],
+    ["teacher-farid", "TCH-005", "Mr Farid", "English", "019-5550188", "available"],
+  ];
+  const students = [
+    ["student-aisha", "STU-005", "Aisha Rahman", "Year 7", "012-5551005", "active"],
+    ["student-daniel", "STU-006", "Daniel Wong", "Year 7", "012-5551006", "active"],
+    ["student-yuna", "STU-007", "Yuna Lim", "Year 7", "012-5551007", "active"],
+    ["student-adam", "STU-008", "Adam Lee", "Year 6", "012-5551008", "active"],
+    ["student-sara", "STU-009", "Sara Tan", "Year 7", "012-5551009", "active"],
+    ["student-noah", "STU-010", "Noah Chen", "Year 7", "012-5551010", "active"],
+  ];
+  const courses = [
+    ["course-english-y7", "ENG-Y7", "English Year 7", "English", "Year 7", 12, 90, 390, "#4F46E5", "active"],
+  ];
+
+  for (const teacher of teachers) {
+    await execute("INSERT OR IGNORE INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, ?, ?)", teacher);
+  }
+  for (const student of students) {
+    await execute("INSERT OR IGNORE INTO students (id, code, name, level, guardian_phone, status) VALUES (?, ?, ?, ?, ?, ?)", student);
+  }
+  for (const course of courses) {
+    await execute(
+      "INSERT OR IGNORE INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      course,
+    );
+  }
+  await execute("UPDATE course_catalogs SET default_sessions = ? WHERE id = ?", [12, "course-math-y7"]);
+  await execute(
+    "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ["run-english-y7-a", "ENG-Y7-2026-A", "course-english-y7", termId, "English Year 7 - Wednesday PM", 18, 390, "open", localDate(-14), localDate(28)],
+  );
+
+  const chineseTopics = [
+    "Reading foundations", "Writing practice", "Vocabulary in context", "Informative texts", "Sentence structure", "Narrative writing",
+    "Reading comprehension", "Grammar review", "Speaking practice", "Persuasive writing", "Revision workshop", "Term assessment",
+  ];
+  const mathematicsTopics = [
+    "Fractions and decimals", "Equivalent fractions", "Decimal operations", "Percentages", "Ratio and proportion", "Algebraic expressions",
+    "Linear equations", "Geometry: angles", "Perimeter and area", "Data handling", "Problem-solving strategies", "Maths revision",
+  ];
+  const englishTopics = [
+    "Reading for meaning", "Vocabulary and word families", "Sentence crafting", "Narrative structure", "Descriptive writing", "Grammar in use",
+    "Speaking and listening", "Informative writing", "Comprehension strategies", "Editing workshop", "Presentation skills", "English revision",
+  ];
+  const violinTopics = [
+    "Posture and rhythm", "Bow control", "Open strings", "First finger notes", "Simple melodies", "Dynamics", "Ensemble practice", "Performance review",
+  ];
+  const sessionSeeds: [string, string, number, string, string, string, string, string, number][] = [];
+  const schedule = (runId: string, prefix: string, topics: string[], offset: number, time: string, roomId: string, teacherId: string, pay: number) => {
+    topics.forEach((topic, index) => {
+      const startsAt = localDate(offset + index * 7, time);
+      sessionSeeds.push([`${prefix}-${String(index + 1).padStart(2, "0")}`, runId, index + 1, topic, startsAt, later(startsAt, prefix === "session-violin" ? 60 : 90), roomId, teacherId, pay]);
+    });
+  };
+  schedule("run-chinese-y7-a", "session-chinese", chineseTopics, 1, "09:00", "room-a201", "teacher-zhang", 90);
+  schedule("run-math-y7-a", "session-math", mathematicsTopics, 1, "10:30", "room-b102", "teacher-sophia", 85);
+  schedule("run-english-y7-a", "session-english", englishTopics, 4, "16:00", "room-a201", "teacher-olivia", 90);
+  schedule("run-violin-beg-a", "session-violin", violinTopics, 4, "18:00", "room-m301", "teacher-lim", 120);
+
+  for (const [sessionId, runId, sessionNo, topic, startsAt, endsAt, classroomId, teacherId, payAmount] of sessionSeeds) {
+    await execute(
+      "INSERT OR IGNORE INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [sessionId, runId, sessionNo, topic, startsAt, endsAt, "scheduled"],
+    );
+    await execute(
+      "INSERT OR IGNORE INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+      [`rb-${sessionId}`, sessionId, classroomId, startsAt, endsAt, "reserved"],
+    );
+    await execute(
+      "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [`tb-${sessionId}`, sessionId, teacherId, startsAt, endsAt, payAmount, "unpaid", "confirmed"],
+    );
+  }
+
+  await ensureEnrollment("run-math-y7-a", "student-may", 420);
+  await ensureEnrollment("run-math-y7-a", "student-jerry", 420);
+  await ensureEnrollment("run-math-y7-a", "student-aisha", 420);
+  await ensureEnrollment("run-math-y7-a", "student-daniel", 420);
+  await ensureEnrollment("run-english-y7-a", "student-allen", 390);
+  await ensureEnrollment("run-english-y7-a", "student-jerry", 390);
+  await ensureEnrollment("run-english-y7-a", "student-lina", 390);
+  await ensureEnrollment("run-english-y7-a", "student-yuna", 390);
+  await ensureEnrollment("run-english-y7-a", "student-sara", 390);
+  await ensureEnrollment("run-english-y7-a", "student-noah", 390);
+  await ensureEnrollmentBookings("run-chinese-y7-a");
+  await ensureEnrollmentBookings("run-math-y7-a");
+  await ensureEnrollmentBookings("run-english-y7-a");
+  await ensureEnrollmentBookings("run-violin-beg-a");
+}
+
+async function ensureEnrollment(runId: string, studentId: string, contractedFee: number) {
+  const existing = await row("SELECT id FROM class_enrollments WHERE class_run_id = ? AND student_id = ?", [runId, studentId]);
+  if (!existing) await enrollStudent(runId, studentId, contractedFee, false);
+}
+
+async function ensureEnrollmentBookings(runId: string) {
+  const sessions = await rows<{ id: string }>("SELECT id FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [runId]);
+  const enrollments = await rows<{ id: string; student_id: string; contracted_fee: number }>(
+    "SELECT id, student_id, contracted_fee FROM class_enrollments WHERE class_run_id = ? AND status = 'enrolled'",
+    [runId],
+  );
+  for (const enrollment of enrollments) {
+    const allocated = sessions.length ? Math.round((number(enrollment.contracted_fee) / sessions.length) * 100) / 100 : 0;
+    await execute("UPDATE class_student_bookings SET allocated_fee = ? WHERE enrollment_id = ?", [allocated, enrollment.id]);
+    for (const session of sessions) {
+      const booking = await row("SELECT id FROM class_student_bookings WHERE class_session_id = ? AND enrollment_id = ?", [session.id, enrollment.id]);
+      if (booking) continue;
+      const bookingId = `sample-sb-${enrollment.id}-${session.id}`;
+      await execute(
+        "INSERT OR IGNORE INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status) VALUES (?, ?, ?, ?, ?, ?)",
+        [bookingId, session.id, enrollment.id, enrollment.student_id, allocated, "booked"],
+      );
+      await execute("INSERT OR IGNORE INTO class_attendance (id, student_booking_id, status, note) VALUES (?, ?, ?, ?)", [`sample-att-${bookingId}`, bookingId, "pending", ""]);
+    }
   }
 }
 

@@ -29,6 +29,12 @@ export const classrooms = sqliteTable("classrooms", {
   name: text("name").notNull(),
   location: text("location").notNull(),
   capacity: integer("capacity").notNull(),
+  roomType: text("room_type").notNull().default("classroom"),
+  resources: text("resources").notNull().default(""),
+  mapX: integer("map_x").notNull().default(80),
+  mapY: integer("map_y").notNull().default(80),
+  mapWidth: integer("map_width").notNull().default(180),
+  mapHeight: integer("map_height").notNull().default(110),
   status: text("status").notNull().default("active"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

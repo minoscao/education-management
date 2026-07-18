@@ -30,6 +30,12 @@ type ActionPayload = {
   note?: string;
   phone?: string;
   location?: string;
+  roomType?: string;
+  resources?: string;
+  mapX?: number | string;
+  mapY?: number | string;
+  mapWidth?: number | string;
+  mapHeight?: number | string;
 };
 
 function db() {
@@ -86,7 +92,10 @@ async function execute(sql: string, values: unknown[] = []) {
 
 async function seedDatabase() {
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
-  if (seeded) return;
+  if (seeded) {
+    await ensureClassroomLayouts();
+    return;
+  }
 
   const today = localDate(0, "00:00").slice(0, 10);
   const termId = "term-current";
@@ -121,6 +130,7 @@ async function seedDatabase() {
   for (const classroom of classrooms) {
     await execute("INSERT OR IGNORE INTO classrooms (id, code, name, location, capacity, status) VALUES (?, ?, ?, ?, ?, ?)", classroom);
   }
+  await ensureClassroomLayouts();
   await execute(
     "INSERT OR IGNORE INTO academic_terms (id, code, name, starts_on, ends_on, status) VALUES (?, ?, ?, ?, ?, ?)",
     [termId, `TERM-${today.slice(0, 4)}-CURRENT`, "Current Term", today, localDate(120, "00:00").slice(0, 10), "active"],
@@ -170,6 +180,20 @@ async function seedDatabase() {
   await enrollStudent("run-math-y7-a", "student-allen", 420, false);
   await enrollStudent("run-violin-beg-a", "student-may", 480, false);
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
+}
+
+async function ensureClassroomLayouts() {
+  const layouts = [
+    ["classroom", "Whiteboard, projector", 70, 86, 190, 116, "room-a201"],
+    ["classroom", "Whiteboard, projector", 315, 86, 182, 116, "room-b102"],
+    ["music room", "Music stands, keyboard", 177, 274, 210, 118, "room-m301"],
+  ];
+  for (const layout of layouts) {
+    await execute(
+      "UPDATE classrooms SET room_type = ?, resources = ?, map_x = ?, map_y = ?, map_width = ?, map_height = ? WHERE id = ? AND map_x = 80 AND map_y = 80",
+      layout,
+    );
+  }
 }
 
 async function conflictExists(kind: "classroom" | "teacher" | "student", entityId: string, startsAt: string, endsAt: string) {
@@ -353,10 +377,26 @@ async function createBaseRecord(payload: ActionPayload) {
   }
   if (payload.action === "createClassroom") {
     await execute(
-      "INSERT INTO classrooms (id, code, name, location, capacity, status) VALUES (?, ?, ?, ?, ?, ?)",
-      [id("room"), `ROOM-${Date.now().toString().slice(-5)}`, label, payload.location?.trim() || "Main campus", Math.max(1, Math.floor(number(payload.capacity, 12))), "active"],
+      "INSERT INTO classrooms (id, code, name, location, capacity, room_type, resources, map_x, map_y, map_width, map_height, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [id("room"), `ROOM-${Date.now().toString().slice(-5)}`, label, payload.location?.trim() || "Main campus", Math.max(1, Math.floor(number(payload.capacity, 12))), payload.roomType?.trim() || "classroom", payload.resources?.trim() || "", 80, 80, 180, 110, "active"],
     );
   }
+}
+
+async function updateClassroomMap(payload: ActionPayload) {
+  if (!payload.classroomId) throw new Error("Classroom not found.");
+  await execute(
+    "UPDATE classrooms SET map_x = ?, map_y = ?, map_width = ?, map_height = ?, room_type = ?, resources = ? WHERE id = ?",
+    [
+      Math.max(0, Math.round(number(payload.mapX, 80))),
+      Math.max(0, Math.round(number(payload.mapY, 80))),
+      Math.max(80, Math.round(number(payload.mapWidth, 180))),
+      Math.max(60, Math.round(number(payload.mapHeight, 110))),
+      payload.roomType?.trim() || "classroom",
+      payload.resources?.trim() || "",
+      payload.classroomId,
+    ],
+  );
 }
 
 async function readPortal() {
@@ -444,6 +484,7 @@ export async function POST(request: Request) {
     if (payload.action === "setAttendance") await setAttendance(payload);
     if (payload.action === "updateCourse" || payload.action === "updateRun") await updateEntity(payload);
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
+    if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
     return await readPortal();
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });

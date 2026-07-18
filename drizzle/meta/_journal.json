@@ -29,6 +29,13 @@
       "when": 1784362521963,
       "tag": "0003_thick_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784365326513,
+      "tag": "0004_past_spitfire",
+      "breakpoints": true
     }
   ]
 }

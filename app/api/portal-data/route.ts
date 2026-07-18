@@ -27,6 +27,9 @@ type ActionPayload = {
   teacherId?: string;
   payAmount?: number | string;
   amount?: number | string;
+  discount?: number | string;
+  method?: string;
+  proofReference?: string;
   attendanceStatus?: string;
   note?: string;
   phone?: string;
@@ -125,6 +128,7 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 }
 
 async function seedDatabase() {
+  await ensurePaymentData();
   await ensureCommunicationData();
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
   if (seeded) {
@@ -237,8 +241,15 @@ async function ensureCommunicationData() {
     { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, ?, ?)", values: ["history-enr-may", "run-eng-y7-history", "student-may", 390, "enrolled", "2026-03-05 09:00"] },
     { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-pay-allen", "PAY-2026-0401", "history-enr-allen", "student-allen", 390, 390, "paid", "2026-03-05", "2026-03-20"] },
     { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-pay-may", "PAY-2026-0402", "history-enr-may", "student-may", 390, 390, "paid", "2026-03-05", "2026-03-20"] },
+    { sql: "INSERT OR IGNORE INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-payment-allen", "history-pay-allen", "student-allen", 390, "bank_transfer", "TRX-APR-101", "April term received in full", "2026-03-07 10:30"] },
+    { sql: "INSERT OR IGNORE INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-payment-may", "history-pay-may", "student-may", 390, "ewallet", "TNG-APR-202", "Paid by guardian", "2026-03-08 14:10"] },
     { sql: "INSERT OR IGNORE INTO student_messages (id, student_id, recipient, subject, body, direction, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["message-welcome-allen", "student-allen", "allen.tan@family.example", "Welcome to English Year 7", "Your completed April course is now available in your learning history.", "outbound", "sent", "2026-04-30 16:00"] },
   ]);
+}
+
+async function ensurePaymentData() {
+  try { await execute("ALTER TABLE student_payments ADD COLUMN proof_reference text DEFAULT ''"); } catch { /* Column is already available. */ }
+  try { await execute("ALTER TABLE student_payments ADD COLUMN note text DEFAULT ''"); } catch { /* Column is already available. */ }
 }
 
 async function ensureClassroomLayouts() {
@@ -610,12 +621,14 @@ async function recordPayment(payload: ActionPayload) {
     "SELECT id, student_id, enrollment_id, total_amount, paid_amount FROM student_invoices WHERE id = ?", [payload.invoiceId],
   );
   if (!invoice) throw new Error("Invoice not found.");
-  const remaining = Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount));
+  const discount = Math.min(Math.max(0, number(payload.discount)), Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)));
+  const adjustedTotal = Math.round((number(invoice.total_amount) - discount) * 100) / 100;
+  const remaining = Math.max(0, adjustedTotal - number(invoice.paid_amount));
   const amount = Math.min(Math.max(0.01, number(payload.amount, remaining)), remaining);
   const paid = Math.round((number(invoice.paid_amount) + amount) * 100) / 100;
-  const status = paid >= number(invoice.total_amount) ? "paid" : "partly_paid";
-  await execute("INSERT INTO student_payments (id, invoice_id, student_id, amount, method, received_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", [id("payment"), invoice.id, invoice.student_id, amount, "bank_transfer"]);
-  await execute("UPDATE student_invoices SET paid_amount = ?, status = ? WHERE id = ?", [paid, status, invoice.id]);
+  const status = paid >= adjustedTotal ? "paid" : "partly_paid";
+  await execute("INSERT INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", [id("payment"), invoice.id, invoice.student_id, amount, payload.method || "bank_transfer", payload.proofReference?.trim() ?? "", payload.note?.trim() ?? ""]);
+  await execute("UPDATE student_invoices SET total_amount = ?, paid_amount = ?, status = ? WHERE id = ?", [adjustedTotal, paid, status, invoice.id]);
 }
 
 async function setAttendance(payload: ActionPayload) {
@@ -753,7 +766,10 @@ async function readPortal() {
           LEFT JOIN student_invoices ON student_invoices.enrollment_id = class_enrollments.id ORDER BY class_enrollments.enrolled_at DESC`),
     rows(`SELECT student_invoices.*, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM student_invoices JOIN students ON students.id = student_invoices.student_id JOIN class_enrollments ON class_enrollments.id = student_invoices.enrollment_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY student_invoices.issued_at DESC`),
-    rows("SELECT student_payments.*, student_invoices.invoice_no, students.name AS student_name FROM student_payments JOIN student_invoices ON student_invoices.id = student_payments.invoice_id JOIN students ON students.id = student_payments.student_id ORDER BY student_payments.received_at DESC"),
+    rows(`SELECT student_payments.*, student_invoices.invoice_no, class_runs.name AS run_name, course_catalogs.title AS course_title, students.name AS student_name
+          FROM student_payments JOIN student_invoices ON student_invoices.id = student_payments.invoice_id JOIN class_enrollments ON class_enrollments.id = student_invoices.enrollment_id
+          JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN students ON students.id = student_payments.student_id
+          ORDER BY student_payments.received_at DESC`),
     rows("SELECT * FROM student_messages ORDER BY created_at DESC"),
     rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.class_run_id, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id

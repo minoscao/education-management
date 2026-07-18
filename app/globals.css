@@ -569,6 +569,22 @@ button:disabled {
   color: #718187;
 }
 
+/* Payment keeps the invoice and every received amount separate and auditable. */
+.payment-history { display: grid; gap: 8px; }
+.payment-history article { grid-template-columns: minmax(0, 1fr) auto !important; align-items: start !important; padding: 12px !important; border: 1px solid #d8e9ed; border-left: 4px solid #4aa9bd; border-radius: 6px; background: #f9fcfd; }
+.payment-history article > div { gap: 4px; }
+.payment-history article > div small { display: block; }
+.payment-history article > strong { color: #137b65; font-size: 14px; }
+.payment-dialog-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(19, 43, 50, .45); }
+.payment-dialog { width: min(520px, 100%); overflow: hidden; border: 1px solid #cbe1e6; border-radius: 8px; background: #ffffff; box-shadow: 0 18px 42px rgba(13, 47, 57, .28); }
+.payment-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #dbeaec; background: #eff9fa; }
+.payment-dialog header span { color: #087f9f; font-size: 10px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.payment-dialog header h3,.payment-dialog header p { margin: 0; }.payment-dialog header h3 { margin-top: 4px; color: #224651; font-size: 18px; }.payment-dialog header p { margin-top: 3px; color: #6c858d; font-size: 12px; }
+.payment-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border-bottom: 1px solid #dbeaec; background: #dbeaec; }.payment-summary > div { display: grid; gap: 5px; padding: 13px; background: #fbfdfd; }.payment-summary span { color: #6a858e; font-size: 10px; font-weight: 800; }.payment-summary strong { color: #244c57; font-size: 13px; }
+.payment-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 18px 20px; }.payment-note { grid-column: 1 / -1; }.payment-note textarea { min-height: 76px; padding: 8px; border: 1px solid #cbdce1; border-radius: 6px; outline: 0; resize: vertical; color: #1f3d48; font: inherit; }.payment-note textarea:focus { border-color: #0b91b2; box-shadow: 0 0 0 3px rgba(11,145,178,.11); }
+.payment-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e1edef; background: #fbfdfd; }
+@media (max-width: 560px) { .payment-summary { grid-template-columns: 1fr; }.payment-form-grid { grid-template-columns: 1fr; }.payment-note { grid-column: auto; } }
+
 .admin-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

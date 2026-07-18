@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import {
-  Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap,
+  Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
   LayoutGrid, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, SlidersHorizontal, Users, UserRound,
   UserRoundPlus, UsersRound, X,
 } from "lucide-react";
@@ -42,6 +43,21 @@ const minutesForTime = (value: string) => { const [hour, minute] = value.split("
 const portraitColours = ["#eaf7ff", "#fff4db", "#e9f7ee", "#f5ecff", "#ffede9"];
 const courseColourOptions = ["#0F8AA8", "#2563EB", "#4F46E5", "#7C3AED", "#0F766E", "#16A34A", "#A21CAF"];
 const defaultCourseColour = courseColourOptions[0];
+const campusMap = { width: 1000, height: 560 };
+
+function courseCover(course: Row) {
+  const subject = get(course, "subject").toLowerCase();
+  if (subject.includes("math")) return "/assets/courses/mathematics-year-7.png";
+  if (subject.includes("english")) return "/assets/courses/english-year-7.png";
+  if (subject.includes("chinese")) return "/assets/courses/chinese-year-7.png";
+  if (subject.includes("music") || subject.includes("violin")) return "/assets/courses/violin-beginner.png";
+  return "/assets/courses/english-year-7.png";
+}
+
+function avatarUrl(person: Row) {
+  const seed = encodeURIComponent(`${get(person, "id")}-${get(person, "name")}`);
+  return `https://api.dicebear.com/9.x/personas/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf,ffd5dc`;
+}
 
 const calendarText = {
   en: { year: "Year", month: "Month", week: "Week", day: "Day", time: "Time", resource: "Time × resource", classrooms: "Classrooms", teachers: "Teachers", students: "Students", today: "Today", previous: "Previous", next: "Next", allSchedule: "All schedule", lessons: "lessons", noEvents: "No lessons in this period" },
@@ -271,13 +287,39 @@ function CampusView({ data, t, onOpenSession, onOpenRoom }: { data: PortalData; 
   return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>{t.mapHint}</p></div><div className="map-legend"><span><i className="free" />{t.active}</span><span><i className="occupied" />{t.booked}</span></div></div><FloorMap rooms={data.classrooms} sessionsByRoom={nextByRoom} editable={false} onOpenSession={onOpenSession} onOpenRoom={onOpenRoom} /></section>;
 }
 
-function FloorMap({ rooms, sessionsByRoom, editable, onOpenSession, onOpenRoom, onDropRoom }: { rooms: Row[]; sessionsByRoom: Map<string, Row>; editable: boolean; onOpenSession: (id: string) => void; onOpenRoom: (id: string) => void; onDropRoom?: (room: Row, event: React.DragEvent<HTMLButtonElement>) => void }) {
-  return <div className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>Campus One · Level 2</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const next = sessionsByRoom.get(get(room, "name")); return <button draggable={editable} onDragEnd={(event) => onDropRoom?.(room, event)} type="button" key={get(room, "id")} className={next ? "map-room occupied" : "map-room"} style={{ left: `${Number(room.map_x ?? 80)}px`, top: `${Number(room.map_y ?? 80)}px`, width: `${Number(room.map_width ?? 180)}px`, height: `${Number(room.map_height ?? 110)}px`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onClick={() => next && !editable ? onOpenSession(get(next, "id")) : onOpenRoom(get(room, "id"))}><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span>{next ? <em>{get(next, "course_title")} · {timePart(next.starts_at)}</em> : <small>{get(room, "resources") || "Available"}</small>}</button>; })}</div>;
+function FloorMap({ rooms, sessionsByRoom, editable, onOpenSession, onOpenRoom, onSelectRoom, onMoveRoom }: { rooms: Row[]; sessionsByRoom: Map<string, Row>; editable: boolean; onOpenSession: (id: string) => void; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
+  function movePosition(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    const current = drag.current; const rect = mapRef.current?.getBoundingClientRect();
+    if (!current || current.id !== get(room, "id") || !rect) return;
+    const width = Number(room.map_width ?? 180); const height = Number(room.map_height ?? 110);
+    const x = Math.max(12, Math.min(campusMap.width - width - 12, Math.round(current.baseX + (event.clientX - current.startX) * (campusMap.width / rect.width))));
+    const y = Math.max(62, Math.min(campusMap.height - height - 12, Math.round(current.baseY + (event.clientY - current.startY) * (campusMap.height / rect.height))));
+    current.last = { x, y };
+    setPositions((currentPositions) => ({ ...currentPositions, [get(room, "id")]: { x, y } }));
+  }
+  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!editable) return;
+    const current = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) };
+    drag.current = { id: get(room, "id"), startX: event.clientX, startY: event.clientY, baseX: current.x, baseY: current.y, last: current };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelectRoom?.(get(room, "id"));
+  }
+  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!drag.current || drag.current.id !== get(room, "id")) return;
+    const position = drag.current.last;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    onMoveRoom?.(room, position);
+  }
+  return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>Campus One · Level 2</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const next = sessionsByRoom.get(get(room, "name")); const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; return <button type="button" key={get(room, "id")} className={`${next ? "map-room occupied" : "map-room"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(Number(room.map_height ?? 110) / campusMap.height) * 100}%`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : next ? onOpenSession(get(next, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span>{next ? <em>{get(next, "course_title")} · {timePart(next.starts_at)}</em> : <small>{get(room, "resources") || "Available"}</small>}</button>; })}</div>;
 }
 
 function DirectoryView({ type, rows, data, t, onOpen }: { type: "student" | "teacher"; rows: Row[]; data: PortalData; t: typeof copy.en; onOpen: (id: string) => void }) {
   const isStudent = type === "student";
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{isStudent ? t.students : t.teachers}</h2><p>{isStudent ? t.studentHint : t.teacherHint}</p></div><span className="record-count">{rows.length}</span></div><div className="directory-grid">{rows.map((person, index) => { const personId = get(person, "id"); const lessons = isStudent ? data.attendance.filter((item) => get(item, "student_id") === personId) : data.teacherBookings.filter((item) => get(item, "teacher_id") === personId); const active = isStudent ? data.enrollments.filter((item) => get(item, "student_id") === personId && get(item, "status") === "enrolled").length : lessons.length; return <button className="person-card" type="button" key={personId} onClick={() => onOpen(personId)}><div className="person-avatar" style={{ background: portraitColours[index % portraitColours.length] }}>{isStudent ? <GraduationCap size={25} /> : <UserRound size={25} />}</div><div className="person-main"><strong>{get(person, "name")}</strong><span>{isStudent ? get(person, "level") : get(person, "subject")}</span></div><Status value={get(person, "status")} /><div className="person-stats"><span><b>{active}</b>{isStudent ? " classes" : " lessons"}</span><span>{isStudent ? get(person, "guardian_phone") : get(person, "phone")}</span></div><div className="person-action">{t.openDetail}<ChevronRight size={15} /></div></button>; })}{!rows.length ? <Empty text={t.noData} /> : null}</div></section>;
+  return <section className="operation-stack"><div className="view-intro"><div><h2>{isStudent ? t.students : t.teachers}</h2><p>{isStudent ? t.studentHint : t.teacherHint}</p></div><span className="record-count">{rows.length}</span></div><div className="directory-grid">{rows.map((person) => { const personId = get(person, "id"); const lessons = isStudent ? data.attendance.filter((item) => get(item, "student_id") === personId) : data.teacherBookings.filter((item) => get(item, "teacher_id") === personId); const active = isStudent ? data.enrollments.filter((item) => get(item, "student_id") === personId && get(item, "status") === "enrolled").length : lessons.length; return <button className="person-card" type="button" key={personId} onClick={() => onOpen(personId)}><div className="person-avatar"><img src={avatarUrl(person)} alt="" /></div><div className="person-main"><strong>{get(person, "name")}</strong><span>{isStudent ? get(person, "level") : get(person, "subject")}</span></div><Status value={get(person, "status")} /><div className="person-stats"><span><b>{active}</b>{isStudent ? " classes" : " lessons"}</span><span>{isStudent ? get(person, "guardian_phone") : get(person, "phone")}</span></div><div className="person-action">{t.openDetail}<ChevronRight size={15} /></div></button>; })}{!rows.length ? <Empty text={t.noData} /> : null}</div></section>;
 }
 
 function CourseManager({ data, run, busy, t }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en }) {
@@ -286,7 +328,7 @@ function CourseManager({ data, run, busy, t }: { data: PortalData; run: (action:
   return <section className="operation-stack"><div className="view-intro"><div><h2>{t.courses}</h2><p>{t.courseHint}</p></div><button className="primary-button" type="button" onClick={() => setShowForm(!showForm)}><Plus size={16} />{t.newCourse}</button></div>{showForm ? <CourseForm run={run} busy={busy} close={() => setShowForm(false)} t={t} /> : null}<div className="course-grid">{data.courses.map((course) => <article key={get(course, "id")} className="course-card"><CourseVisual course={course} /><div className="course-body"><span className="code">{get(course, "code")}</span><h3>{get(course, "title")}</h3><p>{get(course, "subject")} · {get(course, "level")}</p><div className="course-facts"><span><CalendarDays size={15} />{get(course, "default_sessions")} lessons</span><span><Banknote size={15} />{amount(course.list_price)}</span></div><CourseColourPicker value={eventColour({ course_color: get(course, "display_color") })} onChange={(color) => updateColour(course, color)} disabled={busy} compact /><footer><Status value={get(course, "status")} /><span>{get(course, "run_count")} classes</span></footer></div></article>)}</div></section>;
 }
 
-function CourseVisual({ course }: { course: Row }) { const subject = get(course, "subject").toLowerCase(); const Icon = subject.includes("music") || subject.includes("violin") ? Music2 : subject.includes("math") ? LayoutGrid : BookOpen; return <div className="course-visual" style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") }) } as React.CSSProperties}><Icon size={34} /><span>{get(course, "subject").slice(0, 2).toUpperCase()}</span></div>; }
+function CourseVisual({ course }: { course: Row }) { const subject = get(course, "subject").toLowerCase(); const Icon = subject.includes("music") || subject.includes("violin") ? Music2 : subject.includes("math") ? LayoutGrid : BookOpen; return <div className="course-visual" style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") }) } as React.CSSProperties}><img src={courseCover(course)} alt="" /><div><Icon size={22} /><span>{get(course, "subject").slice(0, 2).toUpperCase()}</span></div></div>; }
 
 function CourseForm({ run, busy, close, t }: { run: (action: string, values?: Row) => Promise<void>; busy: boolean; close: () => void; t: typeof copy.en }) {
   const [color, setColor] = useState(defaultCourseColour);
@@ -299,12 +341,13 @@ function CourseColourPicker({ value, onChange, disabled, compact = false }: { va
 }
 
 function ClassroomManager({ data, run, busy, t, onOpenRoom }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpenRoom: (id: string) => void }) {
-  const [editing, setEditing] = useState(false); const [selectedId, setSelectedId] = useState(""); const mapRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false); const [adding, setAdding] = useState(false); const [selectedId, setSelectedId] = useState("");
   const selected = data.classrooms.find((item) => get(item, "id") === selectedId) ?? data.classrooms[0];
   const sessionsByRoom = useMemo(() => { const map = new Map<string, Row>(); data.sessions.forEach((item) => { const key = get(item, "classroom_name"); if (key && !map.has(key)) map.set(key, item); }); return map; }, [data.sessions]);
-  function drop(room: Row, event: React.DragEvent<HTMLButtonElement>) { if (!mapRef.current) return; const rect = mapRef.current.getBoundingClientRect(); const x = Math.max(10, Math.round((event.clientX - rect.left) * (680 / rect.width) - Number(room.map_width ?? 180) / 2)); const y = Math.max(52, Math.round((event.clientY - rect.top) * (430 / rect.height) - Number(room.map_height ?? 110) / 2)); void run("updateClassroomMap", { classroomId: get(room, "id"), mapX: x, mapY: y, mapWidth: room.map_width, mapHeight: room.map_height, roomType: room.room_type, resources: room.resources }); }
+  function moveRoom(room: Row, position: { x: number; y: number }) { void run("updateClassroomMap", { classroomId: get(room, "id"), mapX: position.x, mapY: position.y, mapWidth: room.map_width, mapHeight: room.map_height, roomType: room.room_type, resources: room.resources }); }
   function saveLayout(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateClassroomMap", { ...values, classroomId: get(selected, "id") }); }
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.classrooms}</h2><p>{t.classroomHint}</p></div><button className={editing ? "quiet-button active" : "primary-button"} type="button" onClick={() => setEditing(!editing)}><MapIcon size={16} />{t.roomLayout}</button></div><div ref={mapRef}><FloorMap rooms={data.classrooms} sessionsByRoom={sessionsByRoom} editable={editing} onOpenSession={() => undefined} onOpenRoom={(id) => { setSelectedId(id); onOpenRoom(id); }} onDropRoom={drop} /></div>{editing && selected ? <form className="inline-form compact" onSubmit={saveLayout}><SelectField name="classroomId" label={t.classroom} rows={data.classrooms} value={get(selected, "id")} onChange={setSelectedId} /><FormField name="roomType" label={t.type} defaultValue={get(selected, "room_type")} /><FormField name="resources" label={t.resources} defaultValue={get(selected, "resources")} /><FormField name="mapWidth" label="Width" type="number" defaultValue={get(selected, "map_width")} min="80" /><FormField name="mapHeight" label="Height" type="number" defaultValue={get(selected, "map_height")} min="60" /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button></form> : null}<Table columns={[["code", "Code"], ["name", t.classroom], ["location", t.location], ["room_type", t.type], ["resources", t.resources], ["capacity", t.capacity], ["status", t.status]]} rows={data.classrooms} empty={t.noData} /></section>;
+  function createRoom(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createClassroom", values).then(() => setAdding(false)); }
+  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.classrooms}</h2><p>{t.classroomHint}</p></div><div className="action-group"><button className="quiet-button" type="button" onClick={() => setAdding(!adding)}><Plus size={16} />{t.addClassroom}</button><button className={editing ? "quiet-button active" : "primary-button"} type="button" onClick={() => setEditing(!editing)}><MapIcon size={16} />{t.roomLayout}</button></div></div>{adding ? <form className="inline-form compact" onSubmit={createRoom}><FormField name="name" label={t.classroom} required /><FormField name="location" label={t.location} defaultValue="Campus One" required /><FormField name="capacity" label={t.capacity} type="number" defaultValue="16" min="1" required /><FormField name="roomType" label={t.type} defaultValue="classroom" required /><FormField name="resources" label={t.resources} defaultValue="Whiteboard, projector" /><button className="primary-button" disabled={busy} type="submit"><Plus size={16} />{t.addClassroom}</button></form> : null}<FloorMap rooms={data.classrooms} sessionsByRoom={sessionsByRoom} editable={editing} onOpenSession={() => undefined} onOpenRoom={onOpenRoom} onSelectRoom={setSelectedId} onMoveRoom={moveRoom} />{editing && selected ? <form key={get(selected, "id")} className="inline-form compact" onSubmit={saveLayout}><SelectField name="classroomId" label={t.classroom} rows={data.classrooms} value={get(selected, "id")} onChange={setSelectedId} /><FormField name="roomType" label={t.type} defaultValue={get(selected, "room_type")} /><FormField name="resources" label={t.resources} defaultValue={get(selected, "resources")} /><FormField name="mapWidth" label="Width" type="number" defaultValue={get(selected, "map_width")} min="80" /><FormField name="mapHeight" label="Height" type="number" defaultValue={get(selected, "map_height")} min="60" /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button></form> : null}<Table columns={[["code", "Code"], ["name", t.classroom], ["location", t.location], ["room_type", t.type], ["resources", t.resources], ["capacity", t.capacity], ["status", t.status]]} rows={data.classrooms} empty={t.noData} /></section>;
 }
 
 function ClassManager({ data, run, busy, t, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpen: (id: string) => void }) {

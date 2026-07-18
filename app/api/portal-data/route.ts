@@ -221,6 +221,8 @@ async function ensureCourseColours() {
 }
 
 async function ensureOperationalSampleData() {
+  let stage = "base records";
+  try {
   const termId = "term-current";
   const teachers = [
     ["teacher-olivia", "TCH-004", "Ms Olivia", "English", "014-5550134", "available"],
@@ -271,6 +273,7 @@ async function ensureOperationalSampleData() {
   const violinTopics = [
     "Posture and rhythm", "Bow control", "Open strings", "First finger notes", "Simple melodies", "Dynamics", "Ensemble practice", "Performance review",
   ];
+  stage = "class schedules";
   const sessionSeeds: [string, string, number, string, string, string, string, string, number][] = [];
   const schedule = (runId: string, prefix: string, topics: string[], offset: number, time: string, roomId: string, teacherId: string, pay: number) => {
     topics.forEach((topic, index) => {
@@ -298,20 +301,26 @@ async function ensureOperationalSampleData() {
     );
   }
 
+  stage = "mathematics enrolments";
   await ensureEnrollment("run-math-y7-a", "student-may", 420);
   await ensureEnrollment("run-math-y7-a", "student-jerry", 420);
   await ensureEnrollment("run-math-y7-a", "student-aisha", 420);
   await ensureEnrollment("run-math-y7-a", "student-daniel", 420);
+  stage = "english enrolments";
   await ensureEnrollment("run-english-y7-a", "student-allen", 390);
   await ensureEnrollment("run-english-y7-a", "student-jerry", 390);
   await ensureEnrollment("run-english-y7-a", "student-lina", 390);
   await ensureEnrollment("run-english-y7-a", "student-yuna", 390);
   await ensureEnrollment("run-english-y7-a", "student-sara", 390);
   await ensureEnrollment("run-english-y7-a", "student-noah", 390);
+  stage = "lesson booking backfill";
   await ensureEnrollmentBookings("run-chinese-y7-a");
   await ensureEnrollmentBookings("run-math-y7-a");
   await ensureEnrollmentBookings("run-english-y7-a");
   await ensureEnrollmentBookings("run-violin-beg-a");
+  } catch (error) {
+    throw new Error(`Operational sample data failed during ${stage}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
 }
 
 async function ensureEnrollment(runId: string, studentId: string, contractedFee: number) {

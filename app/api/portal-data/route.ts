@@ -30,6 +30,7 @@ type ActionPayload = {
   attendanceStatus?: string;
   note?: string;
   phone?: string;
+  email?: string;
   location?: string;
   campusId?: string;
   address?: string;
@@ -43,6 +44,14 @@ type ActionPayload = {
   businessStart?: string;
   businessEnd?: string;
   mapImage?: string;
+  sender?: string;
+  inboundProtocol?: string;
+  inboundHost?: string;
+  inboundPort?: string;
+  smtpHost?: string;
+  smtpPort?: string;
+  recipient?: string;
+  body?: string;
 };
 
 function db() {
@@ -116,6 +125,7 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 }
 
 async function seedDatabase() {
+  await ensureCommunicationData();
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
   if (seeded) {
     await ensureCampuses();
@@ -215,6 +225,20 @@ async function seedDatabase() {
   await ensureMalaysiaTermSampleData();
   await ensureRichCampusSampleData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
+}
+
+async function ensureCommunicationData() {
+  try { await execute("ALTER TABLE students ADD COLUMN email text DEFAULT ''"); } catch { /* Column is already available. */ }
+  await execute("CREATE TABLE IF NOT EXISTS student_messages (id text PRIMARY KEY NOT NULL, student_id text NOT NULL, recipient text NOT NULL, subject text NOT NULL, body text NOT NULL, direction text DEFAULT 'outbound' NOT NULL, status text DEFAULT 'prepared' NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+  await execute("UPDATE students SET email = lower(replace(replace(name, ' ', '.'), '''', '')) || '@family.example' WHERE email IS NULL OR email = ''");
+  await executeBatch([
+    { sql: "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["run-eng-y7-history", "ENG-Y7-2026-H", "course-english-y7", "term-current", "English Year 7 - April PM", 18, 390, "finished", "2026-03-01 09:00", "2026-04-30 18:00"] },
+    { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, ?, ?)", values: ["history-enr-allen", "run-eng-y7-history", "student-allen", 390, "enrolled", "2026-03-05 09:00"] },
+    { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, ?, ?)", values: ["history-enr-may", "run-eng-y7-history", "student-may", 390, "enrolled", "2026-03-05 09:00"] },
+    { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-pay-allen", "PAY-2026-0401", "history-enr-allen", "student-allen", 390, 390, "paid", "2026-03-05", "2026-03-20"] },
+    { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-pay-may", "PAY-2026-0402", "history-enr-may", "student-may", 390, 390, "paid", "2026-03-05", "2026-03-20"] },
+    { sql: "INSERT OR IGNORE INTO student_messages (id, student_id, recipient, subject, body, direction, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["message-welcome-allen", "student-allen", "allen.tan@family.example", "Welcome to English Year 7", "Your completed April course is now available in your learning history.", "outbound", "sent", "2026-04-30 16:00"] },
+  ]);
 }
 
 async function ensureClassroomLayouts() {
@@ -609,6 +633,11 @@ async function requestLeave(payload: ActionPayload) {
   await execute("UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", ["leave", "Requested by student", booking.id]);
 }
 
+async function sendMessage(payload: ActionPayload) {
+  if (!payload.studentId || !payload.recipient || !payload.subject?.trim() || !payload.body?.trim()) throw new Error("Email details are incomplete.");
+  await execute("INSERT INTO student_messages (id, student_id, recipient, subject, body, direction, status) VALUES (?, ?, ?, ?, ?, ?, ?)", [id("message"), payload.studentId, payload.recipient, payload.subject.trim(), payload.body.trim(), "outbound", "prepared"]);
+}
+
 async function updateEntity(payload: ActionPayload) {
   if (payload.action === "updateCourse" && payload.courseId) {
     await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ?, display_color = ? WHERE id = ?", [payload.title?.trim() || "Untitled course", payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), courseColour(payload.color), payload.courseId]);
@@ -617,7 +646,7 @@ async function updateEntity(payload: ActionPayload) {
     await execute("UPDATE class_runs SET name = ?, capacity = ?, price = ? WHERE id = ?", [payload.name?.trim() || "Untitled class", Math.max(1, number(payload.capacity, 1)), number(payload.price), payload.runId]);
   }
   if (payload.action === "updateStudent" && payload.studentId) {
-    await execute("UPDATE students SET name = ?, level = ?, guardian_phone = ? WHERE id = ?", [payload.name?.trim() || "Untitled student", payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.studentId]);
+    await execute("UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ? WHERE id = ?", [payload.name?.trim() || "Untitled student", payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.email?.trim() || "", payload.studentId]);
   }
   if (payload.action === "updateTeacher" && payload.teacherId) {
     await execute("UPDATE teachers SET name = ?, subject = ?, phone = ? WHERE id = ?", [payload.name?.trim() || "Untitled teacher", payload.subject?.trim() || "General", payload.phone?.trim() || "", payload.teacherId]);
@@ -689,6 +718,10 @@ async function updateBusinessHours(payload: ActionPayload) {
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["business_hours", JSON.stringify({ start, end })]);
 }
 
+async function updateMailSettings(payload: ActionPayload) {
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["mail_settings", JSON.stringify({ sender: payload.sender?.trim() ?? "", inboundProtocol: payload.inboundProtocol === "POP3" ? "POP3" : "IMAP", inboundHost: payload.inboundHost?.trim() ?? "", inboundPort: payload.inboundPort?.trim() ?? "", smtpHost: payload.smtpHost?.trim() ?? "", smtpPort: payload.smtpPort?.trim() ?? "" })]);
+}
+
 async function updateCampusFloorplan(payload: ActionPayload) {
   if (!payload.campusId || !payload.mapImage) throw new Error("Please choose a floor plan image.");
   if (!payload.mapImage.startsWith("data:image/") || payload.mapImage.length > 1_800_000) throw new Error("Use a PNG or JPG floor plan smaller than 1.3 MB.");
@@ -697,7 +730,7 @@ async function updateCampusFloorplan(payload: ActionPayload) {
 
 async function readPortal() {
   await seedDatabase();
-  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, businessHoursSetting] = await Promise.all([
+  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
@@ -715,12 +748,13 @@ async function readPortal() {
     rows(`SELECT classrooms.*, campuses.name AS campus_name, campuses.map_label AS campus_map_label
           FROM classrooms LEFT JOIN campuses ON campuses.id = classrooms.campus_id
           ORDER BY campuses.code, classrooms.code`),
-    rows(`SELECT class_enrollments.*, students.name AS student_name, students.guardian_phone, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, student_invoices.id AS invoice_id, student_invoices.invoice_no, student_invoices.total_amount, student_invoices.paid_amount, student_invoices.status AS invoice_status
+    rows(`SELECT class_enrollments.*, students.name AS student_name, students.guardian_phone, students.email AS student_email, class_runs.name AS run_name, class_runs.code AS run_code, class_runs.status AS run_status, course_catalogs.title AS course_title, student_invoices.id AS invoice_id, student_invoices.invoice_no, student_invoices.total_amount, student_invoices.paid_amount, student_invoices.status AS invoice_status
           FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id
           LEFT JOIN student_invoices ON student_invoices.enrollment_id = class_enrollments.id ORDER BY class_enrollments.enrolled_at DESC`),
     rows(`SELECT student_invoices.*, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM student_invoices JOIN students ON students.id = student_invoices.student_id JOIN class_enrollments ON class_enrollments.id = student_invoices.enrollment_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY student_invoices.issued_at DESC`),
     rows("SELECT student_payments.*, student_invoices.invoice_no, students.name AS student_name FROM student_payments JOIN student_invoices ON student_invoices.id = student_payments.invoice_id JOIN students ON students.id = student_payments.student_id ORDER BY student_payments.received_at DESC"),
+    rows("SELECT * FROM student_messages ORDER BY created_at DESC"),
     rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.class_run_id, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
           JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_sessions.starts_at ASC`),
@@ -731,6 +765,7 @@ async function readPortal() {
           FROM class_teacher_bookings JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id JOIN class_sessions ON class_sessions.id = class_teacher_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_teacher_bookings.starts_at ASC`),
     row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["business_hours"]),
+    row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["mail_settings"]),
   ]);
 
   const conflictRows = [
@@ -749,9 +784,11 @@ async function readPortal() {
     const ends = sessions.map((item) => String(item.ends_at).slice(11, 16)).filter(validTime).sort();
     businessHours = { start: starts[0] ?? "08:00", end: ends.at(-1) ?? "20:00", source: "bookings" };
   }
+  let mail = { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" };
+  try { mail = { ...mail, ...JSON.parse(mailSettingsSetting?.value ?? "{}") }; } catch { /* Use connection defaults. */ }
   return Response.json({
-    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
-    settings: { businessHours },
+    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    settings: { businessHours, mail },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
       sessionsThisWeek: sessions.filter((item) => new Date(String(item.starts_at).replace(" ", "T")).getTime() < Date.now() + 7 * 86400000).length,
@@ -795,12 +832,14 @@ export async function POST(request: Request) {
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "setAttendance") await setAttendance(payload);
     if (payload.action === "requestLeave") await requestLeave(payload);
+    if (payload.action === "sendMessage") await sendMessage(payload);
     if (payload.action === "updateCourse" || payload.action === "updateRun" || payload.action === "updateStudent" || payload.action === "updateTeacher") await updateEntity(payload);
     if (payload.action === "createCampus") await createCampus(payload);
     if (payload.action === "updateCampus") await updateCampus(payload);
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
     if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
+    if (payload.action === "updateMailSettings") await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
     return await readPortal();
   } catch (error) {

@@ -121,6 +121,7 @@ async function seedDatabase() {
     await ensureClassroomLayouts();
     await ensureCourseColours();
     await ensureOperationalSampleData();
+    await ensureMalaysiaTermSampleData();
     return;
   }
 
@@ -209,6 +210,7 @@ async function seedDatabase() {
   await enrollStudent("run-violin-beg-a", "student-may", 480, false);
   await ensureCourseColours();
   await ensureOperationalSampleData();
+  await ensureMalaysiaTermSampleData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
 }
 
@@ -327,6 +329,73 @@ async function ensureOperationalSampleData() {
     { sql: "INSERT OR IGNORE INTO class_attendance (id, student_booking_id, status, note) SELECT 'sample-att-' || class_student_bookings.id, class_student_bookings.id, 'pending', '' FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id LEFT JOIN class_attendance ON class_attendance.student_booking_id = class_student_bookings.id WHERE class_sessions.class_run_id = ? AND class_attendance.id IS NULL", values: [runId] },
   ]));
   await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["operational_sample_v2", "true"]);
+}
+
+async function ensureMalaysiaTermSampleData() {
+  const completed = await row("SELECT value FROM app_settings WHERE key = ?", ["malaysia_term_sample_v3"]);
+  if (completed) return;
+
+  const termId = "term-current";
+  const teachers = [
+    ["teacher-aina", "TCH-006", "Ms Aina", "Science", "012-6655101", "available"],
+    ["teacher-nurul", "TCH-007", "Cikgu Nurul", "Bahasa Melayu", "017-6655102", "available"],
+    ["teacher-raj", "TCH-008", "Mr Raj", "Science", "016-6655103", "available"],
+  ];
+  const courses = [
+    ["course-science-y7", "SCI-Y7", "Science Year 7", "Science", "Year 7", 10, 90, 400, "#0F766E", "active"],
+    ["course-science-y9", "SCI-Y9", "Science Year 9", "Science", "Year 9", 10, 90, 450, "#16A34A", "active"],
+    ["course-math-y8", "MTH-Y8", "Mathematics Year 8", "Mathematics", "Year 8", 10, 90, 440, "#2563EB", "active"],
+    ["course-english-y8", "ENG-Y8", "English Year 8", "English", "Year 8", 10, 90, 410, "#4F46E5", "active"],
+    ["course-bm-y7", "BM-Y7", "Bahasa Melayu Year 7", "Bahasa Melayu", "Year 7", 10, 90, 360, "#0F8AA8", "active"],
+  ];
+  const runs = [
+    ["run-science-y7-a", "SCI-Y7-2026-A", "course-science-y7", "Science Year 7 - Saturday PM", 16, 400],
+    ["run-science-y9-a", "SCI-Y9-2026-A", "course-science-y9", "Science Year 9 - Saturday PM", 16, 450],
+    ["run-math-y8-a", "MTH-Y8-2026-A", "course-math-y8", "Mathematics Year 8 - Saturday PM", 16, 440],
+    ["run-english-y8-a", "ENG-Y8-2026-A", "course-english-y8", "English Year 8 - Sunday AM", 16, 410],
+    ["run-bm-y7-a", "BM-Y7-2026-A", "course-bm-y7", "Bahasa Melayu Year 7 - Sunday PM", 16, 360],
+  ];
+  await executeBatch([
+    ...teachers.map((teacher) => ({ sql: "INSERT OR IGNORE INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, ?, ?)", values: teacher })),
+    ...courses.map((course) => ({ sql: "INSERT OR IGNORE INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", values: course })),
+    ...runs.map(([idValue, code, courseId, name, capacity, price]) => ({ sql: "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", values: [idValue, code, courseId, termId, name, capacity, price, "open", "2026-07-15 09:00", "2026-09-20 18:00"] })),
+  ]);
+
+  const saturdayDates = ["2026-07-25", "2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22", "2026-08-29", "2026-09-05", "2026-09-12", "2026-09-19", "2026-09-26"];
+  const sundayDates = ["2026-07-26", "2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30", "2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
+  const lessonPlans = [
+    ["run-science-y7-a", "session-science-y7", ["Laboratory safety", "Cells and life", "Matter and materials", "Forces in action", "Heat transfer", "Light and shadows", "Plant reproduction", "Ecosystems", "Scientific investigation", "Science revision"], saturdayDates, "15:30", "room-b102", "teacher-aina", 92],
+    ["run-science-y9-a", "session-science-y9", ["Atomic structure", "Chemical bonding", "Electric circuits", "Energy transfer", "Human response", "Genetics", "Waves and sound", "Climate systems", "Practical skills", "Science exam practice"], saturdayDates, "16:30", "room-a201", "teacher-raj", 98],
+    ["run-math-y8-a", "session-math-y8", ["Integers and indices", "Fractions and ratios", "Percentages", "Algebra foundations", "Linear graphs", "Geometry and angles", "Area and volume", "Statistics", "Problem solving", "Maths revision"], saturdayDates, "13:00", "room-b102", "teacher-sophia", 88],
+    ["run-english-y8-a", "session-english-y8", ["Reading with purpose", "Vocabulary choices", "Paragraph building", "Narrative voice", "Grammar in context", "Discussion skills", "Argument writing", "Editing for clarity", "Presentation practice", "English revision"], sundayDates, "15:30", "room-a201", "teacher-farid", 92],
+    ["run-bm-y7-a", "session-bm-y7", ["Kefahaman asas", "Tatabahasa", "Perbendaharaan kata", "Penulisan perenggan", "Karangan naratif", "Karangan fakta", "Lisan dan komunikasi", "Pemahaman teks", "Teknik menjawab", "Ulang kaji"], sundayDates, "13:00", "room-a201", "teacher-nurul", 82],
+  ] as const;
+  const sessionSeeds: [string, string, number, string, string, string, string, string, number][] = [];
+  lessonPlans.forEach(([runId, prefix, topics, dates, time, roomId, teacherId, pay]) => topics.forEach((topic, index) => {
+    const startsAt = `${dates[index]} ${time}`;
+    sessionSeeds.push([`${prefix}-${String(index + 1).padStart(2, "0")}`, runId, index + 1, topic, startsAt, later(startsAt, 90), roomId, teacherId, pay]);
+  }));
+  await executeBatch(sessionSeeds.flatMap(([sessionId, runId, sessionNo, topic, startsAt, endsAt, classroomId, teacherId, payAmount]) => [
+    { sql: "INSERT OR IGNORE INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)", values: [sessionId, runId, sessionNo, topic, startsAt, endsAt, "scheduled"] },
+    { sql: "INSERT OR IGNORE INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?)", values: [`rb-${sessionId}`, sessionId, classroomId, startsAt, endsAt, "reserved"] },
+    { sql: "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: [`tb-${sessionId}`, sessionId, teacherId, startsAt, endsAt, payAmount, "unpaid", "confirmed"] },
+  ]));
+  const enrollments = [
+    ["run-science-y7-a", "student-allen", 400], ["run-science-y7-a", "student-aisha", 400], ["run-science-y7-a", "student-yuna", 400],
+    ["run-science-y9-a", "student-noah", 450], ["run-science-y9-a", "student-sara", 450],
+    ["run-math-y8-a", "student-daniel", 440], ["run-math-y8-a", "student-may", 440],
+    ["run-english-y8-a", "student-jerry", 410], ["run-english-y8-a", "student-lina", 410],
+    ["run-bm-y7-a", "student-allen", 360], ["run-bm-y7-a", "student-aisha", 360], ["run-bm-y7-a", "student-sara", 360],
+  ] as const;
+  await executeBatch(enrollments.flatMap(([runId, studentId, fee]) => [
+    { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) SELECT ?, ?, ?, ?, 'enrolled', CURRENT_TIMESTAMP WHERE EXISTS (SELECT 1 FROM students WHERE id = ?) AND NOT EXISTS (SELECT 1 FROM class_enrollments WHERE class_run_id = ? AND student_id = ?)", values: [`my-enr-${runId}-${studentId}`, runId, studentId, fee, studentId, runId, studentId] },
+    { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) SELECT ?, ?, id, student_id, ?, 0, 'unpaid', '2026-07-15 09:00', '2026-08-01' FROM class_enrollments WHERE class_run_id = ? AND student_id = ? AND NOT EXISTS (SELECT 1 FROM student_invoices WHERE student_invoices.enrollment_id = class_enrollments.id)", values: [`my-inv-${runId}-${studentId}`, `MY-${runId}-${studentId}`, fee, runId, studentId] },
+  ]));
+  await executeBatch(runs.flatMap(([runId]) => [
+    { sql: "INSERT OR IGNORE INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status) SELECT 'my-sb-' || class_enrollments.id || '-' || class_sessions.id, class_sessions.id, class_enrollments.id, class_enrollments.student_id, ROUND(class_enrollments.contracted_fee / 10, 2), 'booked' FROM class_enrollments JOIN class_sessions ON class_sessions.class_run_id = class_enrollments.class_run_id LEFT JOIN class_student_bookings ON class_student_bookings.class_session_id = class_sessions.id AND class_student_bookings.enrollment_id = class_enrollments.id WHERE class_enrollments.class_run_id = ? AND class_student_bookings.id IS NULL", values: [runId] },
+    { sql: "INSERT OR IGNORE INTO class_attendance (id, student_booking_id, status, note) SELECT 'my-att-' || class_student_bookings.id, class_student_bookings.id, 'pending', '' FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id LEFT JOIN class_attendance ON class_attendance.student_booking_id = class_student_bookings.id WHERE class_sessions.class_run_id = ? AND class_attendance.id IS NULL", values: [runId] },
+  ]));
+  await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["malaysia_term_sample_v3", "true"]);
 }
 
 async function conflictExists(kind: "classroom" | "teacher" | "student", entityId: string, startsAt: string, endsAt: string) {

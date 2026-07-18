@@ -11,6 +11,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "reac
 type Row = Record<string, unknown>;
 type Language = "en" | "zh";
 type Role = "admin" | "teacher" | "student";
+type StudentTheme = "blush" | "sky" | "mint";
 type View = "dashboard" | "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports" | "settings" | "teacherHome" | "studentHome" | "studentCourses" | "studentCalendar";
 type Detail = { kind: "session" | "student" | "teacher" | "room" | "course"; id: string } | null;
 
@@ -106,6 +107,7 @@ export function ManagementPortal() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [studentTheme, setStudentTheme] = useState<StudentTheme>("blush");
   const t = copy[language];
 
   async function load() {
@@ -131,6 +133,8 @@ export function ManagementPortal() {
   }
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => { const saved = window.localStorage.getItem("student-portal-theme"); if (saved === "blush" || saved === "sky" || saved === "mint") setStudentTheme(saved); }, []);
+  useEffect(() => { window.localStorage.setItem("student-portal-theme", studentTheme); }, [studentTheme]);
   useEffect(() => { if (!data.students.some((item) => get(item, "id") === selectedStudentId)) setSelectedStudentId(get(data.students[0], "id")); }, [data.students, selectedStudentId]);
   useEffect(() => { if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId)) setSelectedTeacherId(get(data.teachers[0], "id")); }, [data.teachers, selectedTeacherId]);
 
@@ -138,7 +142,7 @@ export function ManagementPortal() {
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
   function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "dashboard" : next === "teacher" ? "teacherHome" : "studentHome"); }
 
-  return <main className={`operation-app role-${role}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+  return <main className={`operation-app role-${role} student-theme-${studentTheme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <aside className="operation-sidebar">
       <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
       {role === "admin" ? <><NavGroup label={t.operate} current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers]]} /><NavGroup label={t.manage} current={view} setView={setView} items={[["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"]]} /></> : null}
@@ -150,6 +154,7 @@ export function ManagementPortal() {
       <header className="operation-header">
         <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : view === "calendar" || view === "classes" || view === "campus" || view === "students" || view === "teachers" ? t.operate : t.manage}</p><h1>{pageTitle(view, t)}</h1></div>
         <div className="header-tools">
+          {role === "student" ? <StudentThemePicker value={studentTheme} onChange={setStudentTheme} /> : null}
           {role !== "admin" ? <PersonaPicker role={role} rows={role === "student" ? data.students : data.teachers} value={role === "student" ? selectedStudentId : selectedTeacherId} onChange={role === "student" ? setSelectedStudentId : setSelectedTeacherId} /> : null}
           <label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} aria-label={t.search} /></label>
           {message ? <span className={message === "Saved" || message === "已保存" ? "save-message ok" : "save-message error"}>{message}</span> : null}
@@ -187,6 +192,8 @@ function NavGroup({ label, current, setView, items }: { label: string; current: 
 }
 
 function RoleSwitcher({ role, onChange }: { role: Role; onChange: (role: Role) => void }) { return <div className="role-switcher"><button type="button" className={role === "admin" ? "active" : ""} onClick={() => onChange("admin")}><ShieldCheck size={15} /><span>Admin</span></button><button type="button" className={role === "teacher" ? "active" : ""} onClick={() => onChange("teacher")}><UserRound size={15} /><span>Teacher</span></button><button type="button" className={role === "student" ? "active" : ""} onClick={() => onChange("student")}><GraduationCap size={15} /><span>Student</span></button></div>; }
+
+function StudentThemePicker({ value, onChange }: { value: StudentTheme; onChange: (value: StudentTheme) => void }) { const themes: { id: StudentTheme; label: string }[] = [{ id: "blush", label: "Pink violet and blue" }, { id: "sky", label: "Blue and turquoise" }, { id: "mint", label: "Mint and peach" }]; return <div className="student-theme-picker" aria-label="Student colour theme"><span>Theme</span>{themes.map((theme) => <button key={theme.id} className={value === theme.id ? "active" : ""} type="button" title={theme.label} aria-label={theme.label} onClick={() => onChange(theme.id)}><i className={theme.id} /></button>)}</div>; }
 
 function PersonaPicker({ role, rows, value, onChange }: { role: Exclude<Role, "admin">; rows: Row[]; value: string; onChange: (value: string) => void }) {
   const person = rows.find((item) => get(item, "id") === value) ?? rows[0];

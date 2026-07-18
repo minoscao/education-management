@@ -245,6 +245,8 @@ async function ensureCommunicationData() {
     { sql: "INSERT OR IGNORE INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["history-payment-may", "history-pay-may", "student-may", 390, "ewallet", "TNG-APR-202", "Paid by guardian", "2026-03-08 14:10"] },
     { sql: "INSERT OR IGNORE INTO student_messages (id, student_id, recipient, subject, body, direction, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: ["message-welcome-allen", "student-allen", "allen.tan@family.example", "Welcome to English Year 7", "Your completed April course is now available in your learning history.", "outbound", "sent", "2026-04-30 16:00"] },
   ]);
+  await execute("INSERT OR IGNORE INTO student_messages (id, student_id, recipient, subject, body, direction, status, created_at) SELECT 'email-out-' || students.id, students.id, students.email, 'Course update', 'Hello, your current course schedule and learning materials are ready to view.', 'outbound', 'sent', CURRENT_TIMESTAMP FROM students WHERE EXISTS (SELECT 1 FROM class_enrollments WHERE class_enrollments.student_id = students.id)");
+  await execute("INSERT OR IGNORE INTO student_messages (id, student_id, recipient, subject, body, direction, status, created_at) SELECT 'email-in-' || students.id, students.id, students.email, 'Re: Course update', 'Thank you. We have received the class schedule and will attend the next lesson.', 'inbound', 'received', CURRENT_TIMESTAMP FROM students WHERE EXISTS (SELECT 1 FROM class_enrollments WHERE class_enrollments.student_id = students.id)");
 }
 
 async function ensurePaymentData() {

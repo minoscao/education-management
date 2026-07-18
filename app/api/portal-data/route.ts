@@ -434,7 +434,15 @@ async function ensureRichCampusSampleData() {
     { sql: "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')", values: [`tb-${sessionId}`, sessionId, run[7], startsAt, later(startsAt, 90), run[9]] },
   ]; })).flat());
   const learnerIds = ["student-allen", "student-may", "student-jerry", "student-lina", "student-aisha", "student-daniel", "student-yuna", "student-sara", "student-noah", ...students.map((_, index) => `student-rich-${index + 1}`)];
-  for (const [runId] of runs) for (const studentId of learnerIds.slice(0, 12)) { try { await enrollStudent(runId, studentId, undefined, false); } catch { /* Existing enrolment or a sample conflict is safe to skip. */ } }
+  const enrollmentRows = runs.flatMap(([runId, , , , , price], runIndex) => learnerIds.slice(runIndex, runIndex + 10).map((studentId) => [runId, studentId, price] as const));
+  await executeBatch(enrollmentRows.flatMap(([runId, studentId, fee]) => [
+    { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, 'enrolled', CURRENT_TIMESTAMP)", values: [`rich-enr-${runId}-${studentId}`, runId, studentId, fee] },
+    { sql: "INSERT OR IGNORE INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, 0, 'unpaid', CURRENT_TIMESTAMP, '2026-08-15')", values: [`rich-inv-${runId}-${studentId}`, `RICH-${runId}-${studentId}`, `rich-enr-${runId}-${studentId}`, studentId, fee] },
+  ]));
+  await executeBatch(runs.flatMap(([runId]) => [
+    { sql: "INSERT OR IGNORE INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status) SELECT 'rich-sb-' || class_enrollments.id || '-' || class_sessions.id, class_sessions.id, class_enrollments.id, class_enrollments.student_id, ROUND(class_enrollments.contracted_fee / 10, 2), 'booked' FROM class_enrollments JOIN class_sessions ON class_sessions.class_run_id = class_enrollments.class_run_id WHERE class_enrollments.class_run_id = ?", values: [runId] },
+    { sql: "INSERT OR IGNORE INTO class_attendance (id, student_booking_id, status, note) SELECT 'rich-att-' || class_student_bookings.id, class_student_bookings.id, 'pending', '' FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_sessions.class_run_id = ?", values: [runId] },
+  ]));
   await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["rich_campus_sample_v4", "true"]);
 }
 

@@ -37,6 +37,8 @@ type ActionPayload = {
   mapY?: number | string;
   mapWidth?: number | string;
   mapHeight?: number | string;
+  businessStart?: string;
+  businessEnd?: string;
 };
 
 function db() {
@@ -59,6 +61,11 @@ const defaultCourseColour = courseColours[0];
 function courseColour(value: unknown) {
   const selected = String(value ?? "").toUpperCase();
   return courseColours.includes(selected) ? selected : defaultCourseColour;
+}
+
+function validTime(value: unknown) {
+  const time = String(value ?? "");
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "";
 }
 
 function localDate(offsetDays = 0, time = "09:00") {
@@ -512,9 +519,16 @@ async function updateClassroomMap(payload: ActionPayload) {
   );
 }
 
+async function updateBusinessHours(payload: ActionPayload) {
+  const start = validTime(payload.businessStart);
+  const end = validTime(payload.businessEnd);
+  if (!start || !end || end <= start) throw new Error("Please enter a valid operating time range.");
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["business_hours", JSON.stringify({ start, end })]);
+}
+
 async function readPortal() {
   await seedDatabase();
-  const [terms, courses, runs, sessions, students, teachers, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings] = await Promise.all([
+  const [terms, courses, runs, sessions, students, teachers, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, businessHoursSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, academic_terms.name AS term_name, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
@@ -544,6 +558,7 @@ async function readPortal() {
     rows(`SELECT class_teacher_bookings.*, teachers.name AS teacher_name, class_sessions.topic, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM class_teacher_bookings JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id JOIN class_sessions ON class_sessions.id = class_teacher_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_teacher_bookings.starts_at ASC`),
+    row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["business_hours"]),
   ]);
 
   const conflictRows = [
@@ -551,8 +566,20 @@ async function readPortal() {
     ...await findConflicts(teacherBookings, "teacher_id", "teacher_name", "Teacher"),
   ];
   const outstanding = invoices.reduce((sum, invoice) => sum + Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)), 0);
+  let businessHours: { start: string; end: string; source: "configured" | "bookings" } | null = null;
+  try {
+    const parsed = JSON.parse(businessHoursSetting?.value ?? "") as { start?: string; end?: string };
+    const start = validTime(parsed.start); const end = validTime(parsed.end);
+    if (start && end && end > start) businessHours = { start, end, source: "configured" };
+  } catch { /* Fall back to the booked lesson range. */ }
+  if (!businessHours) {
+    const starts = sessions.map((item) => String(item.starts_at).slice(11, 16)).filter(validTime).sort();
+    const ends = sessions.map((item) => String(item.ends_at).slice(11, 16)).filter(validTime).sort();
+    businessHours = { start: starts[0] ?? "08:00", end: ends.at(-1) ?? "20:00", source: "bookings" };
+  }
   return Response.json({
     terms, courses, runs, sessions, students, teachers, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    settings: { businessHours },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
       sessionsThisWeek: sessions.filter((item) => new Date(String(item.starts_at).replace(" ", "T")).getTime() < Date.now() + 7 * 86400000).length,
@@ -598,6 +625,7 @@ export async function POST(request: Request) {
     if (payload.action === "updateCourse" || payload.action === "updateRun") await updateEntity(payload);
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
     if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
+    if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
     return await readPortal();
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });

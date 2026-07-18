@@ -2,24 +2,25 @@
 
 import {
   Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap,
-  LayoutGrid, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, Users, UserRound,
+  LayoutGrid, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, SlidersHorizontal, Users, UserRound,
   UserRoundPlus, UsersRound, X,
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type Row = Record<string, unknown>;
 type Language = "en" | "zh";
-type View = "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports";
+type View = "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports" | "settings";
 type Detail = { kind: "session" | "student" | "teacher" | "room"; id: string } | null;
 
 type PortalData = {
   terms: Row[]; courses: Row[]; runs: Row[]; sessions: Row[]; students: Row[]; teachers: Row[]; classrooms: Row[];
   enrollments: Row[]; invoices: Row[]; payments: Row[]; attendance: Row[]; resourceBookings: Row[]; teacherBookings: Row[]; conflicts: Row[];
+  settings: { businessHours: { start: string; end: string; source: "configured" | "bookings" } };
   metrics: { openRuns: number; sessionsThisWeek: number; activeStudents: number; outstanding: number; conflicts: number };
 };
 
 const emptyData: PortalData = {
-  terms: [], courses: [], runs: [], sessions: [], students: [], teachers: [], classrooms: [], enrollments: [], invoices: [], payments: [], attendance: [], resourceBookings: [], teacherBookings: [], conflicts: [],
+  terms: [], courses: [], runs: [], sessions: [], students: [], teachers: [], classrooms: [], enrollments: [], invoices: [], payments: [], attendance: [], resourceBookings: [], teacherBookings: [], conflicts: [], settings: { businessHours: { start: "08:00", end: "20:00", source: "bookings" } },
   metrics: { openRuns: 0, sessionsThisWeek: 0, activeStudents: 0, outstanding: 0, conflicts: 0 },
 };
 
@@ -37,6 +38,7 @@ const amount = (value: unknown) => `RM ${Number(value ?? 0).toFixed(2)}`;
 const datePart = (value: unknown) => String(value ?? "").slice(0, 10);
 const timePart = (value: unknown) => String(value ?? "").slice(11, 16);
 const minutesOfDay = (value: unknown) => { const [hour, minute] = timePart(value).split(":").map(Number); return hour * 60 + minute; };
+const minutesForTime = (value: string) => { const [hour, minute] = value.split(":").map(Number); return hour * 60 + minute; };
 const portraitColours = ["#eaf7ff", "#fff4db", "#e9f7ee", "#f5ecff", "#ffede9"];
 const courseColourOptions = ["#0F8AA8", "#2563EB", "#4F46E5", "#7C3AED", "#0F766E", "#16A34A", "#A21CAF"];
 const defaultCourseColour = courseColourOptions[0];
@@ -51,6 +53,7 @@ type CalendarMode = "time" | "resource";
 type ScheduleScope = Exclude<CalendarScope, "year">;
 type ResourceKind = "classroom" | "teacher" | "student";
 type CalendarResource = { id: string; name: string; icon: "classroom" | "teacher" | "student" };
+type ScheduleWindow = { start: number; end: number; labels: string[]; height: number };
 
 function fromKey(value: string) { return new Date(`${value}T12:00:00`); }
 function toKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
@@ -60,6 +63,19 @@ function startOfMonth(date: Date) { return new Date(date.getFullYear(), date.get
 function eventSessionId(row: Row) { return get(row, "calendar_session_id") || get(row, "id"); }
 function eventColour(row: Row) { const color = get(row, "course_color").toUpperCase(); return courseColourOptions.includes(color) ? color : defaultCourseColour; }
 function eventStyle(row: Row) { return { "--course-colour": eventColour(row) } as React.CSSProperties; }
+
+function scheduleWindow(hours: PortalData["settings"]["businessHours"]): ScheduleWindow {
+  const start = minutesForTime(hours.start); const end = minutesForTime(hours.end);
+  const safeStart = Number.isFinite(start) ? start : 8 * 60;
+  const safeEnd = Number.isFinite(end) && end > safeStart ? end : 20 * 60;
+  const firstHour = Math.floor(safeStart / 60) * 60;
+  const lastHour = Math.ceil(safeEnd / 60) * 60;
+  const labels = Array.from({ length: Math.max(1, (lastHour - firstHour) / 60) }, (_, index) => {
+    const hour = Math.floor((firstHour + index * 60) / 60);
+    return `${String(hour).padStart(2, "0")}:00`;
+  });
+  return { start: safeStart, end: safeEnd, labels, height: Math.max(480, labels.length * 72) };
+}
 
 export function ManagementPortal() {
   const [data, setData] = useState<PortalData>(emptyData);
@@ -105,7 +121,7 @@ export function ManagementPortal() {
         ["calendar", CalendarDays, t.calendar], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers],
       ]} />
       <NavGroup label={t.manage} current={view} setView={setView} items={[
-        ["courses", BookOpen, t.courses], ["classrooms", DoorOpen, t.classrooms], ["classes", LayoutGrid, t.classes], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports],
+        ["courses", BookOpen, t.courses], ["classrooms", DoorOpen, t.classrooms], ["classes", LayoutGrid, t.classes], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"],
       ]} />
       <div className="sidebar-footer"><School size={17} /><span>Campus One</span></div>
     </aside>
@@ -128,13 +144,14 @@ export function ManagementPortal() {
       {view === "classes" ? <ClassManager data={data} run={run} busy={busy} t={t} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
       {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "reports" ? <ReportView data={data} t={t} /> : null}
+      {view === "settings" ? <SettingsView data={data} run={run} busy={busy} /> : null}
     </section>
     {detail ? <DetailSheet detail={detail} data={data} t={t} busy={busy} run={run} close={() => setDetail(null)} /> : null}
   </main>;
 }
 
 function pageTitle(view: View, t: typeof copy.en) {
-  const titles: Record<View, string> = { calendar: t.calendar, campus: t.campus, students: t.students, teachers: t.teachers, courses: t.courses, classrooms: t.classrooms, classes: t.classes, enrollment: t.enrollment, reports: t.reports };
+  const titles: Record<View, string> = { calendar: t.calendar, campus: t.campus, students: t.students, teachers: t.teachers, courses: t.courses, classrooms: t.classrooms, classes: t.classes, enrollment: t.enrollment, reports: t.reports, settings: "Settings" };
   return titles[view];
 }
 
@@ -151,6 +168,7 @@ function CalendarView({ data, t, language, onOpen }: { data: PortalData; t: type
   const [anchor, setAnchor] = useState<Date>(() => firstSession);
   const events = data.sessions;
   const resources = calendarResources(data, resourceKind);
+  const businessHours = data.settings.businessHours;
   const displayTitle = calendarTitle(anchor, scope, language);
   function shift(direction: number) {
     setAnchor((current) => {
@@ -168,7 +186,7 @@ function CalendarView({ data, t, language, onOpen }: { data: PortalData; t: type
       {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button></div> : null}
     </section>
     {scope !== "year" && mode === "resource" ? <div className="resource-kind-tabs">{(["classroom", "teacher", "student"] as ResourceKind[]).map((item) => <button type="button" className={resourceKind === item ? "active" : ""} key={item} onClick={() => setResourceKind(item)}>{item === "classroom" ? <DoorOpen size={14} /> : item === "teacher" ? <UserRound size={14} /> : <GraduationCap size={14} />}{c[`${item}s` as "classrooms" | "teachers" | "students"]}</button>)}</div> : null}
-    {scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} c={c} language={language} onOpen={onOpen} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} c={c} language={language} onOpen={onOpen} />}
+    {scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} />}
   </section>;
 }
 
@@ -186,10 +204,10 @@ function calendarTitle(anchor: Date, scope: CalendarScope, language: Language) {
   return `${start.toLocaleDateString(locale, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-function TimeCalendar({ scope, anchor, events, c, language, onOpen, onSelectDate }: { scope: ScheduleScope; anchor: Date; events: Row[]; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; onSelectDate: (date: Date) => void }) {
+function TimeCalendar({ scope, anchor, events, window, c, language, onOpen, onSelectDate }: { scope: ScheduleScope; anchor: Date; events: Row[]; window: ScheduleWindow; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; onSelectDate: (date: Date) => void }) {
   if (scope === "month") return <MonthCalendar anchor={anchor} events={events} c={c} language={language} onOpen={onOpen} onSelectDate={onSelectDate} />;
-  if (scope === "week") return <WeekCalendar anchor={anchor} events={events} c={c} language={language} onOpen={onOpen} />;
-  return <DayTimeline anchor={anchor} columns={[{ id: "all", name: c.allSchedule, icon: "classroom" }]} eventsForColumn={() => events.filter((event) => datePart(event.starts_at) === toKey(anchor))} c={c} onOpen={onOpen} />;
+  if (scope === "week") return <WeekCalendar anchor={anchor} events={events} window={window} language={language} onOpen={onOpen} />;
+  return <DayTimeline anchor={anchor} columns={[{ id: "all", name: c.allSchedule, icon: "classroom" }]} eventsForColumn={() => events.filter((event) => datePart(event.starts_at) === toKey(anchor))} window={window} c={c} onOpen={onOpen} />;
 }
 
 function YearCalendar({ anchor, events, c, language, onSelectDate }: { anchor: Date; events: Row[]; c: typeof calendarText.en; language: Language; onSelectDate: (date: Date) => void }) {
@@ -205,14 +223,15 @@ function MonthCalendar({ anchor, events, c, language, onOpen, onSelectDate }: { 
   return <section className="month-calendar"><div className="month-weekdays">{Array.from({ length: 7 }, (_, index) => <span key={index}>{addDays(startOfWeek(new Date(2026, 6, 20, 12)), index).toLocaleDateString(locale, { weekday: "short" })}</span>)}</div><div className="month-days">{days.map((day) => { const key = toKey(day); const dayEvents = events.filter((event) => datePart(event.starts_at) === key); const outside = day.getMonth() !== anchor.getMonth(); return <div key={key} className={outside ? "month-day outside" : "month-day"}><button type="button" className="month-day-number" onClick={() => onSelectDate(day)}>{day.getDate()}</button>{dayEvents.slice(0, 3).map((event) => <button type="button" className="month-event" style={eventStyle(event)} key={get(event, "id")} onClick={() => onOpen(eventSessionId(event))}><b>{timePart(event.starts_at)}</b>{get(event, "course_title")}</button>)}{dayEvents.length > 3 ? <span className="more-events">+{dayEvents.length - 3} {c.lessons}</span> : null}</div>; })}</div></section>;
 }
 
-function WeekCalendar({ anchor, events, c, language, onOpen }: { anchor: Date; events: Row[]; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void }) {
+function WeekCalendar({ anchor, events, window, language, onOpen }: { anchor: Date; events: Row[]; window: ScheduleWindow; language: Language; onOpen: (id: string) => void }) {
   const start = startOfWeek(anchor); const days = Array.from({ length: 7 }, (_, index) => addDays(start, index)); const locale = language === "zh" ? "zh-CN" : "en-US";
-  return <section className="week-calendar"><div className="week-columns">{days.map((day) => { const dayEvents = events.filter((event) => datePart(event.starts_at) === toKey(day)); return <div className="week-day" key={toKey(day)}><header><span>{day.toLocaleDateString(locale, { weekday: "short" })}</span><strong>{day.getDate()}</strong></header><div className="week-day-events">{dayEvents.map((event) => <EventCard key={get(event, "id")} event={event} onOpen={onOpen} />)}{!dayEvents.length ? <small>{c.noEvents}</small> : null}</div></div>; })}</div></section>;
+  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length } as React.CSSProperties;
+  return <section className="week-timeline"><div className="week-timeline-head"><div className="week-time-corner">Time</div>{days.map((day) => <div className="week-timeline-day-head" key={toKey(day)}><span>{day.toLocaleDateString(locale, { weekday: "short" })}</span><strong>{day.getDate()}</strong></div>)}</div><div className="week-timeline-body" style={bodyStyle}><div className="week-time-labels">{window.labels.map((label) => <span key={label}>{label}</span>)}</div>{days.map((day) => <div className="week-timeline-column" key={toKey(day)}>{events.filter((event) => datePart(event.starts_at) === toKey(day)).map((event) => <TimelineEvent key={get(event, "id")} event={event} window={window} onOpen={onOpen} />)}</div>)}</div></section>;
 }
 
-function ResourceCalendar({ scope, anchor, data, resources, kind, c, language, onOpen }: { scope: ScheduleScope; anchor: Date; data: PortalData; resources: CalendarResource[]; kind: ResourceKind; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void }) {
+function ResourceCalendar({ scope, anchor, data, resources, kind, window, c, language, onOpen }: { scope: ScheduleScope; anchor: Date; data: PortalData; resources: CalendarResource[]; kind: ResourceKind; window: ScheduleWindow; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void }) {
   const eventsFor = (resource: CalendarResource) => resourceEvents(data, kind, resource.id);
-  if (scope === "day") return <DayTimeline anchor={anchor} columns={resources} eventsForColumn={eventsFor} c={c} onOpen={onOpen} />;
+  if (scope === "day") return <DayTimeline anchor={anchor} columns={resources} eventsForColumn={eventsFor} window={window} c={c} onOpen={onOpen} />;
   if (scope === "week") { const start = startOfWeek(anchor); return <ResourceMatrix resources={resources} columns={Array.from({ length: 7 }, (_, index) => addDays(start, index))} eventsFor={eventsFor} c={c} language={language} onOpen={onOpen} />; }
   const days = Array.from({ length: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate() }, (_, index) => new Date(anchor.getFullYear(), anchor.getMonth(), index + 1, 12));
   return <ResourceMatrix resources={resources} columns={days} eventsFor={eventsFor} c={c} language={language} onOpen={onOpen} compact />;
@@ -224,9 +243,17 @@ function resourceEvents(data: PortalData, kind: ResourceKind, id: string): Row[]
   return data.attendance.filter((item) => get(item, "student_id") === id).map((item) => ({ ...item, id: `student-event-${get(item, "id")}`, calendar_session_id: get(item, "class_session_id") }));
 }
 
-function DayTimeline({ anchor, columns, eventsForColumn, c, onOpen }: { anchor: Date; columns: CalendarResource[]; eventsForColumn: (column: CalendarResource) => Row[]; c: typeof calendarText.en; onOpen: (id: string) => void }) {
+function DayTimeline({ anchor, columns, eventsForColumn, window, c, onOpen }: { anchor: Date; columns: CalendarResource[]; eventsForColumn: (column: CalendarResource) => Row[]; window: ScheduleWindow; c: typeof calendarText.en; onOpen: (id: string) => void }) {
   const visible = columns.length ? columns : [{ id: "none", name: c.allSchedule, icon: "classroom" }];
-  return <section className="day-timeline"><div className="timeline-head"><div>{toKey(anchor)}</div>{visible.map((column) => <div key={column.id}>{column.icon === "teacher" ? <UserRound size={15} /> : column.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}<span>{column.name}</span></div>)}</div><div className="timeline-body"><div className="timeline-hours">{[8, 10, 12, 14, 16, 18, 20].map((hour) => <span key={hour}>{String(hour).padStart(2, "0")}:00</span>)}</div><div className="timeline-columns">{visible.map((column) => <div className="timeline-column" key={column.id}>{eventsForColumn(column).filter((event) => datePart(event.starts_at) === toKey(anchor)).map((event) => { const top = Math.max(0, ((minutesOfDay(event.starts_at) - 480) / 720) * 100); const height = Math.max(10, ((minutesOfDay(event.ends_at) - minutesOfDay(event.starts_at)) / 720) * 100); return <button key={get(event, "id")} type="button" className="timeline-event" style={{ ...eventStyle(event), top: `${top}%`, height: `${height}%` }} onClick={() => onOpen(eventSessionId(event))}><span>{timePart(event.starts_at)}</span><strong>{get(event, "course_title")}</strong><em>{get(event, "topic") || get(event, "student_name")}</em></button>; })}</div>)}</div></div></section>;
+  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length } as React.CSSProperties;
+  return <section className="day-timeline"><div className="timeline-head"><div>{toKey(anchor)}</div>{visible.map((column) => <div key={column.id}>{column.icon === "teacher" ? <UserRound size={15} /> : column.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}<span>{column.name}</span></div>)}</div><div className="timeline-body" style={bodyStyle}><div className="timeline-hours">{window.labels.map((label) => <span key={label}>{label}</span>)}</div><div className="timeline-columns">{visible.map((column) => <div className="timeline-column" key={column.id}>{eventsForColumn(column).filter((event) => datePart(event.starts_at) === toKey(anchor)).map((event) => <TimelineEvent key={get(event, "id")} event={event} window={window} onOpen={onOpen} />)}</div>)}</div></div></section>;
+}
+
+function TimelineEvent({ event, window, onOpen }: { event: Row; window: ScheduleWindow; onOpen: (id: string) => void }) {
+  const duration = Math.max(1, window.end - window.start);
+  const top = Math.max(0, ((minutesOfDay(event.starts_at) - window.start) / duration) * 100);
+  const height = Math.max(8, ((minutesOfDay(event.ends_at) - minutesOfDay(event.starts_at)) / duration) * 100);
+  return <button type="button" className="timeline-event" style={{ ...eventStyle(event), top: `${top}%`, height: `${height}%` }} onClick={() => onOpen(eventSessionId(event))}><span>{timePart(event.starts_at)}</span><strong>{get(event, "course_title")}</strong><em>{get(event, "topic") || get(event, "classroom_name") || get(event, "student_name")}</em></button>;
 }
 
 function ResourceMatrix({ resources, columns, eventsFor, c, language, onOpen, compact = false }: { resources: CalendarResource[]; columns: Date[]; eventsFor: (resource: CalendarResource) => Row[]; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; compact?: boolean }) {
@@ -237,8 +264,6 @@ function ResourceMatrix({ resources, columns, eventsFor, c, language, onOpen, co
 function ResourceMatrixRow({ resource, columns, events, compact, onOpen }: { resource: CalendarResource; columns: Date[]; events: Row[]; compact: boolean; onOpen: (id: string) => void }) {
   return <><div className="matrix-resource"><span>{resource.icon === "teacher" ? <UserRound size={15} /> : resource.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}</span><strong>{resource.name}</strong></div>{columns.map((day) => { const cellEvents = events.filter((event) => datePart(event.starts_at) === toKey(day)); return <div className="matrix-cell" key={`${resource.id}-${toKey(day)}`}>{cellEvents.slice(0, compact ? 1 : 2).map((event) => <button type="button" key={get(event, "id")} className="matrix-event" style={eventStyle(event)} onClick={() => onOpen(eventSessionId(event))}>{compact ? <span>{cellEvents.length}</span> : <><b>{timePart(event.starts_at)}</b><span>{get(event, "course_title")}</span></>}</button>)}{cellEvents.length > (compact ? 1 : 2) ? <small>+{cellEvents.length - (compact ? 1 : 2)}</small> : null}</div>; })}</>;
 }
-
-function EventCard({ event, onOpen }: { event: Row; onOpen: (id: string) => void }) { return <button type="button" className="week-event" style={eventStyle(event)} onClick={() => onOpen(eventSessionId(event))}><span>{timePart(event.starts_at)}</span><strong>{get(event, "course_title")}</strong><em>{get(event, "classroom_name") || get(event, "student_name")}</em></button>; }
 
 function CampusView({ data, t, onOpenSession, onOpenRoom }: { data: PortalData; t: typeof copy.en; onOpenSession: (id: string) => void; onOpenRoom: (id: string) => void }) {
   const nextByRoom = new Map<string, Row>();
@@ -295,6 +320,14 @@ function EnrollmentManager({ data, run, busy, t }: { data: PortalData; run: (act
 }
 
 function ReportView({ data, t }: { data: PortalData; t: typeof copy.en }) { return <section className="operation-stack"><div className="view-intro"><div><h2>{t.reports}</h2><p>{t.reportHint}</p></div></div><section className="report-grid"><ReportCard icon={<UsersRound size={20} />} label={t.students} value={data.metrics.activeStudents} note="Active student records" /><ReportCard icon={<CalendarDays size={20} />} label="Lessons this week" value={data.metrics.sessionsThisWeek} note="Scheduled in the coming 7 days" /><ReportCard icon={<Banknote size={20} />} label={t.due} value={amount(data.metrics.outstanding)} note="Across open invoices" /><ReportCard icon={<Settings2 size={20} />} label={t.conflict} value={data.metrics.conflicts} note={data.metrics.conflicts ? "Needs attention" : t.allClear} /></section><section className="management-panel"><h3>{t.conflict}</h3><Table columns={[["kind", "Type"], ["resource", "Resource"], ["first", "First booking"], ["second", "Second booking"], ["starts_at", t.start]]} rows={data.conflicts} empty={t.allClear} /></section></section>; }
+
+function SettingsView({ data, run, busy }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) {
+  const [start, setStart] = useState(data.settings.businessHours.start);
+  const [end, setEnd] = useState(data.settings.businessHours.end);
+  const configured = data.settings.businessHours.source === "configured";
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void run("updateBusinessHours", { businessStart: start, businessEnd: end }); }
+  return <section className="operation-stack"><div className="view-intro"><div><h2>Settings</h2><p>Set the operating hours used by day and week calendar timelines.</p></div></div><section className="management-panel settings-panel"><header><SlidersHorizontal size={18} /><div><h3>Operating hours</h3><p>{configured ? "This schedule is configured for the campus." : "Using the earliest and latest booked lesson until you save a schedule."}</p></div></header><form className="inline-form compact" onSubmit={submit}><label className="form-field">Start time<input type="time" value={start} onChange={(event) => setStart(event.target.value)} required /></label><label className="form-field">End time<input type="time" value={end} onChange={(event) => setEnd(event.target.value)} required /></label><button type="submit" className="primary-button" disabled={busy}><Check size={16} />Save hours</button></form></section></section>;
+}
 function MetricPills({ data, t }: { data: PortalData; t: typeof copy.en }) { return <div className="metric-pills"><span><b>{data.metrics.openRuns}</b> {t.classes}</span><span><b>{data.metrics.activeStudents}</b> {t.students}</span><span><b>{amount(data.metrics.outstanding)}</b> {t.due}</span></div>; }
 function ReportCard({ icon, label, value, note }: { icon: ReactNode; label: string; value: string | number; note: string }) { return <article className="report-card"><span>{icon}</span><p>{label}</p><strong>{value}</strong><small>{note}</small></article>; }
 

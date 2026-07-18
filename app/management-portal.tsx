@@ -319,10 +319,10 @@ function CampusView({ data, t, onOpenRoom }: { data: PortalData; t: typeof copy.
   const [campusId, setCampusId] = useState("");
   const campus = data.campuses.find((item) => get(item, "id") === campusId) ?? data.campuses[0];
   const rooms = campus ? data.classrooms.filter((room) => get(room, "campus_id") === get(campus, "id")) : [];
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>View classrooms and their facilities by campus.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div>{campus ? <FloorMap campus={campus} rooms={rooms} editable={false} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
+  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
 }
 
-function FloorMap({ campus, rooms, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
@@ -349,10 +349,36 @@ function FloorMap({ campus, rooms, editable, onOpenRoom, onSelectRoom, onMoveRoo
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     onMoveRoom?.(room, position);
   }
+  const now = Date.now();
+  function roomSchedule(room: Row) {
+    const roomSessions = sessions.filter((item) => get(item, "classroom_name") === get(room, "name")).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+    const current = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now && new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now);
+    const next = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now);
+    const nextStarts = next ? new Date(get(next, "starts_at").replace(" ", "T")).getTime() : 0;
+    const status = current ? "in_class" : next && nextStarts - now <= 90 * 60 * 1000 ? "starting_soon" : "available";
+    const count = (item: Row | undefined) => item ? attendance.filter((record) => get(record, "class_session_id") === get(item, "id")).length : 0;
+    return { current, next, status, currentCount: count(current), nextCount: count(next) };
+  }
   /*
   return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>Campus One · Level 2</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const next = sessionsByRoom.get(get(room, "name")); const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; return <button type="button" key={get(room, "id")} className={`${next ? "map-room occupied" : "map-room"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(Number(room.map_height ?? 110) / campusMap.height) * 100}%`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : next ? onOpenSession(get(next, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span>{next ? <em>{get(next, "course_title")} · {timePart(next.starts_at)}</em> : <small>{get(room, "resources") || "Available"}</small>}</button>; })}</div>;
   */
+  /*
   return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; return <button type="button" key={get(room, "id")} className={`map-room${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(Number(room.map_height ?? 110) / campusMap.height) * 100}%`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></button>; })}</div>;
+  */
+  return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}>
+    <div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div>
+    <div className="map-hall">MAIN WALKWAY</div>
+    {rooms.map((room) => {
+      const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) };
+      const schedule = roomSchedule(room); const focus = schedule.current ?? schedule.next;
+      const courseColor = eventColour(focus ?? {}); const height = Math.max(Number(room.map_height ?? 110), showSchedule ? 142 : 110);
+      return <button type="button" key={get(room, "id")} className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}>
+        <GripVertical className="room-grip" size={15} />
+        <header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available"}</b> : null}</header>
+        {showSchedule ? <div className="room-card-schedule"><div className="room-slot current"><span>NOW</span>{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <><strong>No lesson now</strong><small>Room is ready</small></>}</div><div className="room-slot next"><span>NEXT{schedule.next ? ` · ${timePart(schedule.next.starts_at)}` : ""}</span>{schedule.next ? <><strong>{get(schedule.next, "course_title")}</strong><small>{get(schedule.next, "teacher_name")} · {schedule.nextCount} students</small></> : <><strong>Nothing booked</strong><small>Available later today</small></>}</div></div> : <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div>}
+      </button>;
+    })}
+  </div>;
 }
 
 function DirectoryView({ type, rows, data, t, onOpen }: { type: "student" | "teacher"; rows: Row[]; data: PortalData; t: typeof copy.en; onOpen: (id: string) => void }) {

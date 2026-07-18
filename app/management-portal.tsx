@@ -609,7 +609,7 @@ function LegacyDetailSheet({ detail, data, t, busy, run, close }: { detail: Excl
 }
 
 function DetailSheet({ detail, data, t, busy, run, close }: { detail: Exclude<Detail, null>; data: PortalData; t: typeof copy.en; busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void }) {
-  const item = detail.kind === "session" ? data.sessions.find((row) => get(row, "id") === detail.id) : detail.kind === "student" ? data.students.find((row) => get(row, "id") === detail.id) : detail.kind === "teacher" ? data.teachers.find((row) => get(row, "id") === detail.id) : data.classrooms.find((row) => get(row, "id") === detail.id);
+  const item = detail.kind === "session" ? data.sessions.find((row) => get(row, "id") === detail.id) : detail.kind === "student" ? data.students.find((row) => get(row, "id") === detail.id) : detail.kind === "teacher" ? data.teachers.find((row) => get(row, "id") === detail.id) : detail.kind === "course" ? data.runs.find((row) => get(row, "id") === detail.id) : data.classrooms.find((row) => get(row, "id") === detail.id);
   const [tab, setTab] = useState("summary");
   const [editing, setEditing] = useState(false);
   const [enrollStudentId, setEnrollStudentId] = useState("");

@@ -513,6 +513,33 @@ button:disabled {
 @media (max-width: 760px) { .operation-app { display: block; }.operation-sidebar { position: sticky; top: 0; z-index: 10; min-height: 0; flex-direction: row; gap: 8px; padding: 8px; overflow-x: auto; }.operation-brand { flex: 0 0 auto; }.operation-brand span,.nav-label,.sidebar-footer { display: none; }.nav-group { display: flex; flex: 0 0 auto; gap: 3px; }.nav-group button { min-height: 36px; padding: 0 8px; }.nav-group button span { display: none; }.operation-workspace { padding: 10px; }.operation-header { min-height: 55px; }.search-box { display: none; }.view-intro { align-items: flex-start; }.metric-pills { justify-content: start; }.calendar-controls,.calendar-controls.year-controls { grid-template-columns: 1fr; }.mode-control { justify-self: start; }.calendar-navigation { justify-content: start; }.calendar-navigation strong { min-width: 0; flex: 1; }.year-calendar { grid-template-columns: 1fr; }.calendar-board { grid-template-columns: 53px minmax(0, 1fr); }.calendar-corner span { display: none; }.time-scale span { padding-left: 5px; }.floor-map { min-height: 470px; transform-origin: top left; }.map-room { transform: scale(.82); transform-origin: top left; }.map-room:hover { transform: scale(.82); }.inline-form,.inline-form.compact,.inline-form.lesson-form,.course-form { grid-template-columns: 1fr 1fr; }.inline-form .primary-button,.inline-form .quiet-button { grid-column: auto; }.report-grid { grid-template-columns: 1fr 1fr; }.directory-grid,.course-grid,.run-card-grid { grid-template-columns: 1fr; }.run-card { grid-template-columns: 102px minmax(0, 1fr); }.run-card .course-visual { min-height: 164px; }.course-editor-header { align-items: flex-start; flex-wrap: wrap; }.course-editor-header .course-visual { height: 102px; min-height: 102px; }.course-editor-header > .status-chip { margin-left: 0; }.run-summary { grid-template-columns: 1fr; }.sheet-list-row { grid-template-columns: 1fr 1fr; }.sheet-enroll { flex-direction: column; }.panel-row { display: grid; padding: 0 12px 12px; }.panel-row .form-field { width: 100%; }.save-message { display: none; } }
 @media (max-width: 760px) { .role-switcher { flex: 0 0 126px; grid-template-columns: repeat(3, 1fr); }.role-switcher button { min-height: 36px; padding: 3px; }.role-switcher button span { display: none; }.student-hero { min-height: 235px; }.student-hero::after { background: rgba(236, 252, 250, .8); }.student-hero-copy { width: 72%; min-height: 235px; padding: 18px; }.student-focus-grid,.teacher-stat-grid { grid-template-columns: 1fr; }.student-timetable > button { grid-template-columns: 1fr auto; }.student-timetable > button > span { grid-column: 1; }.student-timetable p { grid-column: 1; }.student-timetable > button > svg { grid-column: 2; grid-row: 1 / span 2; }.teacher-welcome { align-items: flex-start; flex-wrap: wrap; }.teacher-welcome-stats { margin-left: 0; justify-items: start; }.teacher-lesson { grid-template-columns: 74px minmax(0, 1fr); }.teacher-lesson-action { display: none; }.admin-welcome { min-height: 0; padding: 17px; }.admin-welcome h2 { font-size: 21px; }.admin-welcome-illustration { display: none; }.admin-metric-grid { grid-template-columns: 1fr 1fr; }.dashboard-metric { min-height: 112px; }.dashboard-lesson { grid-template-columns: 66px 4px minmax(0, 1fr); padding: 8px 10px; }.dashboard-lesson .status-chip { display: none; }.grid-toolbar > label { flex-basis: 100%; }.grid-toolbar .view-switch { margin-left: 0; }.detail-workspace .entity-main { padding-right: 0; }.detail-workspace .detail-tabs-right { position: static; display: flex; width: auto; margin: 0; overflow-x: auto; border-width: 0 0 1px; border-radius: 0; box-shadow: none; }.detail-workspace .detail-tabs-right button { flex: 0 0 64px; } }
 
+/* The detail rail is navigation, not decoration: every available section stays legible. */
+.detail-workspace .detail-tabs-right {
+  background: #2f91af !important;
+  border-left-color: #237b96 !important;
+}
+.detail-workspace .detail-tabs-right button {
+  min-height: 66px;
+  color: #ffffff !important;
+  text-shadow: none;
+}
+.detail-workspace .detail-tabs-right button svg {
+  color: #ffffff !important;
+}
+.detail-workspace .detail-tabs-right button:hover,
+.detail-workspace .detail-tabs-right button:focus-visible {
+  background: #67b7cc !important;
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
+}
+.detail-workspace .detail-tabs-right button.active {
+  background: #ffffff !important;
+  color: #164d5e !important;
+}
+.detail-workspace .detail-tabs-right button.active svg {
+  color: #087f9f !important;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

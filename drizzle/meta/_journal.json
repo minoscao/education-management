@@ -36,6 +36,13 @@
       "when": 1784365326513,
       "tag": "0004_past_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784367757337,
+      "tag": "0005_course-display-color",
+      "breakpoints": true
     }
   ]
 }

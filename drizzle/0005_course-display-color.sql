@@ -1,0 +1,1 @@
+ALTER TABLE `course_catalogs` ADD `display_color` text DEFAULT '#0F8AA8' NOT NULL;

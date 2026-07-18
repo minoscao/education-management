@@ -136,6 +136,7 @@ export const courseCatalogs = sqliteTable("course_catalogs", {
   defaultSessions: integer("default_sessions").notNull(),
   defaultMinutes: integer("default_minutes").notNull(),
   listPrice: real("list_price").notNull().default(0),
+  displayColor: text("display_color").notNull().default("#0F8AA8"),
   status: text("status").notNull().default("active"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

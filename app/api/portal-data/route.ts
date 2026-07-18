@@ -16,6 +16,7 @@ type ActionPayload = {
   sessions?: number | string;
   minutes?: number | string;
   price?: number | string;
+  color?: string;
   name?: string;
   termId?: string;
   capacity?: number | string;
@@ -50,6 +51,14 @@ function id(prefix: string) {
 function number(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+const courseColours = ["#0F8AA8", "#2563EB", "#4F46E5", "#7C3AED", "#0F766E", "#16A34A", "#A21CAF"];
+const defaultCourseColour = courseColours[0];
+
+function courseColour(value: unknown) {
+  const selected = String(value ?? "").toUpperCase();
+  return courseColours.includes(selected) ? selected : defaultCourseColour;
 }
 
 function localDate(offsetDays = 0, time = "09:00") {
@@ -94,15 +103,16 @@ async function seedDatabase() {
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
   if (seeded) {
     await ensureClassroomLayouts();
+    await ensureCourseColours();
     return;
   }
 
   const today = localDate(0, "00:00").slice(0, 10);
   const termId = "term-current";
   const products = [
-    ["course-chinese-y7", "CHN-Y7", "Chinese Year 7", "Chinese", "Year 7", 12, 90, 360, "active"],
-    ["course-math-y7", "MTH-Y7", "Mathematics Year 7", "Mathematics", "Year 7", 10, 90, 420, "active"],
-    ["course-violin-beg", "VIO-BEG", "Violin Beginner", "Music", "Beginner", 8, 60, 480, "active"],
+    ["course-chinese-y7", "CHN-Y7", "Chinese Year 7", "Chinese", "Year 7", 12, 90, 360, "#0F766E", "active"],
+    ["course-math-y7", "MTH-Y7", "Mathematics Year 7", "Mathematics", "Year 7", 10, 90, 420, "#2563EB", "active"],
+    ["course-violin-beg", "VIO-BEG", "Violin Beginner", "Music", "Beginner", 8, 60, 480, "#7C3AED", "active"],
   ];
   const teachers = [
     ["teacher-zhang", "TCH-001", "Zhang Teacher", "Chinese", "012-8888999", "available"],
@@ -137,7 +147,7 @@ async function seedDatabase() {
   );
   for (const product of products) {
     await execute(
-      "INSERT OR IGNORE INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       product,
     );
   }
@@ -179,6 +189,7 @@ async function seedDatabase() {
   await enrollStudent("run-chinese-y7-a", "student-may", 360, false);
   await enrollStudent("run-math-y7-a", "student-allen", 420, false);
   await enrollStudent("run-violin-beg-a", "student-may", 480, false);
+  await ensureCourseColours();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
 }
 
@@ -193,6 +204,17 @@ async function ensureClassroomLayouts() {
       "UPDATE classrooms SET room_type = ?, resources = ?, map_x = ?, map_y = ?, map_width = ?, map_height = ? WHERE id = ? AND map_x = 80 AND map_y = 80",
       layout,
     );
+  }
+}
+
+async function ensureCourseColours() {
+  const presets = [
+    ["#0F766E", "course-chinese-y7"],
+    ["#2563EB", "course-math-y7"],
+    ["#7C3AED", "course-violin-beg"],
+  ];
+  for (const [color, courseId] of presets) {
+    await execute("UPDATE course_catalogs SET display_color = ? WHERE id = ? AND display_color = ?", [color, courseId, defaultCourseColour]);
   }
 }
 
@@ -217,8 +239,8 @@ async function createCourse(payload: ActionPayload) {
   const count = Math.max(1, Math.floor(number(payload.sessions, 8)));
   const code = `CRS-${Date.now().toString().slice(-6)}`;
   await execute(
-    "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [id("course"), code, title, payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", count, Math.max(30, number(payload.minutes, 90)), number(payload.price), "active"],
+    "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [id("course"), code, title, payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", count, Math.max(30, number(payload.minutes, 90)), number(payload.price), courseColour(payload.color), "active"],
   );
 }
 
@@ -354,7 +376,7 @@ async function setAttendance(payload: ActionPayload) {
 
 async function updateEntity(payload: ActionPayload) {
   if (payload.action === "updateCourse" && payload.courseId) {
-    await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ? WHERE id = ?", [payload.title?.trim() || "Untitled course", payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), payload.courseId]);
+    await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ?, display_color = ? WHERE id = ?", [payload.title?.trim() || "Untitled course", payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), courseColour(payload.color), payload.courseId]);
   }
   if (payload.action === "updateRun" && payload.runId) {
     await execute("UPDATE class_runs SET name = ?, capacity = ?, price = ? WHERE id = ?", [payload.name?.trim() || "Untitled class", Math.max(1, number(payload.capacity, 1)), number(payload.price), payload.runId]);
@@ -408,7 +430,7 @@ async function readPortal() {
           FROM class_runs JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN academic_terms ON academic_terms.id = class_runs.term_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
           GROUP BY class_runs.id ORDER BY class_runs.created_at DESC`),
-    rows(`SELECT class_sessions.*, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, classrooms.name AS classroom_name, teachers.name AS teacher_name, class_teacher_bookings.pay_amount AS pay_amount, class_teacher_bookings.pay_status
+    rows(`SELECT class_sessions.*, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color, classrooms.name AS classroom_name, teachers.name AS teacher_name, class_teacher_bookings.pay_amount AS pay_amount, class_teacher_bookings.pay_status
           FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id
           LEFT JOIN class_resource_bookings ON class_resource_bookings.class_session_id = class_sessions.id LEFT JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id
           LEFT JOIN class_teacher_bookings ON class_teacher_bookings.class_session_id = class_sessions.id LEFT JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id
@@ -422,7 +444,7 @@ async function readPortal() {
     rows(`SELECT student_invoices.*, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM student_invoices JOIN students ON students.id = student_invoices.student_id JOIN class_enrollments ON class_enrollments.id = student_invoices.enrollment_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY student_invoices.issued_at DESC`),
     rows("SELECT student_payments.*, student_invoices.invoice_no, students.name AS student_name FROM student_payments JOIN student_invoices ON student_invoices.id = student_payments.invoice_id JOIN students ON students.id = student_payments.student_id ORDER BY student_payments.received_at DESC"),
-    rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title
+    rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
           JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_sessions.starts_at ASC`),
     rows(`SELECT class_resource_bookings.*, classrooms.name AS classroom_name, class_sessions.topic, class_sessions.starts_at AS session_starts_at, class_runs.name AS run_name, course_catalogs.title AS course_title

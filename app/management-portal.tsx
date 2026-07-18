@@ -317,12 +317,20 @@ function ResourceMatrixRow({ resource, columns, events, compact, onOpen }: { res
 
 function CampusView({ data, t, onOpenRoom }: { data: PortalData; t: typeof copy.en; onOpenRoom: (id: string) => void }) {
   const [campusId, setCampusId] = useState("");
+  const [viewDate, setViewDate] = useState(() => toKey(new Date()));
+  const [timeMode, setTimeMode] = useState<"now" | "day">("now");
   const campus = data.campuses.find((item) => get(item, "id") === campusId) ?? data.campuses[0];
   const rooms = campus ? data.classrooms.filter((room) => get(room, "campus_id") === get(campus, "id")) : [];
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
+  const today = toKey(new Date()); const tomorrow = toKey(addDays(new Date(), 1));
+  const referenceTime = timeMode === "now" ? Date.now() : new Date(`${viewDate}T00:00:00`).getTime();
+  const label = timeMode === "now" ? `Now · ${new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date())}` : `Viewing · ${new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${viewDate}T12:00:00`))}`;
+  function selectToday() { setViewDate(today); setTimeMode("now"); }
+  function selectNow() { setViewDate(today); setTimeMode("now"); }
+  function selectTomorrow() { setViewDate(tomorrow); setTimeMode("day"); }
+  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div><section className="map-time-controls"><div className="map-time-actions"><button className={timeMode === "now" && viewDate === today ? "active" : ""} type="button" onClick={selectToday}>Today</button><button className={timeMode === "now" ? "active" : ""} type="button" onClick={selectNow}><Clock3 size={15} />Now onward</button><button className={timeMode === "day" && viewDate === tomorrow ? "active" : ""} type="button" onClick={selectTomorrow}>Tomorrow</button><label><span>Date</span><input type="date" value={viewDate} onChange={(event) => { setViewDate(event.target.value); setTimeMode(event.target.value === today ? "now" : "day"); }} /></label></div><strong>{label}</strong></section>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} viewDate={viewDate} referenceTime={referenceTime} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
 }
 
-function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
@@ -349,9 +357,9 @@ function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     onMoveRoom?.(room, position);
   }
-  const now = Date.now();
+  const now = referenceTime ?? Date.now();
   function roomSchedule(room: Row) {
-    const roomSessions = sessions.filter((item) => get(item, "classroom_name") === get(room, "name")).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+    const roomSessions = sessions.filter((item) => get(item, "classroom_name") === get(room, "name") && (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate)).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
     const current = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now && new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now);
     const next = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now);
     const nextStarts = next ? new Date(get(next, "starts_at").replace(" ", "T")).getTime() : 0;

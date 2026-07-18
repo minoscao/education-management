@@ -761,7 +761,7 @@ async function readPortal() {
     rows(`SELECT class_resource_bookings.*, classrooms.name AS classroom_name, class_sessions.topic, class_sessions.starts_at AS session_starts_at, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM class_resource_bookings JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id JOIN class_sessions ON class_sessions.id = class_resource_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_resource_bookings.starts_at ASC`),
-    rows(`SELECT class_teacher_bookings.*, teachers.name AS teacher_name, class_sessions.topic, class_runs.name AS run_name, course_catalogs.title AS course_title
+    rows(`SELECT class_teacher_bookings.*, teachers.name AS teacher_name, class_sessions.topic, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_teacher_bookings JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id JOIN class_sessions ON class_sessions.id = class_teacher_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_teacher_bookings.starts_at ASC`),
     row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["business_hours"]),

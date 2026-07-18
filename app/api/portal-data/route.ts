@@ -602,6 +602,13 @@ async function setAttendance(payload: ActionPayload) {
   );
 }
 
+async function requestLeave(payload: ActionPayload) {
+  if (!payload.sessionId || !payload.studentId) throw new Error("Lesson booking not found.");
+  const booking = await row<{ id: string }>("SELECT id FROM class_student_bookings WHERE class_session_id = ? AND student_id = ?", [payload.sessionId, payload.studentId]);
+  if (!booking) throw new Error("Lesson booking not found.");
+  await execute("UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", ["leave", "Requested by student", booking.id]);
+}
+
 async function updateEntity(payload: ActionPayload) {
   if (payload.action === "updateCourse" && payload.courseId) {
     await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ?, display_color = ? WHERE id = ?", [payload.title?.trim() || "Untitled course", payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), courseColour(payload.color), payload.courseId]);
@@ -787,6 +794,7 @@ export async function POST(request: Request) {
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "setAttendance") await setAttendance(payload);
+    if (payload.action === "requestLeave") await requestLeave(payload);
     if (payload.action === "updateCourse" || payload.action === "updateRun" || payload.action === "updateStudent" || payload.action === "updateTeacher") await updateEntity(payload);
     if (payload.action === "createCampus") await createCampus(payload);
     if (payload.action === "updateCampus") await updateCampus(payload);

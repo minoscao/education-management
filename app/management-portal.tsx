@@ -3,14 +3,15 @@
 
 import {
   Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
-  LayoutGrid, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, SlidersHorizontal, Users, UserRound,
+  ClipboardCheck, Home, LayoutGrid, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, UserRound,
   UserRoundPlus, UsersRound, X,
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type Row = Record<string, unknown>;
 type Language = "en" | "zh";
-type View = "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports" | "settings";
+type Role = "admin" | "teacher" | "student";
+type View = "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports" | "settings" | "teacherHome" | "studentHome" | "studentCourses" | "studentCalendar";
 type Detail = { kind: "session" | "student" | "teacher" | "room"; id: string } | null;
 
 type PortalData = {
@@ -96,6 +97,7 @@ function scheduleWindow(hours: PortalData["settings"]["businessHours"]): Schedul
 export function ManagementPortal() {
   const [data, setData] = useState<PortalData>(emptyData);
   const [view, setView] = useState<View>("calendar");
+  const [role, setRole] = useState<Role>("admin");
   const [language, setLanguage] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -129,21 +131,20 @@ export function ManagementPortal() {
 
   const filteredStudents = useMemo(() => data.students.filter((item) => `${get(item, "name")} ${get(item, "code")}`.toLowerCase().includes(search.toLowerCase())), [data.students, search]);
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
+  function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "calendar" : next === "teacher" ? "teacherHome" : "studentHome"); }
 
   return <main className="operation-app">
     <aside className="operation-sidebar">
-      <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{t.product}</span></div>
-      <NavGroup label={t.operate} current={view} setView={setView} items={[
-        ["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers],
-      ]} />
-      <NavGroup label={t.manage} current={view} setView={setView} items={[
-        ["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"],
-      ]} />
+      <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span></div>
+      <RoleSwitcher role={role} onChange={changeRole} />
+      {role === "admin" ? <><NavGroup label={t.operate} current={view} setView={setView} items={[["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers]]} /><NavGroup label={t.manage} current={view} setView={setView} items={[["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"]]} /></> : null}
+      {role === "teacher" ? <NavGroup label="TEACH" current={view} setView={setView} items={[["teacherHome", Home, "Today"], ["calendar", CalendarDays, "My schedule"], ["classes", BookOpen, "My courses"], ["students", Users, "Students"]]} /> : null}
+      {role === "student" ? <NavGroup label="LEARN" current={view} setView={setView} items={[["studentHome", Home, "Home"], ["studentCourses", BookOpen, "My courses"], ["studentCalendar", CalendarDays, "My timetable"]]} /> : null}
       <div className="sidebar-footer"><School size={17} /><span>{get(data.campuses[0], "name") || "Campus"}</span></div>
     </aside>
     <section className="operation-workspace">
       <header className="operation-header">
-        <div className="page-title"><p>{view === "calendar" || view === "classes" || view === "campus" || view === "students" || view === "teachers" ? t.operate : t.manage}</p><h1>{pageTitle(view, t)}</h1></div>
+        <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : view === "calendar" || view === "classes" || view === "campus" || view === "students" || view === "teachers" ? t.operate : t.manage}</p><h1>{pageTitle(view, t)}</h1></div>
         <div className="header-tools">
           <label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} aria-label={t.search} /></label>
           {message ? <span className={message === "Saved" || message === "已保存" ? "save-message ok" : "save-message error"}>{message}</span> : null}
@@ -161,18 +162,51 @@ export function ManagementPortal() {
       {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "reports" ? <ReportView data={data} t={t} /> : null}
       {view === "settings" ? <SettingsView data={data} run={run} busy={busy} /> : null}
+      {view === "teacherHome" ? <TeacherHome data={data} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "studentHome" ? <StudentHome data={data} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "studentCourses" ? <StudentCourses data={data} /> : null}
+      {view === "studentCalendar" ? <StudentTimetable data={data} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
     </section>
     {detail ? <DetailSheet detail={detail} data={data} t={t} busy={busy} run={run} close={() => setDetail(null)} /> : null}
   </main>;
 }
 
 function pageTitle(view: View, t: typeof copy.en) {
-  const titles: Record<View, string> = { calendar: t.calendar, campus: t.campus, students: t.students, teachers: t.teachers, courses: "Course setup", classrooms: t.classrooms, classes: "Courses", enrollment: t.enrollment, reports: t.reports, settings: "Settings" };
+  const titles: Record<View, string> = { calendar: t.calendar, campus: t.campus, students: t.students, teachers: t.teachers, courses: "Course setup", classrooms: t.classrooms, classes: "Courses", enrollment: t.enrollment, reports: t.reports, settings: "Settings", teacherHome: "Today", studentHome: "My learning", studentCourses: "My courses", studentCalendar: "My timetable" };
   return titles[view];
 }
 
 function NavGroup({ label, current, setView, items }: { label: string; current: View; setView: (value: View) => void; items: [View, typeof CalendarDays, string][] }) {
   return <div className="nav-group"><span className="nav-label">{label}</span>{items.map(([key, Icon, title]) => <button key={key} type="button" className={current === key ? "active" : ""} onClick={() => setView(key)}><Icon size={18} /><span>{title}</span></button>)}</div>;
+}
+
+function RoleSwitcher({ role, onChange }: { role: Role; onChange: (role: Role) => void }) { return <div className="role-switcher"><button type="button" className={role === "admin" ? "active" : ""} onClick={() => onChange("admin")}><ShieldCheck size={15} /><span>Admin</span></button><button type="button" className={role === "teacher" ? "active" : ""} onClick={() => onChange("teacher")}><UserRound size={15} /><span>Teacher</span></button><button type="button" className={role === "student" ? "active" : ""} onClick={() => onChange("student")}><GraduationCap size={15} /><span>Student</span></button></div>; }
+
+function studentLearning(data: PortalData) {
+  const student = data.students.find((item) => get(item, "id") === "student-allen") ?? data.students[0];
+  const enrollments = student ? data.enrollments.filter((item) => get(item, "student_id") === get(student, "id") && get(item, "status") === "enrolled") : [];
+  const runIds = new Set(enrollments.map((item) => get(item, "class_run_id")));
+  const sessions = data.sessions.filter((item) => runIds.has(get(item, "class_run_id"))).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+  return { student, enrollments, sessions };
+}
+
+function StudentHome({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) {
+  const { student, enrollments, sessions } = studentLearning(data); const next = sessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()) ?? sessions[0];
+  const attended = data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && ["present", "late"].includes(get(item, "status"))).length;
+  return <section className="student-portal"><section className="student-hero"><img src="/assets/student/learning-hero.png" alt="" /><div className="student-hero-copy"><div className="student-profile"><img src={avatarUrl(student)} alt="" /><span>Year 7 learner</span></div><p>Good to see you</p><h2>{get(student, "name").split(" ")[0]}!</h2><strong>Small steps make big progress.</strong></div><div className="student-stars"><Sparkles size={20} /><b>{attended}</b><span>learning wins</span></div></section><div className="student-focus-grid"><article className="student-next"><span>UP NEXT</span><h3>{get(next, "course_title") || "Your next lesson"}</h3><p>{get(next, "topic") || "A new learning adventure"}</p><div><Clock3 size={16} /><strong>{next ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}` : "No lesson booked"}</strong></div>{next ? <button type="button" onClick={() => onOpen(get(next, "id"))}>View lesson <ChevronRight size={16} /></button> : null}</article><article className="student-progress"><span>MY PROGRESS</span><strong>{sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%</strong><p>{attended} of {sessions.length} lessons attended</p><div className="progress-track"><i style={{ width: `${sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%` }} /></div></article><article className="student-reminder"><ClipboardCheck size={22} /><div><span>THIS WEEK</span><strong>{sessions.slice(0, 2).length} lessons ahead</strong><p>Pack your notebook and arrive ready.</p></div></article></div><section className="student-learning-section"><div className="student-section-title"><div><span>MY LEARNING</span><h3>Keep going, you are doing great</h3></div><b>{enrollments.length} courses</b></div><div className="student-course-grid">{enrollments.map((enrollment) => { const runSessions = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")); const progress = runSessions.length ? Math.min(100, Math.round((data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && runSessions.some((session) => get(session, "id") === get(item, "class_session_id")) && ["present", "late"].includes(get(item, "status"))).length / runSessions.length) * 100)) : 0; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{runSessions.length} lessons planned</p><div className="mini-progress"><i style={{ width: `${progress}%` }} /></div><small>{progress}% complete</small></div></article>; })}</div></section></section>;
+}
+
+function StudentCourses({ data }: { data: PortalData }) { const { enrollments, sessions } = studentLearning(data); return <section className="student-portal"><section className="student-simple-heading"><Sparkles size={22} /><div><span>MY COURSES</span><h2>Everything you are learning</h2></div></section><div className="student-course-grid large">{enrollments.map((enrollment) => { const count = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")).length; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{get(enrollment, "run_name")}</p><span>{count} lessons · {get(enrollment, "status")}</span></div></article>; })}</div></section>; }
+
+function StudentTimetable({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) { const { sessions } = studentLearning(data); return <section className="student-portal"><section className="student-simple-heading"><CalendarDays size={22} /><div><span>MY TIMETABLE</span><h2>Here is what is coming up</h2></div></section><div className="student-timetable">{sessions.map((item) => <button type="button" key={get(item, "id")} style={eventStyle(item)} onClick={() => onOpen(get(item, "id"))}><span>{datePart(item.starts_at)}</span><strong>{timePart(item.starts_at)} · {get(item, "course_title")}</strong><p>{get(item, "topic")} · {get(item, "classroom_name")}</p><ChevronRight size={18} /></button>)}{!sessions.length ? <Empty text="No lessons booked yet." /> : null}</div></section>; }
+
+function TeacherHome({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) {
+  const teacher = data.teachers.find((item) => get(item, "id") === "teacher-sophia") ?? data.teachers[0];
+  const lessons = data.sessions.filter((item) => get(item, "teacher_name") === get(teacher, "name")).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+  const lessonIds = new Set(lessons.map((item) => get(item, "id")));
+  const relatedAttendance = data.attendance.filter((item) => lessonIds.has(get(item, "class_session_id")));
+  const upcoming = lessons.filter((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()).slice(0, 4);
+  return <section className="teacher-home"><header className="teacher-welcome"><div className="person-avatar"><img src={avatarUrl(teacher)} alt="" /></div><div><span>TEACHER HOME</span><h2>Good morning, {get(teacher, "name").replace("Ms ", "")}</h2><p>{get(teacher, "subject")} · Your teaching day at a glance</p></div><div className="teacher-welcome-stats"><b>{upcoming.length}</b><span>upcoming lessons</span></div></header><div className="teacher-stat-grid"><article><CalendarDays size={20} /><b>{lessons.length}</b><span>Scheduled lessons</span></article><article><UsersRound size={20} /><b>{new Set(relatedAttendance.map((item) => get(item, "student_id"))).size}</b><span>Students to support</span></article><article><ClipboardCheck size={20} /><b>{relatedAttendance.filter((item) => get(item, "status") === "pending").length}</b><span>Attendance to take</span></article></div><section className="teacher-agenda"><div className="student-section-title"><div><span>MY AGENDA</span><h3>Upcoming lessons</h3></div></div>{upcoming.map((lesson) => <button type="button" key={get(lesson, "id")} className="teacher-lesson" style={eventStyle(lesson)} onClick={() => onOpen(get(lesson, "id"))}><span>{datePart(lesson.starts_at)}<b>{timePart(lesson.starts_at)}</b></span><div><strong>{get(lesson, "course_title")}</strong><p>{get(lesson, "topic")} · {get(lesson, "classroom_name")}</p></div><span className="teacher-lesson-action">Take attendance <ChevronRight size={16} /></span></button>)}{!upcoming.length ? <Empty text="No upcoming lessons." /> : null}</section></section>;
 }
 
 function CalendarView({ data, t, language, onOpen }: { data: PortalData; t: typeof copy.en; language: Language; onOpen: (id: string) => void }) {

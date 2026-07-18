@@ -540,6 +540,35 @@ button:disabled {
   color: #087f9f !important;
 }
 
+/* Teacher detail uses its own violet navigation family. */
+.detail-sheet.detail-teacher .detail-tabs-right {
+  background: #7358b7 !important;
+  border-left-color: #5d439f !important;
+}
+.detail-sheet.detail-teacher .detail-tabs-right button:hover,
+.detail-sheet.detail-teacher .detail-tabs-right button:focus-visible {
+  background: #9a84cf !important;
+}
+.detail-sheet.detail-teacher .detail-tabs-right button.active {
+  color: #4d3b80 !important;
+}
+.detail-sheet.detail-teacher .detail-tabs-right button.active svg {
+  color: #7253b1 !important;
+}
+
+/* Directory status is a compact label, never a stretched card element. */
+.person-card .status-chip {
+  align-self: start;
+  justify-self: end;
+  width: max-content;
+  height: fit-content;
+}
+.status-finished {
+  border-color: #c9d5d8;
+  background: #f1f4f4;
+  color: #718187;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

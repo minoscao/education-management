@@ -571,10 +571,8 @@ button:disabled {
 
 /* Payment keeps the invoice and every received amount separate and auditable. */
 .payment-history { display: grid; gap: 8px; }
-.payment-history article { grid-template-columns: minmax(0, 1fr) auto !important; align-items: start !important; padding: 12px !important; border: 1px solid #d8e9ed; border-left: 4px solid #4aa9bd; border-radius: 6px; background: #f9fcfd; }
-.payment-history article > div { display: grid; gap: 4px; }
-.payment-history article > div span,.payment-history article > div strong,.payment-history article > div small { display: block; }
-.payment-history article > strong { color: #137b65; font-size: 14px; }
+.payment-history article { grid-template-columns: minmax(0, 1fr) auto !important; align-items: stretch !important; padding: 0 !important; overflow: hidden; border: 1px solid #d8e9ed; border-left: 4px solid #4aa9bd; border-radius: 6px; background: #f9fcfd; }
+.payment-record-details { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 !important; }.payment-record-details > div { display: grid; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2edef; border-bottom: 1px solid #e2edef; }.payment-record-details > div:nth-last-child(-n+2) { border-bottom: 0; }.payment-record-details span,.payment-record-amount span { color: #6d858d; font-size: 10px; font-weight: 850; }.payment-record-details strong { overflow: hidden; color: #294d58; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }.payment-record-amount { display: grid; align-content: end; justify-items: end; min-width: 126px; padding: 12px; background: #e7f7f3; text-align: right; }.payment-record-amount strong { margin-top: 5px; color: #087c62; font-size: 16px; }
 .payment-dialog-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(19, 43, 50, .45); }
 .payment-dialog { width: min(520px, 100%); overflow: hidden; border: 1px solid #cbe1e6; border-radius: 8px; background: #ffffff; box-shadow: 0 18px 42px rgba(13, 47, 57, .28); }
 .payment-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #dbeaec; background: #eff9fa; }

@@ -432,7 +432,7 @@ async function ensureRichCampusSampleData() {
     { sql: "INSERT OR IGNORE INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')", values: [sessionId, run[0], index + 1, `Lesson ${index + 1}`, startsAt, later(startsAt, 90)] },
     { sql: "INSERT OR IGNORE INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", values: [`rb-${sessionId}`, sessionId, run[6], startsAt, later(startsAt, 90)] },
     { sql: "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')", values: [`tb-${sessionId}`, sessionId, run[7], startsAt, later(startsAt, 90), run[9]] },
-  ]; })));
+  ]; })).flat());
   const learnerIds = ["student-allen", "student-may", "student-jerry", "student-lina", "student-aisha", "student-daniel", "student-yuna", "student-sara", "student-noah", ...students.map((_, index) => `student-rich-${index + 1}`)];
   for (const [runId] of runs) for (const studentId of learnerIds.slice(0, 12)) { try { await enrollStudent(runId, studentId, undefined, false); } catch { /* Existing enrolment or a sample conflict is safe to skip. */ } }
   await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["rich_campus_sample_v4", "true"]);

@@ -584,6 +584,135 @@ button:disabled {
 .payment-final-amount { display: grid; gap: 4px; min-width: 150px; margin-left: auto; color: #0a728b; font-size: 10px; font-weight: 900; text-align: right; }.payment-final-amount input { height: 38px; padding: 0 10px; border: 1px solid #0c91ae; border-radius: 6px; outline: 0; background: #e8f8fb; color: #075f76; font-size: 16px; font-weight: 900; text-align: right; }.payment-final-amount input:focus { box-shadow: 0 0 0 3px rgba(11,145,178,.15); }
 @media (max-width: 560px) { .payment-summary { grid-template-columns: 1fr; }.payment-form-grid { grid-template-columns: 1fr; }.payment-note { grid-column: auto; }.payment-dialog > footer { flex-wrap: wrap; }.payment-final-amount { order: -1; width: 100%; margin-left: 0; } }
 
+/* Role themes keep the shared portal structure while giving each audience a clear home. */
+.operation-app.role-student {
+  --role-accent: #2d6cf5;
+  --role-accent-deep: #2149b8;
+  --role-soft: #e9f0ff;
+  --role-mint: #dff9f1;
+  --role-ink: #233765;
+  background:
+    radial-gradient(circle at 84% 4%, rgba(117, 227, 210, .28), transparent 24rem),
+    radial-gradient(circle at 25% 94%, rgba(255, 178, 139, .16), transparent 22rem),
+    #f6f8ff;
+}
+.role-student .operation-sidebar {
+  background: linear-gradient(165deg, #263f9c 0%, #265dc0 52%, #187f9e 100%);
+}
+.role-student .operation-brand svg { color: #8eece0; }
+.role-student .sidebar-toggle,
+.role-student .role-switcher { border-color: rgba(224, 241, 255, .28); background: rgba(18, 38, 108, .32); }
+.role-student .sidebar-toggle { color: #d9efff; }
+.role-student .nav-label,
+.role-student .sidebar-footer { color: #bad2ff; border-top-color: rgba(215, 235, 255, .25); }
+.role-student .nav-group button { color: #eef4ff; }
+.role-student .nav-group button:hover,
+.role-student .role-switcher button:hover { border-color: rgba(221, 242, 255, .36); background: rgba(255, 255, 255, .13); color: #ffffff; }
+.role-student .nav-group button.active,
+.role-student .role-switcher button.active {
+  border-color: rgba(255,255,255,.22);
+  background: linear-gradient(135deg, #4e7df5, #19b8b1);
+  box-shadow: 0 7px 18px rgba(12, 35, 107, .24);
+}
+.role-student .operation-header {
+  border-color: #d7e1ff;
+  background: linear-gradient(106deg, #ffffff 0%, #f6f7ff 58%, #e9fbf7 100%);
+  box-shadow: 0 7px 22px rgba(62, 91, 184, .07);
+}
+.role-student .page-title p,
+.role-student .student-simple-heading span,
+.role-student .student-section-title > div > span { color: #3668dc; }
+.role-student .page-title h1 { color: #293c74; }
+.role-student .search-box:focus-within,
+.role-student .language-toggle:hover,
+.role-student .header-icon:hover { border-color: #7197ff; background: #f1f5ff; }
+.role-student .primary-button,
+.role-student .table-button,
+.role-student .student-timetable-switch button.active {
+  border-color: #2d6cf5;
+  background: linear-gradient(135deg, #3775f5, #278edb);
+  box-shadow: 0 5px 13px rgba(45, 108, 245, .18);
+}
+.role-student .primary-button:hover,
+.role-student .table-button:hover { background: linear-gradient(135deg, #285fd9, #217ec7); }
+.role-student .quiet-button:hover,
+.role-student .quiet-button.active { border-color: #9ab5ff; background: #eff3ff; color: #365fc8; }
+.role-student .student-hero {
+  border-color: #b8c9ff;
+  background: linear-gradient(120deg, #e9eeff, #e7fbf5);
+  box-shadow: 0 10px 24px rgba(61, 91, 186, .1);
+}
+.role-student .student-hero::after { background: linear-gradient(90deg, rgba(241, 244, 255, .98) 0%, rgba(241, 244, 255, .9) 34%, rgba(231, 251, 245, .10) 70%); }
+.role-student .student-profile { color: #3f67ce; }
+.role-student .student-hero-copy h2 { color: #263b78; }
+.role-student .student-hero-copy p { color: #5071ae; }
+.role-student .student-stars { background: linear-gradient(135deg, #406be6, #1db1a7); }
+.role-student .student-next { border-color: #afc8ff; background: linear-gradient(145deg, #eef2ff, #e8fbf5); }
+.role-student .student-next > span,
+.role-student .student-next > div,
+.role-student .student-next button { color: #3d67ce; }
+.role-student .student-next h3 { color: #2c437f; }
+.role-student .student-progress { border-color: #a9e2d0; background: #ecfbf5; }
+.role-student .student-progress strong { color: #159578; }
+.role-student .student-progress p { color: #4a8073; }
+.role-student .progress-track { background: rgba(21, 149, 120, .16); }
+.role-student .progress-track i { background: #1db699; }
+.role-student .student-reminder { border-color: #ffcabb; background: #fff3ee; }
+.role-student .student-learning-section,
+.role-student .student-timetable-grid,
+.role-student .student-calendar-view { border-color: #d8e1ff; box-shadow: 0 5px 16px rgba(60, 86, 177, .04); }
+.role-student .student-course-card { border-color: #d5e0ff; }
+.role-student .student-timetable > button:hover { box-shadow: 0 8px 18px rgba(58, 96, 207, .13); }
+.role-student .data-table thead th { background: #e7edff !important; color: #3b5795 !important; }
+.role-student .data-table tbody tr:hover td { background: #eef2ff !important; }
+.role-student .data-table tbody td:first-child { border-left-color: #6d90f6 !important; }
+
+.operation-app.role-teacher {
+  --role-accent: #7550c9;
+  --role-accent-deep: #52389a;
+  --role-soft: #f0ebff;
+  --role-ink: #3b2a66;
+  background:
+    radial-gradient(circle at 87% 6%, rgba(196, 158, 255, .23), transparent 25rem),
+    radial-gradient(circle at 21% 95%, rgba(129, 109, 236, .12), transparent 24rem),
+    #f8f6fc;
+}
+.role-teacher .operation-sidebar { background: linear-gradient(168deg, #2c214e, #4e3583 58%, #66449b); }
+.role-teacher .operation-brand svg { color: #d3b8ff; }
+.role-teacher .sidebar-toggle,
+.role-teacher .role-switcher { border-color: rgba(231, 216, 255, .24); background: rgba(28, 17, 63, .4); }
+.role-teacher .sidebar-toggle { color: #e5d9ff; }
+.role-teacher .nav-label,
+.role-teacher .sidebar-footer { color: #c9b8e7; border-top-color: rgba(228, 211, 255, .19); }
+.role-teacher .nav-group button { color: #f2edff; }
+.role-teacher .nav-group button:hover,
+.role-teacher .role-switcher button:hover { border-color: rgba(239, 228, 255, .29); background: rgba(255, 255, 255, .12); color: #ffffff; }
+.role-teacher .nav-group button.active,
+.role-teacher .role-switcher button.active { border-color: rgba(255,255,255,.20); background: linear-gradient(135deg, #7e59d0, #9b69cf); box-shadow: 0 7px 18px rgba(22, 12, 53, .28); }
+.role-teacher .operation-header { border-color: #e2d9f4; background: linear-gradient(106deg, #ffffff 0%, #faf8ff 60%, #f2edff 100%); box-shadow: 0 7px 22px rgba(85, 57, 151, .07); }
+.role-teacher .page-title p { color: #7751c4; }.role-teacher .page-title h1 { color: #3d2e68; }
+.role-teacher .search-box:focus-within,
+.role-teacher .language-toggle:hover,
+.role-teacher .header-icon:hover { border-color: #b59ae6; background: #f4f0ff; }
+.role-teacher .primary-button,
+.role-teacher .table-button { border-color: #7250bf; background: linear-gradient(135deg, #7250bf, #9362ca); box-shadow: 0 5px 13px rgba(111, 76, 186, .18); }
+.role-teacher .primary-button:hover,
+.role-teacher .table-button:hover { background: linear-gradient(135deg, #6244ab, #8254b9); }
+.role-teacher .quiet-button:hover,
+.role-teacher .quiet-button.active { border-color: #bea8e5; background: #f2edff; color: #6744b0; }
+.role-teacher .teacher-welcome { border-color: #d8ccef; background: linear-gradient(110deg, #f5f1ff, #efeafd); box-shadow: 0 7px 18px rgba(99, 65, 171, .07); }
+.role-teacher .teacher-welcome > div:nth-child(2) > span,
+.role-teacher .teacher-welcome-stats b,
+.role-teacher .teacher-stat-grid svg,
+.role-teacher .teacher-lesson-action { color: #7652c3; }
+.role-teacher .teacher-welcome h2,
+.role-teacher .teacher-stat-grid b { color: #41306f; }
+.role-teacher .teacher-agenda,
+.role-teacher .teacher-stat-grid article { border-color: #e1d9f0; }
+.role-teacher .data-table thead th { background: #eee8fb !important; color: #624b91 !important; }
+.role-teacher .data-table tbody tr:hover td { background: #f4f0ff !important; }
+.role-teacher .data-table tbody td:first-child { border-left-color: #9571d8 !important; }
+
 .admin-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

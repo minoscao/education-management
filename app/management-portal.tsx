@@ -134,7 +134,7 @@ export function ManagementPortal() {
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
   function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "dashboard" : next === "teacher" ? "teacherHome" : "studentHome"); }
 
-  return <main className={`operation-app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+  return <main className={`operation-app role-${role}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <aside className="operation-sidebar">
       <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
       {role === "admin" ? <><NavGroup label={t.operate} current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers]]} /><NavGroup label={t.manage} current={view} setView={setView} items={[["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"]]} /></> : null}

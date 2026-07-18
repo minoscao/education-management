@@ -3,7 +3,7 @@
 
 import {
   Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
-  ClipboardCheck, Home, LayoutGrid, List, Map as MapIcon, MapPin, Music2, Plus, School, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, UserRound,
+  ClipboardCheck, Home, LayoutGrid, List, Map as MapIcon, MapPin, Minus, Music2, PanelLeftClose, PanelLeftOpen, Plus, School, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, UserRound, ZoomIn,
   UserRoundPlus, UsersRound, X,
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -103,6 +103,7 @@ export function ManagementPortal() {
   const [message, setMessage] = useState("");
   const [detail, setDetail] = useState<Detail>(null);
   const [search, setSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const t = copy[language];
 
   async function load() {
@@ -133,14 +134,13 @@ export function ManagementPortal() {
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
   function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "calendar" : next === "teacher" ? "teacherHome" : "studentHome"); }
 
-  return <main className="operation-app">
+  return <main className={`operation-app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <aside className="operation-sidebar">
-      <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span></div>
-      <RoleSwitcher role={role} onChange={changeRole} />
+      <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
       {role === "admin" ? <><NavGroup label={t.operate} current={view} setView={setView} items={[["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers]]} /><NavGroup label={t.manage} current={view} setView={setView} items={[["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"]]} /></> : null}
       {role === "teacher" ? <NavGroup label="TEACH" current={view} setView={setView} items={[["teacherHome", Home, "Today"], ["calendar", CalendarDays, "My schedule"], ["classes", BookOpen, "My courses"], ["students", Users, "Students"]]} /> : null}
       {role === "student" ? <NavGroup label="LEARN" current={view} setView={setView} items={[["studentHome", Home, "Home"], ["studentCourses", BookOpen, "My courses"], ["studentCalendar", CalendarDays, "My timetable"]]} /> : null}
-      <div className="sidebar-footer"><School size={17} /><span>{get(data.campuses[0], "name") || "Campus"}</span></div>
+      <div className="sidebar-bottom"><RoleSwitcher role={role} onChange={changeRole} /><div className="sidebar-footer"><School size={17} /><span>{get(data.campuses[0], "name") || "Campus"}</span></div></div>
     </aside>
     <section className="operation-workspace">
       <header className="operation-header">
@@ -330,7 +330,7 @@ function CampusView({ data, t, onOpenRoom }: { data: PortalData; t: typeof copy.
   return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div><section className="map-time-controls"><div className="map-time-actions"><button className={timeMode === "now" && viewDate === today ? "active" : ""} type="button" onClick={selectToday}>Today</button><button className={timeMode === "now" ? "active" : ""} type="button" onClick={selectNow}><Clock3 size={15} />Now onward</button><button className={timeMode === "day" && viewDate === tomorrow ? "active" : ""} type="button" onClick={selectTomorrow}>Tomorrow</button><label><span>Date</span><input type="date" value={viewDate} onChange={(event) => { setViewDate(event.target.value); setTimeMode(event.target.value === today ? "now" : "day"); }} /></label></div><strong>{label}</strong></section>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} viewDate={viewDate} referenceTime={referenceTime} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
 }
 
-function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function LegacyFloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
@@ -388,6 +388,33 @@ function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule 
     })}
   </div>;
 }
+
+function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
+  const now = referenceTime ?? Date.now();
+  const density = zoom >= 1.2 ? "all" : zoom >= .82 ? "focus" : "now";
+  const zoomPercent = Math.round(zoom * 100);
+  function point(room: Row) { return positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; }
+  function roomSchedule(room: Row) {
+    const all = sessions.filter((item) => get(item, "classroom_name") === get(room, "name") && (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate)).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+    const current = all.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now && new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now);
+    const next = all.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now);
+    const nextStarts = next ? new Date(get(next, "starts_at").replace(" ", "T")).getTime() : 0;
+    const status = current ? "in_class" : next && nextStarts - now <= 90 * 60 * 1000 ? "starting_soon" : "available";
+    const count = (item: Row | undefined) => item ? attendance.filter((record) => get(record, "class_session_id") === get(item, "id")).length : 0;
+    return { all, current, next, status, currentCount: count(current), nextCount: count(next) };
+  }
+  function sessionState(item: Row) { const start = new Date(get(item, "starts_at").replace(" ", "T")).getTime(); const end = new Date(get(item, "ends_at").replace(" ", "T")).getTime(); return end <= now ? "complete" : start <= now ? "current" : "upcoming"; }
+  function movePosition(event: React.PointerEvent<HTMLButtonElement>, room: Row) { const current = drag.current; const rect = mapRef.current?.getBoundingClientRect(); if (!current || current.id !== get(room, "id") || !rect) return; const width = Number(room.map_width ?? 180); const height = Number(room.map_height ?? 110); const x = Math.max(12, Math.min(campusMap.width - width - 12, Math.round(current.baseX + (event.clientX - current.startX) * (campusMap.width / rect.width)))); const y = Math.max(62, Math.min(campusMap.height - height - 12, Math.round(current.baseY + (event.clientY - current.startY) * (campusMap.height / rect.height)))); current.last = { x, y }; setPositions((value) => ({ ...value, [get(room, "id")]: { x, y } })); }
+  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!editable) return; const current = point(room); drag.current = { id: get(room, "id"), startX: event.clientX, startY: event.clientY, baseX: current.x, baseY: current.y, last: current }; event.currentTarget.setPointerCapture(event.pointerId); onSelectRoom?.(get(room, "id")); }
+  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!drag.current || drag.current.id !== get(room, "id")) return; const position = drag.current.last; drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); onMoveRoom?.(room, position); }
+  return <div className={`map-viewport map-density-${density}`}><div className="map-zoom-bar">{showSchedule ? <><button type="button" title="Zoom out" disabled={zoom <= .6} onClick={() => setZoom((value) => Math.max(.6, Math.round((value - .15) * 100) / 100))}><Minus size={15} /></button><input aria-label="Map zoom" type="range" min="0.6" max="1.35" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><button type="button" title="Zoom in" disabled={zoom >= 1.35} onClick={() => setZoom((value) => Math.min(1.35, Math.round((value + .15) * 100) / 100))}><ZoomIn size={15} /></button><strong>{zoomPercent}%</strong></> : <span>Room layout</span>}</div><div className="map-scroll"><div className="map-canvas" style={{ "--map-zoom": zoom } as React.CSSProperties}><div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room) => { const position = point(room); const schedule = roomSchedule(room); const focus = schedule.current ?? schedule.next; const courseColor = eventColour(focus ?? {}); const allHeight = Math.max(Number(room.map_height ?? 110), 112 + schedule.all.length * 33); const height = showSchedule && density === "all" ? allHeight : Math.max(Number(room.map_height ?? 110), showSchedule ? density === "focus" ? 142 : 88 : 110); return <button type="button" key={get(room, "id")} className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available"}</b> : null}</header>{showSchedule && density === "all" ? <div className="room-day-sessions">{schedule.all.length ? schedule.all.map((item) => <div key={get(item, "id")} className={`room-day-session ${sessionState(item)}`}><time>{timePart(item.starts_at)}</time><strong>{get(item, "course_title")}</strong><small>{get(item, "teacher_name")}</small></div>) : <div className="room-empty-day">No lessons today</div>}</div> : null}{showSchedule && density === "focus" ? <div className="room-card-schedule"><div className="room-slot current"><span>NOW</span>{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <><strong>No lesson now</strong><small>Room is ready</small></>}</div><div className="room-slot next"><span>NEXT{schedule.next ? ` · ${timePart(schedule.next.starts_at)}` : ""}</span>{schedule.next ? <><strong>{get(schedule.next, "course_title")}</strong><small>{get(schedule.next, "teacher_name")} · {schedule.nextCount} students</small></> : <><strong>Nothing booked</strong><small>Available later today</small></>}</div></div> : null}{showSchedule && density === "now" ? <div className="room-now-only">{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <small>No lesson now</small>}</div> : null}{!showSchedule ? <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div> : null}</button>; })}</div></div></div>{showSchedule ? <MapMini rooms={rooms} point={point} onOpenRoom={onOpenRoom} /> : null}</div>;
+}
+
+function MapMini({ rooms, point, onOpenRoom }: { rooms: Row[]; point: (room: Row) => { x: number; y: number }; onOpenRoom: (id: string) => void }) { return <div className="map-mini" aria-label="Map overview"><span>MAP</span>{rooms.map((room) => { const position = point(room); return <button type="button" key={get(room, "id")} title={get(room, "name")} onClick={() => onOpenRoom(get(room, "id"))} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%` }} />; })}</div>; }
 
 function DirectoryView({ type, rows, data, t, onOpen }: { type: "student" | "teacher"; rows: Row[]; data: PortalData; t: typeof copy.en; onOpen: (id: string) => void }) {
   const isStudent = type === "student";

@@ -42,6 +42,7 @@ type ActionPayload = {
   mapHeight?: number | string;
   businessStart?: string;
   businessEnd?: string;
+  mapImage?: string;
 };
 
 function db() {
@@ -122,6 +123,7 @@ async function seedDatabase() {
     await ensureCourseColours();
     await ensureOperationalSampleData();
     await ensureMalaysiaTermSampleData();
+    await ensureRichCampusSampleData();
     return;
   }
 
@@ -211,6 +213,7 @@ async function seedDatabase() {
   await ensureCourseColours();
   await ensureOperationalSampleData();
   await ensureMalaysiaTermSampleData();
+  await ensureRichCampusSampleData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
 }
 
@@ -396,6 +399,43 @@ async function ensureMalaysiaTermSampleData() {
     { sql: "INSERT OR IGNORE INTO class_attendance (id, student_booking_id, status, note) SELECT 'my-att-' || class_student_bookings.id, class_student_bookings.id, 'pending', '' FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id LEFT JOIN class_attendance ON class_attendance.student_booking_id = class_student_bookings.id WHERE class_sessions.class_run_id = ? AND class_attendance.id IS NULL", values: [runId] },
   ]));
   await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["malaysia_term_sample_v3", "true"]);
+}
+
+async function ensureRichCampusSampleData() {
+  const completed = await row("SELECT value FROM app_settings WHERE key = ?", ["rich_campus_sample_v4"]);
+  if (completed) return;
+  const rooms = [
+    ["room-c203", "C-203", "C-203", "Campus One, Level 2", 18, "classroom", "Whiteboard, projector", 570, 76, 190, 116],
+    ["room-d204", "D-204", "D-204", "Campus One, Level 2", 18, "classroom", "Whiteboard, projector", 92, 302, 190, 116],
+    ["room-e205", "E-205", "E-205", "Campus One, Level 2", 14, "studio", "Flexible tables, display", 572, 302, 190, 116],
+  ];
+  await executeBatch(rooms.map(([idValue, code, name, location, capacity, roomType, resources, mapX, mapY, mapWidth, mapHeight]) => ({ sql: "INSERT OR IGNORE INTO classrooms (id, code, name, location, capacity, status, campus_id, room_type, resources, map_x, map_y, map_width, map_height) VALUES (?, ?, ?, ?, ?, 'active', 'campus-one', ?, ?, ?, ?, ?, ?)", values: [idValue, code, name, location, capacity, roomType, resources, mapX, mapY, mapWidth, mapHeight] })));
+  await executeBatch([
+    { sql: "UPDATE classrooms SET map_x = 92, map_y = 76, map_width = 190, map_height = 116 WHERE id = 'room-a201'", values: [] },
+    { sql: "UPDATE classrooms SET map_x = 332, map_y = 76, map_width = 190, map_height = 116 WHERE id = 'room-b102'", values: [] },
+    { sql: "UPDATE classrooms SET map_x = 332, map_y = 302, map_width = 190, map_height = 116 WHERE id = 'room-m301'", values: [] },
+  ]);
+  const students = ["Hana Aziz", "Izzat Hakim", "Mei Xin", "Kavin Raj", "Nur Iman", "Sofia Lim", "Arjun Kumar", "Chloe Tan", "Ethan Goh", "Priya Nair", "Rayyan Ali", "Zara Lee"];
+  await executeBatch(students.map((name, index) => ({ sql: "INSERT OR IGNORE INTO students (id, code, name, level, guardian_phone, status) VALUES (?, ?, ?, ?, ?, 'active')", values: [`student-rich-${index + 1}`, `STU-${String(index + 17).padStart(3, '0')}`, name, index % 4 === 0 ? "Year 8" : "Year 7", `012-660${String(index + 110).padStart(4, '0')}`] })));
+  const runs = [
+    ["run-eng-y7-mon", "ENG-Y7-2026-MON", "course-english-y7", "English Year 7 - Monday PM", 18, 390, "room-c203", "teacher-olivia", "16:00", 90],
+    ["run-mth-y7-wed", "MTH-Y7-2026-WED", "course-math-y7", "Mathematics Year 7 - Wednesday PM", 18, 420, "room-b102", "teacher-sophia", "16:00", 85],
+    ["run-chn-y7-thu", "CHN-Y7-2026-THU", "course-chinese-y7", "Chinese Year 7 - Thursday PM", 18, 360, "room-a201", "teacher-zhang", "15:30", 90],
+    ["run-sci-y7-fri", "SCI-Y7-2026-FRI", "course-science-y7", "Science Year 7 - Friday PM", 18, 400, "room-d204", "teacher-aina", "16:00", 92],
+    ["run-bm-y7-tue", "BM-Y7-2026-TUE", "course-bm-y7", "Bahasa Melayu Year 7 - Tuesday PM", 18, 360, "room-e205", "teacher-nurul", "16:00", 82],
+  ] as const;
+  await executeBatch(runs.map(([idValue, code, courseId, name, capacity, price]) => ({ sql: "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, 'term-current', ?, ?, ?, 'open', '2026-07-15 09:00', '2026-09-30 18:00')", values: [idValue, code, courseId, name, capacity, price] })));
+  const dates = ["2026-07-20", "2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21"];
+  const weekdays = { mon: dates, tue: dates.map((date) => later(`${date} 00:00`, 1440).slice(0, 10)), wed: dates.map((date) => later(`${date} 00:00`, 2880).slice(0, 10)), thu: dates.map((date) => later(`${date} 00:00`, 4320).slice(0, 10)), fri: dates.map((date) => later(`${date} 00:00`, 5760).slice(0, 10)) };
+  const plans = runs.map((run, index) => [run, Object.values(weekdays)[index]] as const);
+  await executeBatch(plans.flatMap(([run, runDates]) => runDates.map((date, index) => { const startsAt = `${date} ${run[8]}`; const sessionId = `rich-${run[0]}-${String(index + 1).padStart(2, '0')}`; return [
+    { sql: "INSERT OR IGNORE INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')", values: [sessionId, run[0], index + 1, `Lesson ${index + 1}`, startsAt, later(startsAt, 90)] },
+    { sql: "INSERT OR IGNORE INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", values: [`rb-${sessionId}`, sessionId, run[6], startsAt, later(startsAt, 90)] },
+    { sql: "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')", values: [`tb-${sessionId}`, sessionId, run[7], startsAt, later(startsAt, 90), run[9]] },
+  ]; })));
+  const learnerIds = ["student-allen", "student-may", "student-jerry", "student-lina", "student-aisha", "student-daniel", "student-yuna", "student-sara", "student-noah", ...students.map((_, index) => `student-rich-${index + 1}`)];
+  for (const [runId] of runs) for (const studentId of learnerIds.slice(0, 12)) { try { await enrollStudent(runId, studentId, undefined, false); } catch { /* Existing enrolment or a sample conflict is safe to skip. */ } }
+  await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)", ["rich_campus_sample_v4", "true"]);
 }
 
 async function conflictExists(kind: "classroom" | "teacher" | "student", entityId: string, startsAt: string, endsAt: string) {
@@ -634,6 +674,12 @@ async function updateBusinessHours(payload: ActionPayload) {
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["business_hours", JSON.stringify({ start, end })]);
 }
 
+async function updateCampusFloorplan(payload: ActionPayload) {
+  if (!payload.campusId || !payload.mapImage) throw new Error("Please choose a floor plan image.");
+  if (!payload.mapImage.startsWith("data:image/") || payload.mapImage.length > 1_800_000) throw new Error("Use a PNG or JPG floor plan smaller than 1.3 MB.");
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [`floorplan_${payload.campusId}`, payload.mapImage]);
+}
+
 async function readPortal() {
   await seedDatabase();
   const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, attendance, resourceBookings, teacherBookings, businessHoursSetting] = await Promise.all([
@@ -650,7 +696,7 @@ async function readPortal() {
           ORDER BY class_sessions.starts_at ASC`),
     rows("SELECT * FROM students ORDER BY code"),
     rows("SELECT * FROM teachers ORDER BY code"),
-    rows("SELECT * FROM campuses ORDER BY code"),
+    rows("SELECT campuses.*, COALESCE((SELECT value FROM app_settings WHERE key = 'floorplan_' || campuses.id), '') AS floorplan_url FROM campuses ORDER BY code"),
     rows(`SELECT classrooms.*, campuses.name AS campus_name, campuses.map_label AS campus_map_label
           FROM classrooms LEFT JOIN campuses ON campuses.id = classrooms.campus_id
           ORDER BY campuses.code, classrooms.code`),
@@ -660,7 +706,7 @@ async function readPortal() {
     rows(`SELECT student_invoices.*, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM student_invoices JOIN students ON students.id = student_invoices.student_id JOIN class_enrollments ON class_enrollments.id = student_invoices.enrollment_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY student_invoices.issued_at DESC`),
     rows("SELECT student_payments.*, student_invoices.invoice_no, students.name AS student_name FROM student_payments JOIN student_invoices ON student_invoices.id = student_payments.invoice_id JOIN students ON students.id = student_payments.student_id ORDER BY student_payments.received_at DESC"),
-    rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
+    rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.class_run_id, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
           JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_sessions.starts_at ASC`),
     rows(`SELECT class_resource_bookings.*, classrooms.name AS classroom_name, class_sessions.topic, class_sessions.starts_at AS session_starts_at, class_runs.name AS run_name, course_catalogs.title AS course_title
@@ -739,6 +785,7 @@ export async function POST(request: Request) {
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
     if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
+    if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
     return await readPortal();
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });

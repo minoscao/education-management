@@ -1713,3 +1713,36 @@ button.status-cell {
 .student-more-menu button { width: 100%; min-height: 30px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #416181; cursor: pointer; font-size: 11px; font-weight: 800; text-align: left; }
 .student-more-menu button:hover:not(:disabled) { background: #edf3ff; color: #3564d0; }.student-more-menu button:disabled { color: #95a3b5; cursor: default; }
 @media (max-width: 760px) { .role-student .student-focus-grid-compact { grid-template-columns: 1fr; }.role-student .student-course-card,.role-student .student-course-grid.large .student-course-card { grid-template-columns: 68px minmax(0, 1fr) 54px; }.course-progress-number { min-width: 54px; padding: 0 5px; font-size: 18px; } }
+
+/* One gallery primitive for every learner-facing course card. */
+.course-card-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; align-items: stretch; }
+.course-card-gallery .student-course-card,
+.role-student .course-card-gallery .student-course-card,
+.role-student .student-course-grid.large .student-course-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 68px;
+  min-width: 0;
+  min-height: 126px;
+}
+.course-card-gallery .student-course-card .course-visual,
+.role-student .course-card-gallery .student-course-card .course-visual { min-height: 126px; }
+.course-card-gallery .student-course-card > div:nth-child(2),
+.role-student .course-card-gallery .student-course-card > div:nth-child(2) {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 8px 12px 12px;
+}
+.course-card-gallery .student-course-card h4,
+.course-card-gallery .student-course-card p,
+.course-card-gallery .student-course-card span,
+.course-card-gallery .student-course-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.course-card-gallery .course-progress-number { min-width: 0; font-size: 22px; }
+@media (max-width: 680px) {
+  .course-card-gallery { grid-template-columns: 1fr; }
+  .course-card-gallery .student-course-card,
+  .role-student .course-card-gallery .student-course-card { grid-template-columns: 76px minmax(0, 1fr) 60px; min-height: 112px; }
+  .course-card-gallery .student-course-card .course-visual { min-height: 112px; }
+  .course-card-gallery .course-progress-number { font-size: 19px; }
+}

@@ -713,6 +713,18 @@ button:disabled {
 .role-teacher .data-table tbody tr:hover td { background: #f4f0ff !important; }
 .role-teacher .data-table tbody td:first-child { border-left-color: #9571d8 !important; }
 
+/* The selected learner or teacher is a real data-backed viewing context. */
+.persona-picker { display: flex; align-items: center; gap: 8px; min-width: 196px; height: 40px; padding: 4px 8px 4px 5px; border: 1px solid #cfdde2; border-radius: 7px; background: #ffffff; cursor: pointer; }
+.persona-picker img { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid #d8e8ed; border-radius: 50%; background: #eaf5f7; }
+.persona-picker > span { display: grid; min-width: 0; gap: 1px; }
+.persona-picker small { color: #6a858d; font-size: 8px; font-weight: 900; letter-spacing: .05em; }
+.persona-picker select { width: 100%; min-width: 0; padding: 0 17px 0 0; overflow: hidden; border: 0; outline: 0; background: transparent; color: #244751; cursor: pointer; font: inherit; font-size: 11px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.role-student .persona-picker { border-color: #c9d7ff; background: linear-gradient(135deg, #f7f8ff, #ecfbf7); }
+.role-student .persona-picker img { border-color: #b9cdfc; background: #e8efff; }.role-student .persona-picker small { color: #5e78c6; }.role-student .persona-picker select { color: #2d4c92; }
+.role-teacher .persona-picker { border-color: #ded1f3; background: linear-gradient(135deg, #fbf9ff, #f3effd); }
+.role-teacher .persona-picker img { border-color: #cfbde9; background: #f0ebfa; }.role-teacher .persona-picker small { color: #8567ba; }.role-teacher .persona-picker select { color: #4e397c; }
+@media (max-width: 760px) { .persona-picker { min-width: 148px; }.persona-picker small { display: none; }.persona-picker > span { gap: 0; } }
+
 .admin-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

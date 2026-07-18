@@ -104,6 +104,8 @@ export function ManagementPortal() {
   const [detail, setDetail] = useState<Detail>(null);
   const [search, setSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const t = copy[language];
 
   async function load() {
@@ -129,6 +131,8 @@ export function ManagementPortal() {
   }
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => { if (!data.students.some((item) => get(item, "id") === selectedStudentId)) setSelectedStudentId(get(data.students[0], "id")); }, [data.students, selectedStudentId]);
+  useEffect(() => { if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId)) setSelectedTeacherId(get(data.teachers[0], "id")); }, [data.teachers, selectedTeacherId]);
 
   const filteredStudents = useMemo(() => data.students.filter((item) => `${get(item, "name")} ${get(item, "code")}`.toLowerCase().includes(search.toLowerCase())), [data.students, search]);
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
@@ -146,6 +150,7 @@ export function ManagementPortal() {
       <header className="operation-header">
         <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : view === "calendar" || view === "classes" || view === "campus" || view === "students" || view === "teachers" ? t.operate : t.manage}</p><h1>{pageTitle(view, t)}</h1></div>
         <div className="header-tools">
+          {role !== "admin" ? <PersonaPicker role={role} rows={role === "student" ? data.students : data.teachers} value={role === "student" ? selectedStudentId : selectedTeacherId} onChange={role === "student" ? setSelectedStudentId : setSelectedTeacherId} /> : null}
           <label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} aria-label={t.search} /></label>
           {message ? <span className={message === "Saved" || message === "已保存" ? "save-message ok" : "save-message error"}>{message}</span> : null}
           <button className="language-toggle" onClick={() => setLanguage(language === "en" ? "zh" : "en")} type="button">{t.language}</button>
@@ -153,7 +158,7 @@ export function ManagementPortal() {
         </div>
       </header>
       {view === "dashboard" ? <AdminDashboard data={data} onOpen={(id) => setDetail({ kind: "session", id })} onNavigate={setView} /> : null}
-      {view === "calendar" ? <CalendarView data={data} t={t} language={language} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "calendar" ? <CalendarView data={data} sessions={role === "teacher" ? data.sessions.filter((item) => get(item, "teacher_name") === get(data.teachers.find((teacher) => get(teacher, "id") === selectedTeacherId) ?? {}, "name")) : undefined} t={t} language={language} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
       {view === "campus" ? <CampusView data={data} t={t} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
       {view === "students" ? <DirectoryViewV2 type="student" rows={filteredStudents} data={data} t={t} onOpen={(id) => setDetail({ kind: "student", id })} /> : null}
       {view === "teachers" ? <DirectoryViewV2 type="teacher" rows={filteredTeachers} data={data} t={t} onOpen={(id) => setDetail({ kind: "teacher", id })} /> : null}
@@ -163,10 +168,10 @@ export function ManagementPortal() {
       {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "reports" ? <ReportView data={data} t={t} /> : null}
       {view === "settings" ? <><SettingsView data={data} run={run} busy={busy} /><EmailSettings data={data} run={run} busy={busy} /></> : null}
-      {view === "teacherHome" ? <TeacherHome data={data} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
-      {view === "studentHome" ? <StudentHome data={data} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
-      {view === "studentCourses" ? <StudentCourses data={data} /> : null}
-      {view === "studentCalendar" ? <StudentTimetableV2 data={data} run={run} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "teacherHome" ? <TeacherHome data={data} teacherId={selectedTeacherId} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "studentHome" ? <StudentHome data={data} studentId={selectedStudentId} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "studentCourses" ? <StudentCourses data={data} studentId={selectedStudentId} /> : null}
+      {view === "studentCalendar" ? <StudentTimetableV2 data={data} studentId={selectedStudentId} run={run} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
     </section>
     {detail ? <DetailSheet key={`${detail.kind}-${detail.id}`} detail={detail} data={data} t={t} busy={busy} run={run} close={() => setDetail(null)} /> : null}
   </main>;
@@ -183,8 +188,15 @@ function NavGroup({ label, current, setView, items }: { label: string; current: 
 
 function RoleSwitcher({ role, onChange }: { role: Role; onChange: (role: Role) => void }) { return <div className="role-switcher"><button type="button" className={role === "admin" ? "active" : ""} onClick={() => onChange("admin")}><ShieldCheck size={15} /><span>Admin</span></button><button type="button" className={role === "teacher" ? "active" : ""} onClick={() => onChange("teacher")}><UserRound size={15} /><span>Teacher</span></button><button type="button" className={role === "student" ? "active" : ""} onClick={() => onChange("student")}><GraduationCap size={15} /><span>Student</span></button></div>; }
 
-function studentLearning(data: PortalData) {
-  const student = data.students.find((item) => get(item, "id") === "student-allen") ?? data.students[0];
+function PersonaPicker({ role, rows, value, onChange }: { role: Exclude<Role, "admin">; rows: Row[]; value: string; onChange: (value: string) => void }) {
+  const person = rows.find((item) => get(item, "id") === value) ?? rows[0];
+  if (!person) return null;
+  const isStudent = role === "student";
+  return <label className="persona-picker"><img src={avatarUrl(person)} alt="" /><span><small>{isStudent ? "VIEWING LEARNER" : "VIEWING TEACHER"}</small><select value={get(person, "id")} onChange={(event) => onChange(event.target.value)} aria-label={isStudent ? "Choose student" : "Choose teacher"}>{rows.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")} · {isStudent ? get(item, "level") : get(item, "subject")}</option>)}</select></span></label>;
+}
+
+function studentLearning(data: PortalData, studentId = "") {
+  const student = data.students.find((item) => get(item, "id") === studentId) ?? data.students[0];
   const enrollments = student ? data.enrollments.filter((item) => get(item, "student_id") === get(student, "id") && get(item, "status") === "enrolled") : [];
   const runIds = new Set(enrollments.map((item) => get(item, "class_run_id")));
   const sessions = data.sessions.filter((item) => runIds.has(get(item, "class_run_id"))).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
@@ -198,18 +210,18 @@ function AdminDashboard({ data, onOpen, onNavigate }: { data: PortalData; onOpen
 }
 function DashboardMetric({ icon, label, value, note, tone }: { icon: ReactNode; label: string; value: string; note: string; tone: string }) { return <article className={`dashboard-metric ${tone}`}><span>{icon}</span><p>{label}</p><strong>{value}</strong><small>{note}</small></article>; }
 
-function StudentHome({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) {
-  const { student, enrollments, sessions } = studentLearning(data); const next = sessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()) ?? sessions[0];
+function StudentHome({ data, studentId, onOpen }: { data: PortalData; studentId: string; onOpen: (id: string) => void }) {
+  const { student, enrollments, sessions } = studentLearning(data, studentId); const next = sessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()) ?? sessions[0];
   const attended = data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && ["present", "late"].includes(get(item, "status"))).length;
-  return <section className="student-portal"><section className="student-hero"><img src="/assets/student/learning-hero.png" alt="" /><div className="student-hero-copy"><div className="student-profile"><img src={avatarUrl(student)} alt="" /><span>Year 7 learner</span></div><p>Good to see you</p><h2>{get(student, "name").split(" ")[0]}!</h2><strong>Small steps make big progress.</strong></div><div className="student-stars"><Sparkles size={20} /><b>{attended}</b><span>learning wins</span></div></section><div className="student-focus-grid"><article className="student-next"><span>UP NEXT</span><h3>{get(next, "course_title") || "Your next lesson"}</h3><p>{get(next, "topic") || "A new learning adventure"}</p><div><Clock3 size={16} /><strong>{next ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}` : "No lesson booked"}</strong></div>{next ? <button type="button" onClick={() => onOpen(get(next, "id"))}>View lesson <ChevronRight size={16} /></button> : null}</article><article className="student-progress"><span>MY PROGRESS</span><strong>{sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%</strong><p>{attended} of {sessions.length} lessons attended</p><div className="progress-track"><i style={{ width: `${sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%` }} /></div></article><article className="student-reminder"><ClipboardCheck size={22} /><div><span>THIS WEEK</span><strong>{sessions.slice(0, 2).length} lessons ahead</strong><p>Pack your notebook and arrive ready.</p></div></article></div><section className="student-learning-section"><div className="student-section-title"><div><span>MY LEARNING</span><h3>Keep going, you are doing great</h3></div><b>{enrollments.length} courses</b></div><div className="student-course-grid">{enrollments.map((enrollment) => { const runSessions = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")); const progress = runSessions.length ? Math.min(100, Math.round((data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && runSessions.some((session) => get(session, "id") === get(item, "class_session_id")) && ["present", "late"].includes(get(item, "status"))).length / runSessions.length) * 100)) : 0; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{runSessions.length} lessons planned</p><div className="mini-progress"><i style={{ width: `${progress}%` }} /></div><small>{progress}% complete</small></div></article>; })}</div></section></section>;
+  return <section className="student-portal"><section className="student-hero"><img src="/assets/student/learning-hero.png" alt="" /><div className="student-hero-copy"><div className="student-profile"><img src={avatarUrl(student)} alt="" /><span>{get(student, "level")} learner</span></div><p>Good to see you</p><h2>{get(student, "name").split(" ")[0]}!</h2><strong>Small steps make big progress.</strong></div><div className="student-stars"><Sparkles size={20} /><b>{attended}</b><span>learning wins</span></div></section><div className="student-focus-grid"><article className="student-next"><span>UP NEXT</span><h3>{get(next, "course_title") || "Your next lesson"}</h3><p>{get(next, "topic") || "A new learning adventure"}</p><div><Clock3 size={16} /><strong>{next ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}` : "No lesson booked"}</strong></div>{next ? <button type="button" onClick={() => onOpen(get(next, "id"))}>View lesson <ChevronRight size={16} /></button> : null}</article><article className="student-progress"><span>MY PROGRESS</span><strong>{sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%</strong><p>{attended} of {sessions.length} lessons attended</p><div className="progress-track"><i style={{ width: `${sessions.length ? Math.min(100, Math.round((attended / sessions.length) * 100)) : 0}%` }} /></div></article><article className="student-reminder"><ClipboardCheck size={22} /><div><span>THIS WEEK</span><strong>{sessions.slice(0, 2).length} lessons ahead</strong><p>Pack your notebook and arrive ready.</p></div></article></div><section className="student-learning-section"><div className="student-section-title"><div><span>MY LEARNING</span><h3>Keep going, you are doing great</h3></div><b>{enrollments.length} courses</b></div><div className="student-course-grid">{enrollments.map((enrollment) => { const runSessions = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")); const progress = runSessions.length ? Math.min(100, Math.round((data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && runSessions.some((session) => get(session, "id") === get(item, "class_session_id")) && ["present", "late"].includes(get(item, "status"))).length / runSessions.length) * 100)) : 0; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{runSessions.length} lessons planned</p><div className="mini-progress"><i style={{ width: `${progress}%` }} /></div><small>{progress}% complete</small></div></article>; })}</div></section></section>;
 }
 
-function StudentCourses({ data }: { data: PortalData }) { const { enrollments, sessions } = studentLearning(data); return <section className="student-portal"><section className="student-simple-heading"><Sparkles size={22} /><div><span>MY COURSES</span><h2>Everything you are learning</h2></div></section><div className="student-course-grid large">{enrollments.map((enrollment) => { const count = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")).length; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{get(enrollment, "run_name")}</p><span>{count} lessons · {get(enrollment, "status")}</span></div></article>; })}</div></section>; }
+function StudentCourses({ data, studentId }: { data: PortalData; studentId: string }) { const { enrollments, sessions } = studentLearning(data, studentId); return <section className="student-portal"><section className="student-simple-heading"><Sparkles size={22} /><div><span>MY COURSES</span><h2>Everything you are learning</h2></div></section><div className="student-course-grid large">{enrollments.map((enrollment) => { const count = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")).length; return <article className="student-course-card" key={get(enrollment, "id")}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{get(enrollment, "run_name")}</p><span>{count} lessons · {get(enrollment, "status")}</span></div></article>; })}</div></section>; }
 
 function StudentTimetable({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) { const { sessions } = studentLearning(data); return <section className="student-portal"><section className="student-simple-heading"><CalendarDays size={22} /><div><span>MY TIMETABLE</span><h2>Here is what is coming up</h2></div></section><div className="student-timetable">{sessions.map((item) => <button type="button" key={get(item, "id")} style={eventStyle(item)} onClick={() => onOpen(get(item, "id"))}><span>{datePart(item.starts_at)}</span><strong>{timePart(item.starts_at)} · {get(item, "course_title")}</strong><p>{get(item, "topic")} · {get(item, "classroom_name")}</p><ChevronRight size={18} /></button>)}{!sessions.length ? <Empty text="No lessons booked yet." /> : null}</div></section>; }
 
-function StudentTimetableV2({ data, run, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void }) {
-  const { student, sessions } = studentLearning(data);
+function StudentTimetableV2({ data, studentId, run, onOpen }: { data: PortalData; studentId: string; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void }) {
+  const { student, sessions } = studentLearning(data, studentId);
   const attendance = data.attendance.filter((row) => get(row, "student_id") === get(student, "id"));
   const [mode, setMode] = useState<"list" | "calendar">("list");
   const [anchor, setAnchor] = useState(() => sessions[0] ? fromKey(datePart(sessions[0].starts_at)) : new Date());
@@ -218,8 +230,8 @@ function StudentTimetableV2({ data, run, onOpen }: { data: PortalData; run: (act
 
 function StudentTimetableList({ sessions, attendance, studentId, run, onOpen }: { sessions: Row[]; attendance: Row[]; studentId: string; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void }) { return <div className="table-scroll student-timetable-grid"><table className="data-table"><thead><tr><th>Date</th><th>Time</th><th>Course</th><th>Lesson</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead><tbody>{sessions.map((item) => { const record = attendance.find((row) => get(row, "class_session_id") === get(item, "id")); const status = get(record, "status"); return <tr key={get(item, "id")}><td>{datePart(item.starts_at)}</td><td>{timeRange(item)}</td><td><span className="student-course-cell" style={eventStyle(item)}><i /><strong>{get(item, "course_title")}</strong></span></td><td>{get(item, "topic")}</td><td>{get(item, "classroom_name")}</td><td><Status value={status || "pending"} /></td><td><div className="student-row-actions"><button className="table-button subtle" disabled={status === "leave"} type="button" onClick={() => void run("requestLeave", { sessionId: get(item, "id"), studentId })}>{status === "leave" ? "Leave requested" : "Request leave"}</button><button className="table-button" type="button" onClick={() => onOpen(get(item, "id"))}>Submit homework</button></div></td></tr>; })}{!sessions.length ? <tr><td colSpan={7} className="empty-cell">No lessons booked yet.</td></tr> : null}</tbody></table></div>; }
 
-function TeacherHome({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) {
-  const teacher = data.teachers.find((item) => get(item, "id") === "teacher-sophia") ?? data.teachers[0];
+function TeacherHome({ data, teacherId, onOpen }: { data: PortalData; teacherId: string; onOpen: (id: string) => void }) {
+  const teacher = data.teachers.find((item) => get(item, "id") === teacherId) ?? data.teachers[0];
   const lessons = data.sessions.filter((item) => get(item, "teacher_name") === get(teacher, "name")).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
   const lessonIds = new Set(lessons.map((item) => get(item, "id")));
   const relatedAttendance = data.attendance.filter((item) => lessonIds.has(get(item, "class_session_id")));
@@ -227,14 +239,14 @@ function TeacherHome({ data, onOpen }: { data: PortalData; onOpen: (id: string) 
   return <section className="teacher-home"><header className="teacher-welcome"><div className="person-avatar"><img src={avatarUrl(teacher)} alt="" /></div><div><span>TEACHER HOME</span><h2>Good morning, {get(teacher, "name").replace("Ms ", "")}</h2><p>{get(teacher, "subject")} · Your teaching day at a glance</p></div><div className="teacher-welcome-stats"><b>{upcoming.length}</b><span>upcoming lessons</span></div></header><div className="teacher-stat-grid"><article><CalendarDays size={20} /><b>{lessons.length}</b><span>Scheduled lessons</span></article><article><UsersRound size={20} /><b>{new Set(relatedAttendance.map((item) => get(item, "student_id"))).size}</b><span>Students to support</span></article><article><ClipboardCheck size={20} /><b>{relatedAttendance.filter((item) => get(item, "status") === "pending").length}</b><span>Attendance to take</span></article></div><section className="teacher-agenda"><div className="student-section-title"><div><span>MY AGENDA</span><h3>Upcoming lessons</h3></div></div>{upcoming.map((lesson) => <button type="button" key={get(lesson, "id")} className="teacher-lesson" style={eventStyle(lesson)} onClick={() => onOpen(get(lesson, "id"))}><span>{datePart(lesson.starts_at)}<b>{timePart(lesson.starts_at)}</b></span><div><strong>{get(lesson, "course_title")}</strong><p>{get(lesson, "topic")} · {get(lesson, "classroom_name")}</p></div><span className="teacher-lesson-action">Take attendance <ChevronRight size={16} /></span></button>)}{!upcoming.length ? <Empty text="No upcoming lessons." /> : null}</section></section>;
 }
 
-function CalendarView({ data, t, language, onOpen }: { data: PortalData; t: typeof copy.en; language: Language; onOpen: (id: string) => void }) {
+function CalendarView({ data, sessions: visibleSessions, t, language, onOpen }: { data: PortalData; sessions?: Row[]; t: typeof copy.en; language: Language; onOpen: (id: string) => void }) {
   const c = calendarText[language];
-  const firstSession = data.sessions[0] ? fromKey(datePart(data.sessions[0].starts_at)) : new Date();
+  const firstSession = visibleSessions?.[0] ? fromKey(datePart(visibleSessions[0].starts_at)) : data.sessions[0] ? fromKey(datePart(data.sessions[0].starts_at)) : new Date();
   const [scope, setScope] = useState<CalendarScope>("week");
   const [mode, setMode] = useState<CalendarMode>("time");
   const [resourceKind, setResourceKind] = useState<ResourceKind>("classroom");
   const [anchor, setAnchor] = useState<Date>(() => firstSession);
-  const events = data.sessions;
+  const events = visibleSessions ?? data.sessions;
   const resources = calendarResources(data, resourceKind);
   const businessHours = data.settings.businessHours;
   const displayTitle = calendarTitle(anchor, scope, language);

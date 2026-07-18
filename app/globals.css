@@ -1697,3 +1697,19 @@ button.status-cell {
 .role-admin .operation-sidebar { background: linear-gradient(166deg, #142b36 0%, #173d4a 58%, #0f667f 100%); }
 .role-admin .operation-header { border-color: #cce0e5; background: linear-gradient(105deg, #ffffff 0%, #f7fcfd 62%, #ecf8fb 100%); box-shadow: 0 7px 22px rgba(27, 94, 113, .07); }
 .role-admin .nav-group button.active,.role-admin .role-switcher button.active { background: linear-gradient(135deg, #078bad, #0a9ca8); box-shadow: 0 7px 18px rgba(11, 105, 130, .22); }
+
+/* Student home: progress belongs to a course, never to a mixed total. */
+.role-student .student-focus-grid-compact { grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); }
+.role-student .student-course-card { position: relative; grid-template-columns: 80px minmax(0, 1fr) auto; border-color: color-mix(in srgb, var(--course-colour, #3675f5) 32%, #c7d8ff); background: linear-gradient(112deg, color-mix(in srgb, var(--course-colour, #3675f5) 7%, #ffffff), #ffffff 66%); }
+.role-student .student-course-card .course-visual { min-height: 112px; }
+.role-student .student-course-card > div:nth-child(2) { padding-right: 4px; }
+.course-progress-number { display: grid; min-width: 58px; align-self: stretch; place-items: center; padding: 0 11px; border-left: 1px solid color-mix(in srgb, var(--course-colour, #3675f5) 19%, #ffffff); background: color-mix(in srgb, var(--course-colour, #3675f5) 11%, #ffffff); color: var(--course-colour, #3675f5); font-size: 23px; letter-spacing: 0; }
+.role-student .mini-progress { background: color-mix(in srgb, var(--course-colour, #3675f5) 15%, #ffffff); }
+.role-student .mini-progress i { background: var(--course-colour, #3675f5); }
+.student-more-action { position: relative; }
+.student-more-action .icon-button { display: grid; width: 34px; height: 32px; place-items: center; border: 1px solid #bdd2fb; border-radius: 5px; background: #f4f7ff; color: #4167bd; cursor: pointer; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
+.student-more-action .icon-button:hover { border-color: #668df1; background: #e9efff; transform: translateY(-1px); }
+.student-more-menu { position: absolute; z-index: 8; top: calc(100% + 5px); right: 0; min-width: 136px; padding: 5px; border: 1px solid #c7d8fb; border-radius: 6px; background: #ffffff; box-shadow: 0 10px 20px rgba(57, 86, 158, .17); }
+.student-more-menu button { width: 100%; min-height: 30px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #416181; cursor: pointer; font-size: 11px; font-weight: 800; text-align: left; }
+.student-more-menu button:hover:not(:disabled) { background: #edf3ff; color: #3564d0; }.student-more-menu button:disabled { color: #95a3b5; cursor: default; }
+@media (max-width: 760px) { .role-student .student-focus-grid-compact { grid-template-columns: 1fr; }.role-student .student-course-card,.role-student .student-course-grid.large .student-course-card { grid-template-columns: 68px minmax(0, 1fr) 54px; }.course-progress-number { min-width: 54px; padding: 0 5px; font-size: 18px; } }

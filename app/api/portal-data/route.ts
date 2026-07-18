@@ -609,8 +609,23 @@ async function findConflicts(source: Row[], idKey: string, nameKey: string, kind
   return conflicts;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (new URL(request.url).searchParams.get("inspect") === "seed") {
+      const [terms, courses, runs, sessions, teachers, students, enrollments, resourceBookings, teacherBookings, studentBookings] = await Promise.all([
+        rows("SELECT id, code FROM academic_terms"),
+        rows("SELECT id, code FROM course_catalogs"),
+        rows("SELECT id, course_id, term_id FROM class_runs"),
+        rows("SELECT id, class_run_id FROM class_sessions"),
+        rows("SELECT id, code FROM teachers"),
+        rows("SELECT id, code FROM students"),
+        rows("SELECT id, class_run_id, student_id FROM class_enrollments"),
+        rows("SELECT id, class_session_id, classroom_id FROM class_resource_bookings"),
+        rows("SELECT id, class_session_id, teacher_id FROM class_teacher_bookings"),
+        rows("SELECT id, class_session_id, enrollment_id, student_id FROM class_student_bookings"),
+      ]);
+      return Response.json({ terms, courses, runs, sessions, teachers, students, enrollments, resourceBookings, teacherBookings, studentBookings });
+    }
     return await readPortal();
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to load data." }, { status: 500 });

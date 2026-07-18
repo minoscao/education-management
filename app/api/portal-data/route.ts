@@ -561,6 +561,12 @@ async function updateEntity(payload: ActionPayload) {
   if (payload.action === "updateRun" && payload.runId) {
     await execute("UPDATE class_runs SET name = ?, capacity = ?, price = ? WHERE id = ?", [payload.name?.trim() || "Untitled class", Math.max(1, number(payload.capacity, 1)), number(payload.price), payload.runId]);
   }
+  if (payload.action === "updateStudent" && payload.studentId) {
+    await execute("UPDATE students SET name = ?, level = ?, guardian_phone = ? WHERE id = ?", [payload.name?.trim() || "Untitled student", payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.studentId]);
+  }
+  if (payload.action === "updateTeacher" && payload.teacherId) {
+    await execute("UPDATE teachers SET name = ?, subject = ?, phone = ? WHERE id = ?", [payload.name?.trim() || "Untitled teacher", payload.subject?.trim() || "General", payload.phone?.trim() || "", payload.teacherId]);
+  }
 }
 
 async function createBaseRecord(payload: ActionPayload) {
@@ -727,7 +733,7 @@ export async function POST(request: Request) {
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "setAttendance") await setAttendance(payload);
-    if (payload.action === "updateCourse" || payload.action === "updateRun") await updateEntity(payload);
+    if (payload.action === "updateCourse" || payload.action === "updateRun" || payload.action === "updateStudent" || payload.action === "updateTeacher") await updateEntity(payload);
     if (payload.action === "createCampus") await createCampus(payload);
     if (payload.action === "updateCampus") await updateCampus(payload);
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);

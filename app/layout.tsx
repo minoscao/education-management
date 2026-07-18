@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Teaching Portal Admin",
-  description: "Course, room, student, and teacher management portal.",
+  title: "教学运营管理系统",
+  description: "课程开班、排课、报名、收费、资源预订与上课管理。",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

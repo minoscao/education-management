@@ -2033,11 +2033,16 @@ button.status-cell {
 .persona-picker > .avatar-photo { width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid #c8e2e7; border-radius: 50%; }
 .student-profile .avatar-photo { width: 32px; height: 32px; flex: 0 0 auto; border: 2px solid #ffffff; border-radius: 50%; }
 .entity-avatar.avatar-photo { display: block; width: 52px; height: 52px; border: 2px solid #dceef2; border-radius: 50%; }
+.detail-create .entity-main { background: linear-gradient(180deg, #ffffff 0%, #f7fcfd 100%); }
+.detail-create .detail-metrics { background: linear-gradient(100deg, #e8f8fb, #f7fbff); }
+.create-student-drawer-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.detail-form-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 .create-student-panel { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; padding: 15px; border: 1px solid #a8dbe3; border-radius: 7px; background: linear-gradient(120deg, #eafafb, #f7fcff); }
 .create-student-panel > div > span { color: #0b819c; font-size: 10px; font-weight: 900; letter-spacing: .08em; }.create-student-panel h3 { margin: 5px 0 0; color: #234c58; font-size: 17px; }
 .create-student-form { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 9px; }.create-student-form .form-field { min-width: 0; }.photo-upload input { min-height: 36px; padding: 6px; border: 1px dashed #9ccbd4; border-radius: 5px; background: #ffffff; color: #5d7982; font-size: 10px; }.create-student-actions { display: flex; align-items: end; justify-content: flex-end; gap: 7px; }.form-error { grid-column: 1 / -1; margin: 0; color: #ba4c48; font-size: 11px; font-weight: 750; }
 @media (max-width: 900px) { .create-student-panel { grid-template-columns: 1fr; }.create-student-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .create-student-form { grid-template-columns: 1fr; }.create-student-actions { justify-content: stretch; }.create-student-actions button { flex: 1; } }
+@media (max-width: 560px) { .create-student-drawer-form { grid-template-columns: 1fr; }.detail-form-actions { justify-content: stretch; }.detail-form-actions button { flex: 1; } }
 
 @media (max-width: 760px) {
   .operation-app.calendar-screen,

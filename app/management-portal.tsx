@@ -623,7 +623,8 @@ function CourseVisual({ course }: { course: Row }) {
     english: { Icon: BookOpen, prop: "Aa", label: "ENGLISH" },
   }[subject];
   const Icon = visual.Icon;
-  return <div className={`course-visual abstract-course-visual course-subject-${subject} course-year-${year}`} style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") || get(course, "run_course_color") || get(course, "course_color") }) } as React.CSSProperties}><i className="course-orbit" /><i className="course-dot" /><i className="course-grid-mark" /><span className="course-year-label">{year === "starter" ? "START" : year === "mixed" ? "ALL" : `Y${year}`}</span><div className="course-prop"><Icon size={25} strokeWidth={2.25} /><b>{visual.prop}</b></div><div className="course-subject-label"><span>{visual.label}</span></div></div>;
+  const image = { math: "/assets/courses/mathematics-props-v2.png", science: "/assets/courses/science-props-v2.png", chinese: "/assets/courses/chinese-props-v2.png", bahasa: "/assets/courses/bahasa-props-v2.png", music: "/assets/courses/music-props-v2.png", english: "/assets/courses/english-props-v2.png" }[subject];
+  return <div className={`course-visual abstract-course-visual course-subject-${subject} course-year-${year}`} style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") || get(course, "run_course_color") || get(course, "course_color") }) } as React.CSSProperties}><img className="course-prop-image" src={image} alt="" /><i className="course-image-scrim" /><span className="course-year-label">{year === "starter" ? "START" : year === "mixed" ? "ALL" : `Y${year}`}</span><div className="course-prop"><Icon size={22} strokeWidth={2.25} /><b>{visual.prop}</b></div><div className="course-subject-label"><span>{visual.label}</span></div></div>;
 }
 
 function CourseForm({ run, busy, close, t }: { run: (action: string, values?: Row) => Promise<void>; busy: boolean; close: () => void; t: typeof copy.en }) {

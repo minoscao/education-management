@@ -2127,6 +2127,16 @@ button.status-cell {
 .course-prop svg { filter: drop-shadow(0 1px 0 rgba(7,45,59,.24)); }.course-prop b { position: absolute; right: -5px; bottom: -7px; min-width: 19px; padding: 1px 4px; border: 1px solid rgba(255,255,255,.62); border-radius: 99px; background: var(--year-accent, #e1ddff); color: #27444c; font-size: 10px; text-align: center; }
 .abstract-course-visual > .course-subject-label { position: absolute; z-index: 2; top: auto; right: auto; bottom: 9px; left: 9px; display: block; padding: 0; border: 0; border-radius: 0; background: transparent; color: rgba(255,255,255,.83); font-size: 8px; font-weight: 900; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); }
 
+/* Course covers use tangible study props, so a subject is readable before any text is scanned. */
+.abstract-course-visual { background: var(--course-colour, #0f8aa8); }
+.abstract-course-visual::after { display: none; }
+.course-prop-image { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.course-image-scrim { position: absolute; inset: 0; z-index: 1; display: block; background: linear-gradient(180deg, rgba(10,31,49,.06) 10%, rgba(10,31,49,.13) 58%, rgba(9,30,49,.63) 100%); }
+.abstract-course-visual > .course-prop { z-index: 3; right: 7px; bottom: 8px; width: 40px; height: 40px; border-radius: 8px; background: rgba(9,29,47,.48); backdrop-filter: blur(4px); }
+.course-prop b { right: -6px; bottom: -7px; background: rgba(255,255,255,.91); }
+.course-year-label { z-index: 4; border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.9); }
+.abstract-course-visual > .course-subject-label { z-index: 4; right: auto; bottom: 10px; left: 9px; color: #ffffff; font-size: 8px; text-shadow: 0 1px 3px rgba(5,25,42,.68); }
+
 /* Teacher portraits use rounded squares, leaving circular portraits for students. */
 .teacher-avatar,.teacher-avatar .avatar-photo,.teacher-table-person .avatar-photo,.detail-teacher .entity-avatar { border-radius: 8px !important; }
 .teacher-avatar .avatar-photo { width: 100%; height: 100%; }

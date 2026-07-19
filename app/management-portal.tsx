@@ -92,7 +92,7 @@ const calendarText = {
 } as const;
 
 type CalendarScope = "year" | "month" | "week" | "day";
-type CalendarMode = "time" | "resource";
+type CalendarMode = "time" | "resource" | "list";
 type ScheduleScope = Exclude<CalendarScope, "year">;
 type ResourceKind = "classroom" | "teacher" | "student";
 type CalendarResource = { id: string; name: string; icon: "classroom" | "teacher" | "student" };
@@ -301,11 +301,11 @@ function CalendarView({ data, sessions: visibleSessions, t, language, onOpen, on
       <section className={`calendar-controls ${scope === "year" ? "year-controls" : ""}`} aria-label="Calendar view controls">
         <div className="segmented-control">{(["year", "month", "week", "day"] as CalendarScope[]).map((item) => <button key={item} className={scope === item ? "active" : ""} type="button" onClick={() => { setScope(item); if (item === "year") setMode("time"); }}>{c[item]}</button>)}</div>
         <div className="calendar-navigation"><button type="button" title={c.previous} onClick={() => shift(-1)}><ChevronLeft size={17} /></button><strong>{displayTitle}</strong><button type="button" title={c.next} onClick={() => shift(1)}><ChevronRight size={17} /></button><button className="today-button" type="button" onClick={() => setAnchor(firstSession)}>{c.today}</button></div>
-        {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button></div> : null}
+        {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button><button type="button" className={mode === "list" ? "active" : ""} onClick={() => setMode("list")}><List size={14} />{language === "zh" ? "列表" : "List"}</button></div> : null}
       </section>
       {scope !== "year" && mode === "resource" ? <div className="resource-kind-tabs">{(["classroom", "teacher", "student"] as ResourceKind[]).map((item) => <button type="button" className={resourceKind === item ? "active" : ""} key={item} onClick={() => setResourceKind(item)}>{item === "classroom" ? <DoorOpen size={14} /> : item === "teacher" ? <UserRound size={14} /> : <GraduationCap size={14} />}{c[`${item}s` as "classrooms" | "teachers" | "students"]}</button>)}</div> : null}
     </div>
-    <div className="calendar-stage">{scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onReschedule={onReschedule} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} />}</div>
+    <div className="calendar-stage">{scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onReschedule={onReschedule} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "resource" ? <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} /> : <ScheduleListView events={eventsForScope(events, scope, anchor)} onOpen={onOpen} />}</div>
   </section>;
 }
 
@@ -321,6 +321,27 @@ function calendarTitle(anchor: Date, scope: CalendarScope, language: Language) {
   if (scope === "day") return anchor.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric", weekday: "long" });
   const start = startOfWeek(anchor); const end = addDays(start, 6);
   return `${start.toLocaleDateString(locale, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+function eventsForScope(events: Row[], scope: ScheduleScope, anchor: Date) {
+  const anchorKey = toKey(anchor);
+  if (scope === "day") return events.filter((event) => datePart(event.starts_at) === anchorKey);
+  if (scope === "week") {
+    const start = toKey(startOfWeek(anchor));
+    const end = toKey(addDays(startOfWeek(anchor), 6));
+    return events.filter((event) => datePart(event.starts_at) >= start && datePart(event.starts_at) <= end);
+  }
+  const prefix = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}`;
+  return events.filter((event) => datePart(event.starts_at).startsWith(prefix));
+}
+
+function ScheduleListView({ events, onOpen }: { events: Row[]; onOpen?: (id: string) => void }) {
+  const ordered = [...events].sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+  if (!ordered.length) return <Empty text="No lessons in this period." />;
+  return <section className="schedule-list-view">{ordered.map((event) => <button type="button" key={get(event, "id")} className="schedule-list-card" style={eventStyle(event)} onClick={() => onOpen?.(eventSessionId(event))}>
+    <header><span className="schedule-list-icon"><BookOpen size={17} /></span><div><small>{get(event, "course_title")}</small><strong>{get(event, "topic") || "Lesson"}</strong></div><Status value={get(event, "status") || "scheduled"} /></header>
+    <div className="schedule-list-meta"><span><CalendarDays size={14} />{datePart(event.starts_at)}</span><span><Clock3 size={14} />{timePart(event.starts_at)} - {timePart(event.ends_at)}</span><span><UserRound size={14} />{get(event, "teacher_name") || "Teacher to confirm"}</span><span><DoorOpen size={14} />{get(event, "classroom_name") || "Room to confirm"}</span></div>
+  </button>)}</section>;
 }
 
 function TimeCalendar({ scope, anchor, events, window, c, language, onOpen, onReschedule, onSelectDate }: { scope: ScheduleScope; anchor: Date; events: Row[]; window: ScheduleWindow; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; onReschedule: (id: string, startsAt: string) => void; onSelectDate: (date: Date) => void }) {
@@ -934,7 +955,15 @@ function SessionModifyForm({ item, classrooms, teachers, draftStartsAt, busy, ru
 
 function LessonSequence({ sessions, currentId, expanded = false, title }: { sessions: Row[]; currentId: string; expanded?: boolean; title?: string }) { const now = Date.now(); const upcoming = sessions.find((session) => asTime(session.starts_at) > now); const rows = expanded ? sessions : sessions.filter((session) => get(session, "id") === currentId || get(session, "id") === get(upcoming, "id")).slice(0, 3); return <section className="sheet-section lesson-sequence"><div className="sheet-section-title"><h3>{title || (expanded ? "Course lessons" : "Course sequence")}</h3><span>{sessions.length}</span></div>{rows.map((session) => { const state = get(session, "id") === currentId ? "current" : asTime(session.ends_at) < now ? "completed" : get(session, "id") === get(upcoming, "id") ? "next" : "scheduled"; return <article key={get(session, "id")} className={`lesson-sequence-row ${state}`} style={eventStyle(session)}><i /><div><strong>Lesson {get(session, "session_no")} · {get(session, "topic")}</strong><p>{datePart(session.starts_at)} · {timeRange(session)}</p></div><Status value={state === "current" ? "current" : state === "next" ? "next" : state === "completed" ? "completed" : "scheduled"} /></article>; })}{!rows.length ? <Empty text="No lessons in this group." /> : null}</section>; }
 
-function RoomDetailContent({ tab, item, lessons }: { tab: string; item: Row; lessons: Row[] }) { return tab === "schedule" ? <ListSection title="Room schedule" rows={lessons} fields={[["course_title", "Course"], ["topic", "Lesson"], ["starts_at", "Start"], ["teacher_name", "Teacher"]]} /> : <><section className="detail-metrics"><DetailMetric label="Capacity" value={`${get(item, "capacity")} seats`} /><DetailMetric label="Scheduled lessons" value={String(lessons.length)} /></section><section className="sheet-section"><h3>Room profile</h3><div className="sheet-overview"><Info label="Campus" value={get(item, "campus_name")} /><Info label="Room type" value={get(item, "room_type")} /><Info label="Resources" value={get(item, "resources")} /><Info label="Status" value={get(item, "status")} /></div></section></>;
+function RoomScheduleContent({ lessons }: { lessons: Row[] }) {
+  const initialDate = lessons[0] ? fromKey(datePart(lessons[0].starts_at)) : new Date();
+  const [mode, setMode] = useState<"calendar" | "list">("calendar");
+  const [anchor, setAnchor] = useState(initialDate);
+  const monthTitle = anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" });
+  return <section className="sheet-section room-schedule-section"><div className="sheet-section-title"><h3>Room schedule</h3><span>{lessons.length}</span></div><div className="room-schedule-toolbar"><div className="segmented-control"><button className={mode === "calendar" ? "active" : ""} type="button" onClick={() => setMode("calendar")}><CalendarDays size={14} />Calendar</button><button className={mode === "list" ? "active" : ""} type="button" onClick={() => setMode("list")}><List size={14} />List</button></div>{mode === "calendar" ? <div className="room-month-navigation"><button type="button" className="header-icon" title="Previous month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1, 12))}><ChevronLeft size={16} /></button><strong>{monthTitle}</strong><button type="button" className="header-icon" title="Next month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1, 12))}><ChevronRight size={16} /></button></div> : null}</div>{mode === "calendar" ? <div className="room-schedule-calendar"><MonthCalendar anchor={anchor} events={lessons} c={calendarText.en} language="en" onOpen={() => undefined} onSelectDate={() => undefined} /></div> : <ScheduleListView events={lessons} />}</section>;
+}
+
+function RoomDetailContent({ tab, item, lessons }: { tab: string; item: Row; lessons: Row[] }) { return tab === "schedule" ? <RoomScheduleContent lessons={lessons} /> : <><section className="detail-metrics"><DetailMetric label="Capacity" value={`${get(item, "capacity")} seats`} /><DetailMetric label="Scheduled lessons" value={String(lessons.length)} /></section><section className="sheet-section"><h3>Room profile</h3><div className="sheet-overview"><Info label="Campus" value={get(item, "campus_name")} /><Info label="Room type" value={get(item, "room_type")} /><Info label="Resources" value={get(item, "resources")} /><Info label="Status" value={get(item, "status")} /></div></section></>;
 }
 
 function SessionSummary({ item, courseSessions, roster, students, enrollStudentId, setEnrollStudentId, busy, run, t }: { item: Row; courseSessions: Row[]; roster: Row[]; students: Row[]; enrollStudentId: string; setEnrollStudentId: (value: string) => void; busy: boolean; run: (action: string, values?: Row) => Promise<void>; t: typeof copy.en }) {
@@ -950,7 +979,7 @@ function SessionEnrollment({ item, roster, students, enrollStudentId, setEnrollS
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value || "-"}</strong></div>; }
-function ListSection({ title, rows, fields, moneyKeys = [] }: { title: string; rows: Row[]; fields: [string, string][]; moneyKeys?: string[] }) { return <section className="sheet-section detail-list-section"><div className="sheet-section-title"><h3>{title}</h3><span>{rows.length}</span></div><div className="detail-list-cards">{rows.map((row) => <article className="sheet-list-row themed-list-row" style={eventStyle(row)} key={get(row, "id")}><i className="list-row-colour" />{fields.map(([key, label]) => <div key={key}><span>{label}</span>{key.includes("status") ? <Status value={get(row, key)} /> : <strong>{moneyKeys.includes(key) ? amount(row[key]) : get(row, key)}</strong>}</div>)}</article>)}</div>{!rows.length ? <Empty text="No records" /> : null}</section>; }
+function ListSection({ title, rows, fields, moneyKeys = [] }: { title: string; rows: Row[]; fields: [string, string][]; moneyKeys?: string[] }) { const [primary, ...details] = fields; return <section className="sheet-section detail-list-section"><div className="sheet-section-title"><h3>{title}</h3><span>{rows.length}</span></div><div className="detail-list-cards">{rows.map((row) => <article className="sheet-list-row themed-list-row" style={eventStyle(row)} key={get(row, "id")}><header><span>{primary[1]}</span>{primary[0].includes("status") ? <Status value={get(row, primary[0])} /> : <strong>{moneyKeys.includes(primary[0]) ? amount(row[primary[0]]) : get(row, primary[0])}</strong>}</header><div className="themed-list-details">{details.map(([key, label]) => <div key={key}><span>{label}</span>{key.includes("status") ? <Status value={get(row, key)} /> : <strong>{moneyKeys.includes(key) ? amount(row[key]) : get(row, key)}</strong>}</div>)}</div></article>)}</div>{!rows.length ? <Empty text="No records" /> : null}</section>; }
 
 type GridColumn = { key: string; label: string; width?: number };
 

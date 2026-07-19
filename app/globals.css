@@ -1945,6 +1945,95 @@ button.status-cell {
 .calendar-stage > .week-timeline .week-timeline-body,
 .calendar-stage > .day-timeline .timeline-body { min-height: 100%; }
 
+/* Shared schedule cards: the course colour owns the header, while operational facts stay calm below. */
+.calendar-stage > .schedule-list-view {
+  height: 100%;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.schedule-list-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-content: start;
+  gap: 10px;
+  padding: 2px;
+}
+.schedule-list-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--course-colour, #0f8aa8) 32%, #d9e7eb);
+  border-radius: 7px;
+  background: #ffffff;
+  color: #244954;
+  cursor: pointer;
+  text-align: left;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.schedule-list-card:hover { transform: translateY(-2px); border-color: var(--course-colour, #0f8aa8); box-shadow: 0 8px 18px color-mix(in srgb, var(--course-colour, #0f8aa8) 20%, transparent); }
+.schedule-list-card > header {
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 12px;
+  background: var(--course-colour, #0f8aa8);
+  color: #ffffff;
+}
+.schedule-list-icon { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid rgba(255,255,255,.48); border-radius: 6px; background: rgba(255,255,255,.16); }
+.schedule-list-card header > div { display: grid; min-width: 0; gap: 3px; }
+.schedule-list-card header small,.schedule-list-card header strong { overflow: hidden; color: #ffffff; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-list-card header small { opacity: .8; font-size: 10px; font-weight: 750; }
+.schedule-list-card header strong { font-size: 13px; }
+.schedule-list-card header .status-chip { border-color: rgba(255,255,255,.55); background: rgba(255,255,255,.18); color: #ffffff; }
+.schedule-list-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 11px 12px; background: color-mix(in srgb, var(--course-colour, #0f8aa8) 4%, #ffffff); }
+.schedule-list-meta span { display: flex; min-width: 0; align-items: center; gap: 5px; overflow: hidden; color: #476873; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-list-meta svg { flex: 0 0 auto; color: var(--course-colour, #0f8aa8); }
+
+/* Reusable inverted detail-card header. */
+.detail-workspace .sheet-list-row.themed-list-row {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--course-colour, #0f8aa8) 28%, #d7e6e9);
+  background: #ffffff;
+}
+.detail-workspace .sheet-list-row.themed-list-row > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  padding: 9px 13px;
+  background: var(--course-colour, #0f8aa8);
+}
+.detail-workspace .sheet-list-row.themed-list-row > header > span { color: rgba(255,255,255,.76); font-size: 10px; font-weight: 800; }
+.detail-workspace .sheet-list-row.themed-list-row > header > strong { overflow: hidden; color: #ffffff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.detail-workspace .sheet-list-row.themed-list-row > header .status-chip { border-color: rgba(255,255,255,.58); background: rgba(255,255,255,.17); color: #ffffff; }
+.detail-workspace .themed-list-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 1px; background: #dfecef; }
+.detail-workspace .themed-list-details > div { display: grid; min-width: 0; gap: 4px; padding: 10px 12px; background: color-mix(in srgb, var(--course-colour, #0f8aa8) 5%, #ffffff); }
+.detail-workspace .themed-list-details span { color: #6b838c; font-size: 10px; font-weight: 750; }
+.detail-workspace .themed-list-details strong { overflow: hidden; color: #294c57; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.room-schedule-section { padding-bottom: 22px !important; }
+.room-schedule-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 12px; }
+.room-schedule-toolbar .segmented-control button { display: inline-flex; align-items: center; gap: 5px; }
+.room-month-navigation { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.room-month-navigation strong { min-width: 122px; color: #315560; font-size: 12px; text-align: center; white-space: nowrap; }
+.room-schedule-calendar { min-height: 408px; overflow: auto; border: 1px solid #d5e6e9; border-radius: 7px; background: #fbfdfd; }
+.room-schedule-calendar .month-calendar { min-width: 560px; border: 0; border-radius: 0; }
+.room-schedule-calendar .month-day { min-height: 104px; }
+.room-schedule-section .schedule-list-view { grid-template-columns: 1fr; }
+
+@media (max-width: 760px) {
+  .schedule-list-view { grid-template-columns: 1fr; }
+  .schedule-list-meta { grid-template-columns: 1fr; }
+  .room-schedule-toolbar { align-items: flex-start; flex-direction: column; }
+  .detail-workspace .themed-list-details { grid-template-columns: 1fr 1fr; }
+}
+
 /* Detail drawers are narrow right panels; section navigation floats outside on the left. */
 .detail-sheet {
   position: relative;

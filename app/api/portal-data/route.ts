@@ -663,7 +663,7 @@ async function recordPayment(payload: ActionPayload) {
   const amount = Math.min(Math.max(0.01, number(payload.amount, remaining)), remaining);
   const paid = Math.round((number(invoice.paid_amount) + amount) * 100) / 100;
   const status = paid >= adjustedTotal ? "paid" : "partly_paid";
-  await execute("INSERT INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", [id("payment"), invoice.id, invoice.student_id, amount, payload.method || "bank_transfer", payload.proofReference?.trim() ?? "", payload.note?.trim() ?? ""]);
+  await execute("INSERT INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", [id("payment"), invoice.id, invoice.student_id, amount, payload.method || "duitnow_qr", payload.proofReference?.trim() ?? "", payload.note?.trim() ?? ""]);
   await execute("UPDATE student_invoices SET total_amount = ?, paid_amount = ?, status = ? WHERE id = ?", [adjustedTotal, paid, status, invoice.id]);
 }
 

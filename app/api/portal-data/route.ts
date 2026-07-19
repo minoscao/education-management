@@ -784,7 +784,15 @@ async function updateCampusFloorplan(payload: ActionPayload) {
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [`floorplan_${payload.campusId}`, payload.mapImage]);
 }
 
-async function readPortal() {
+async function readAttendance() {
+  return rows(`SELECT class_attendance.id, class_attendance.student_booking_id, class_attendance.status, class_attendance.note, class_attendance.marked_at,
+    class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee,
+    students.name AS student_name, class_sessions.class_run_id
+    FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
+    JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id ORDER BY class_sessions.starts_at ASC`);
+}
+
+async function readPortal(includeAttendance = false) {
   await seedDatabase();
   const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
@@ -815,11 +823,7 @@ async function readPortal() {
           ORDER BY student_payments.received_at DESC`),
     rows("SELECT * FROM student_messages ORDER BY created_at DESC"),
     rows("SELECT * FROM portal_notifications ORDER BY created_at DESC LIMIT 80"),
-    rows(`SELECT class_attendance.id, class_attendance.student_booking_id, class_attendance.status, class_attendance.note, class_attendance.marked_at,
-          class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee,
-          students.name AS student_name, class_sessions.class_run_id
-          FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
-          JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id ORDER BY class_sessions.starts_at ASC`),
+    includeAttendance ? readAttendance() : Promise.resolve([] as Row[]),
     rows(`SELECT class_resource_bookings.*, classrooms.name AS classroom_name, class_sessions.topic, class_sessions.starts_at AS session_starts_at, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM class_resource_bookings JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id JOIN class_sessions ON class_sessions.id = class_resource_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_resource_bookings.starts_at ASC`),
@@ -875,8 +879,12 @@ async function findConflicts(source: Row[], idKey: string, nameKey: string, kind
   return conflicts;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (new URL(request.url).searchParams.get("scope") === "attendance") {
+      await seedDatabase();
+      return Response.json({ attendance: await readAttendance() });
+    }
     return await readPortal();
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to load data." }, { status: 500 });
@@ -904,7 +912,7 @@ export async function POST(request: Request) {
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
     if (payload.action === "updateMailSettings") await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
-    return await readPortal();
+    return await readPortal(payload.action === "setAttendance" || payload.action === "enrollStudent");
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });
   }

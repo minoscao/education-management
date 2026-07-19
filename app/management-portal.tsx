@@ -127,6 +127,8 @@ export function ManagementPortal() {
   const [language, setLanguage] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [detailStack, setDetailStack] = useState<Exclude<Detail, null>[]>([]);
   const detail = detailStack.at(-1) ?? null;
@@ -147,9 +149,22 @@ export function ManagementPortal() {
       const response = await fetch("/api/portal-data", { cache: "no-store" });
       const payload = await response.json() as PortalData & { error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load data");
-      setData(payload);
+      setData(payload); setAttendanceLoaded(false);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load data"); }
     finally { setBusy(false); setLoading(false); }
+  }
+
+  async function loadAttendance() {
+    if (attendanceLoaded || attendanceLoading) return;
+    setAttendanceLoading(true);
+    try {
+      const response = await fetch("/api/portal-data?scope=attendance", { cache: "no-store" });
+      const payload = await response.json() as { attendance?: Row[]; error?: string };
+      if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load attendance");
+      setData((current) => ({ ...current, attendance: payload.attendance ?? current.attendance }));
+      setAttendanceLoaded(true);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load attendance"); }
+    finally { setAttendanceLoading(false); }
   }
 
   async function run(action: string, values: Row = {}) {
@@ -158,7 +173,9 @@ export function ManagementPortal() {
       const response = await fetch("/api/portal-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...values }) });
       const payload = await response.json() as PortalData & { error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error || "Unable to save changes");
-      setData(payload); setMessage(language === "en" ? "Saved" : "已保存");
+      setData((current) => ({ ...payload, attendance: payload.attendance.length ? payload.attendance : current.attendance }));
+      if (payload.attendance.length) setAttendanceLoaded(true);
+      setMessage(language === "en" ? "Saved" : "已保存");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to save changes"); }
     finally { setBusy(false); }
   }
@@ -168,6 +185,9 @@ export function ManagementPortal() {
   useEffect(() => { window.localStorage.setItem("student-portal-theme", studentTheme); }, [studentTheme]);
   useEffect(() => { if (!data.students.some((item) => get(item, "id") === selectedStudentId)) setSelectedStudentId(get(data.students[0], "id")); }, [data.students, selectedStudentId]);
   useEffect(() => { if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId)) setSelectedTeacherId(get(data.teachers[0], "id")); }, [data.teachers, selectedTeacherId]);
+
+  const attendanceNeeded = role !== "admin" || ["calendar", "campus", "reports"].includes(view) || detail !== null;
+  useEffect(() => { if (attendanceNeeded) void loadAttendance(); }, [attendanceNeeded, attendanceLoaded]);
 
   const filteredStudents = useMemo(() => data.students.filter((item) => `${get(item, "name")} ${get(item, "code")}`.toLowerCase().includes(search.toLowerCase())), [data.students, search]);
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
@@ -213,7 +233,7 @@ export function ManagementPortal() {
     </section>
     {detailStack.map((stackDetail, index) => <DetailSheet key={`${stackDetail.kind}-${stackDetail.id}-${index}`} detail={stackDetail} data={data} t={t} busy={busy} run={run} close={closeDetail} closeAll={() => setDetailStack([])} openDetail={openNestedDetail} />)}
     {notificationsOpen ? <NotificationDrawer notifications={visibleNotifications} close={() => setNotificationsOpen(false)} /> : null}
-    {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
+    {loading || attendanceLoading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
   </main>;
 }
 

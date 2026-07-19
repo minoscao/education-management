@@ -129,6 +129,11 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 }
 
 async function seedDatabase() {
+  // Initial sample data and schema compatibility work are expensive on D1.
+  // Run them once, then leave ordinary reads to the portal queries below.
+  const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["portal_bootstrap_v4"]);
+  if (ready) return;
+
   await ensurePaymentData();
   await ensureCommunicationData();
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
@@ -139,6 +144,7 @@ async function seedDatabase() {
     await ensureOperationalSampleData();
     await ensureMalaysiaTermSampleData();
     await ensureRichCampusSampleData();
+    await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v4", "true"]);
     return;
   }
 
@@ -230,6 +236,7 @@ async function seedDatabase() {
   await ensureMalaysiaTermSampleData();
   await ensureRichCampusSampleData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v4", "true"]);
 }
 
 async function ensureCommunicationData() {

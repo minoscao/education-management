@@ -213,7 +213,17 @@ export function ManagementPortal() {
     </section>
     {detailStack.map((stackDetail, index) => <DetailSheet key={`${stackDetail.kind}-${stackDetail.id}-${index}`} detail={stackDetail} data={data} t={t} busy={busy} run={run} close={closeDetail} closeAll={() => setDetailStack([])} openDetail={openNestedDetail} />)}
     {notificationsOpen ? <NotificationDrawer notifications={visibleNotifications} close={() => setNotificationsOpen(false)} /> : null}
+    {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
   </main>;
+}
+
+function PortalLoading({ refreshing }: { refreshing: boolean }) {
+  return <div className={`portal-loading ${refreshing ? "is-refreshing" : ""}`} role="status" aria-live="polite">
+    <div className="portal-loading-card">
+      <div className="portal-loading-mark"><BookOpen size={27} /><i /><i /><i /></div>
+      <div><strong>{refreshing ? "Updating your teaching day" : "Preparing your teaching day"}</strong><span>{refreshing ? "Refreshing live classes, payments and attendance." : "Loading courses, rooms and learners."}</span></div>
+    </div>
+  </div>;
 }
 
 function pageTitle(view: View, t: typeof copy.en) {

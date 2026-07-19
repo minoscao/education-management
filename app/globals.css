@@ -1950,7 +1950,9 @@ button.status-cell {
   position: relative;
   width: min(clamp(480px, 36vw, 580px), calc(100vw - 88px)) !important;
   min-height: 0 !important;
-  height: 100dvh;
+  height: auto;
+  max-height: calc(100dvh - 28px);
+  margin: 14px 0;
   overflow: visible !important;
 }
 .detail-sheet > header { position: relative; z-index: 2; overflow: visible !important; }
@@ -1958,12 +1960,14 @@ button.status-cell {
   position: relative;
   display: block !important;
   min-height: 0 !important;
-  height: calc(100dvh - 118px);
+  height: auto;
+  max-height: calc(100dvh - 160px);
   overflow: visible !important;
 }
 .detail-workspace .entity-main {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: calc(100dvh - 160px);
   min-height: 0;
   padding: 0 !important;
   overflow-x: hidden;
@@ -1975,28 +1979,38 @@ button.status-cell {
   z-index: 5;
   top: 0 !important;
   right: auto !important;
-  bottom: 0;
+  bottom: auto;
   left: -78px !important;
   display: flex !important;
   width: 78px !important;
   min-height: 0 !important;
   margin: 0 !important;
-  padding: 10px 6px !important;
+  gap: 4px;
+  padding: 7px 6px !important;
   box-sizing: border-box;
   border: 1px solid #087d9b !important;
   border-right: 0 !important;
   border-radius: 7px 0 0 7px !important;
   background: #1592ae !important;
-  box-shadow: -8px 8px 20px rgba(12, 89, 110, .18) !important;
+  box-shadow: 0 8px 18px rgba(12, 89, 110, .20), 0 -4px 12px rgba(12, 89, 110, .10) !important;
 }
 .detail-workspace .detail-tabs-right button {
-  min-height: 60px;
+  min-height: 54px;
   padding: 7px 5px !important;
   border: 1px solid transparent !important;
   border-radius: 5px 0 0 5px !important;
   color: #e9f9fc !important;
   text-align: center;
 }
+.detail-workspace .detail-tabs-right .drawer-close-tab {
+  flex: 0 0 34px;
+  min-height: 34px;
+  padding: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.38) !important;
+  border-radius: 0 !important;
+  background: rgba(5, 96, 123, .28) !important;
+}
+.detail-workspace .detail-tabs-right .drawer-close-tab:hover { background: rgba(255,255,255,.22) !important; }
 .detail-workspace .detail-tabs-right button:hover { background: rgba(255,255,255,.16) !important; }
 .detail-workspace .detail-tabs-right button.active {
   margin-right: -6px;
@@ -2009,9 +2023,21 @@ button.status-cell {
 .detail-workspace .detail-tabs-right button svg { color: currentColor !important; }
 .detail-workspace .detail-tabs-right b { background: rgba(255,255,255,.25) !important; color: #ffffff !important; }
 .detail-workspace .detail-tabs-right button.active b { background: #d7f1f6 !important; color: #087b99 !important; }
-.sheet-close-float { top: 17px; left: -45px; }
 .detail-teacher .detail-tabs-right { background: #7656be !important; border-color: #6547aa !important; }
 .detail-teacher .detail-tabs-right button.active { color: #5b4299 !important; }
+
+/* Generated Malaysian portrait sheet is cropped consistently wherever a student avatar appears. */
+.avatar-photo { display: block; width: 100%; height: 100%; border-radius: inherit; background: url('/assets/students/malaysia-student-portraits.png') var(--avatar-x, 0%) var(--avatar-y, 0%) / 400% 200% no-repeat; }
+.table-person .avatar-photo { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid #d9ecf0; border-radius: 50%; }
+.roster-student .avatar-photo { width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid #d6e8eb; border-radius: 50%; }
+.persona-picker > .avatar-photo { width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid #c8e2e7; border-radius: 50%; }
+.student-profile .avatar-photo { width: 32px; height: 32px; flex: 0 0 auto; border: 2px solid #ffffff; border-radius: 50%; }
+.entity-avatar.avatar-photo { display: block; width: 52px; height: 52px; border: 2px solid #dceef2; border-radius: 50%; }
+.create-student-panel { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; padding: 15px; border: 1px solid #a8dbe3; border-radius: 7px; background: linear-gradient(120deg, #eafafb, #f7fcff); }
+.create-student-panel > div > span { color: #0b819c; font-size: 10px; font-weight: 900; letter-spacing: .08em; }.create-student-panel h3 { margin: 5px 0 0; color: #234c58; font-size: 17px; }
+.create-student-form { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 9px; }.create-student-form .form-field { min-width: 0; }.photo-upload input { min-height: 36px; padding: 6px; border: 1px dashed #9ccbd4; border-radius: 5px; background: #ffffff; color: #5d7982; font-size: 10px; }.create-student-actions { display: flex; align-items: end; justify-content: flex-end; gap: 7px; }.form-error { grid-column: 1 / -1; margin: 0; color: #ba4c48; font-size: 11px; font-weight: 750; }
+@media (max-width: 900px) { .create-student-panel { grid-template-columns: 1fr; }.create-student-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .create-student-form { grid-template-columns: 1fr; }.create-student-actions { justify-content: stretch; }.create-student-actions button { flex: 1; } }
 
 @media (max-width: 760px) {
   .operation-app.calendar-screen,

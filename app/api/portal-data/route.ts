@@ -34,6 +34,7 @@ type ActionPayload = {
   note?: string;
   phone?: string;
   email?: string;
+  avatarUrl?: string;
   location?: string;
   campusId?: string;
   address?: string;
@@ -233,8 +234,13 @@ async function seedDatabase() {
 
 async function ensureCommunicationData() {
   try { await execute("ALTER TABLE students ADD COLUMN email text DEFAULT ''"); } catch { /* Column is already available. */ }
+  try { await execute("ALTER TABLE students ADD COLUMN avatar_url text DEFAULT ''"); } catch { /* Column is already available. */ }
   await execute("CREATE TABLE IF NOT EXISTS student_messages (id text PRIMARY KEY NOT NULL, student_id text NOT NULL, recipient text NOT NULL, subject text NOT NULL, body text NOT NULL, direction text DEFAULT 'outbound' NOT NULL, status text DEFAULT 'prepared' NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL)");
   await execute("UPDATE students SET email = lower(replace(replace(name, ' ', '.'), '''', '')) || '@family.example' WHERE email IS NULL OR email = ''");
+  await executeBatch([
+    ["student-allen", "sprite:0"], ["student-may", "sprite:1"], ["student-jerry", "sprite:2"], ["student-lina", "sprite:3"],
+    ["student-aisha", "sprite:4"], ["student-daniel", "sprite:5"], ["student-yuna", "sprite:6"], ["student-sara", "sprite:7"],
+  ].map(([studentId, avatarUrl]) => ({ sql: "UPDATE students SET avatar_url = ? WHERE id = ? AND (avatar_url IS NULL OR avatar_url = '')", values: [avatarUrl, studentId] })));
   await executeBatch([
     { sql: "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", values: ["run-eng-y7-history", "ENG-Y7-2026-H", "course-english-y7", "term-current", "English Year 7 - April PM", 18, 390, "finished", "2026-03-01 09:00", "2026-04-30 18:00"] },
     { sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, ?, ?)", values: ["history-enr-allen", "run-eng-y7-history", "student-allen", 390, "enrolled", "2026-03-05 09:00"] },
@@ -661,7 +667,7 @@ async function updateEntity(payload: ActionPayload) {
     await execute("UPDATE class_runs SET name = ?, capacity = ?, price = ? WHERE id = ?", [payload.name?.trim() || "Untitled class", Math.max(1, number(payload.capacity, 1)), number(payload.price), payload.runId]);
   }
   if (payload.action === "updateStudent" && payload.studentId) {
-    await execute("UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ? WHERE id = ?", [payload.name?.trim() || "Untitled student", payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.email?.trim() || "", payload.studentId]);
+    await execute("UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ?, avatar_url = COALESCE(NULLIF(?, ''), avatar_url) WHERE id = ?", [payload.name?.trim() || "Untitled student", payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.email?.trim() || "", payload.avatarUrl?.trim() || "", payload.studentId]);
   }
   if (payload.action === "updateTeacher" && payload.teacherId) {
     await execute("UPDATE teachers SET name = ?, subject = ?, phone = ? WHERE id = ?", [payload.name?.trim() || "Untitled teacher", payload.subject?.trim() || "General", payload.phone?.trim() || "", payload.teacherId]);
@@ -672,8 +678,8 @@ async function createBaseRecord(payload: ActionPayload) {
   const label = payload.name?.trim() || "Untitled";
   if (payload.action === "createStudent") {
     await execute(
-      "INSERT INTO students (id, code, name, level, guardian_phone, status) VALUES (?, ?, ?, ?, ?, ?)",
-      [id("student"), `STU-${Date.now().toString().slice(-6)}`, label, payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", "active"],
+      "INSERT INTO students (id, code, name, level, guardian_phone, email, avatar_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [id("student"), `STU-${Date.now().toString().slice(-6)}`, label, payload.level?.trim() || "Unassigned", payload.phone?.trim() || "", payload.email?.trim() || "", payload.avatarUrl?.trim() || "sprite:0", "active"],
     );
   }
   if (payload.action === "createTeacher") {

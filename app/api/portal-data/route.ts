@@ -895,13 +895,16 @@ export async function POST(request: Request) {
   try {
     await seedDatabase();
     const payload = await request.json<ActionPayload>();
+    if (payload.action === "setAttendance") {
+      await setAttendance(payload);
+      return Response.json({ attendanceUpdate: { studentBookingId: payload.studentBookingId, status: payload.attendanceStatus ?? "present", note: payload.note ?? "" } });
+    }
     if (payload.action === "createCourse") await createCourse(payload);
     if (payload.action === "createClassRun") await createClassRun(payload);
     if (payload.action === "createSession") await createSession(payload);
     if (payload.action === "updateSession") await updateSession(payload);
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
     if (payload.action === "recordPayment") await recordPayment(payload);
-    if (payload.action === "setAttendance") await setAttendance(payload);
     if (payload.action === "requestLeave") await requestLeave(payload);
     if (payload.action === "sendMessage") await sendMessage(payload);
     if (payload.action === "updateCourse" || payload.action === "updateRun" || payload.action === "updateStudent" || payload.action === "updateTeacher") await updateEntity(payload);
@@ -912,7 +915,7 @@ export async function POST(request: Request) {
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
     if (payload.action === "updateMailSettings") await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
-    return await readPortal(payload.action === "setAttendance" || payload.action === "enrollStudent");
+    return await readPortal(payload.action === "enrollStudent");
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });
   }

@@ -169,14 +169,23 @@ export function ManagementPortal() {
 
   async function run(action: string, values: Row = {}) {
     setBusy(true); setMessage("");
+    const previousAttendance = action === "setAttendance" ? data.attendance : null;
+    if (action === "setAttendance" && values.studentBookingId) {
+      setData((current) => ({ ...current, attendance: current.attendance.map((record) => get(record, "student_booking_id") === String(values.studentBookingId) ? { ...record, status: String(values.attendanceStatus ?? "present"), note: String(values.note ?? "") } : record) }));
+    }
     try {
       const response = await fetch("/api/portal-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...values }) });
-      const payload = await response.json() as PortalData & { error?: string };
+      const payload = await response.json() as PortalData & { error?: string; attendanceUpdate?: { studentBookingId?: string; status?: string; note?: string } };
       if (!response.ok || payload.error) throw new Error(payload.error || "Unable to save changes");
+      if (payload.attendanceUpdate?.studentBookingId) {
+        setData((current) => ({ ...current, attendance: current.attendance.map((record) => get(record, "student_booking_id") === payload.attendanceUpdate?.studentBookingId ? { ...record, status: payload.attendanceUpdate.status ?? get(record, "status"), note: payload.attendanceUpdate.note ?? get(record, "note") } : record) }));
+        setMessage(language === "en" ? "Attendance updated" : "已更新考勤");
+        return;
+      }
       setData((current) => ({ ...payload, attendance: payload.attendance.length ? payload.attendance : current.attendance }));
       if (payload.attendance.length) setAttendanceLoaded(true);
       setMessage(language === "en" ? "Saved" : "已保存");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to save changes"); }
+    } catch (error) { if (previousAttendance) setData((current) => ({ ...current, attendance: previousAttendance })); setMessage(error instanceof Error ? error.message : "Unable to save changes"); }
     finally { setBusy(false); }
   }
 

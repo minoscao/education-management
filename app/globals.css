@@ -14,6 +14,70 @@
   --radius: 8px;
 }
 
+/* Shared operational grids: readable at any width, with intentional overflow instead of crushed content. */
+.table-scroll.grid-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-color: #8abfcb #edf5f6;
+  scrollbar-width: thin;
+}
+.table-scroll.grid-scroll::-webkit-scrollbar { height: 10px; }
+.table-scroll.grid-scroll::-webkit-scrollbar-track { background: #edf5f6; border-radius: 99px; }
+.table-scroll.grid-scroll::-webkit-scrollbar-thumb { border: 2px solid #edf5f6; border-radius: 99px; background: #8abfcb; }
+.resizable-data-table { table-layout: fixed; }
+.resizable-data-table th { position: relative; padding-right: 17px !important; user-select: none; }
+.resizable-data-table th > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resizable-data-table td {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  vertical-align: top !important;
+  white-space: normal !important;
+}
+.resizable-data-table td > :not(.status-chip):not(.table-button):not(.table-actions) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.resizable-data-table .table-person,
+.resizable-data-table .table-actions { display: flex !important; min-width: 0; }
+.resizable-data-table .table-person strong { overflow: hidden; text-overflow: ellipsis; white-space: normal; }
+.resizable-data-table .table-actions { flex-wrap: wrap; }
+.column-resizer {
+  position: absolute;
+  top: 6px;
+  right: -6px;
+  bottom: 6px;
+  z-index: 3;
+  width: 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: col-resize;
+}
+.column-resizer::after { position: absolute; top: 4px; bottom: 4px; left: 5px; width: 2px; border-radius: 2px; background: transparent; content: ""; transition: background 150ms ease; }
+.column-resizer:hover::after,.column-resizer:focus-visible::after { background: #0c91ad; }
+.resizable-data-table.has-actions th:last-child,
+.resizable-data-table.has-actions td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  box-shadow: -8px 0 14px rgba(41, 85, 96, .08);
+}
+.resizable-data-table.has-actions th:last-child { z-index: 4; }
+.resizable-data-table.has-actions td:last-child { background: #fbfefe !important; }
+.resizable-data-table.has-actions tbody tr:nth-child(4n+2) td:last-child { background: #f4fbfd !important; }
+.resizable-data-table.has-actions tbody tr:nth-child(4n+3) td:last-child { background: #f6f5fd !important; }
+.resizable-data-table.has-actions tbody tr:nth-child(4n+4) td:last-child { background: #f4fbf7 !important; }
+@media (max-width: 760px) {
+  .table-scroll.grid-scroll { margin-right: -2px; }
+  .resizable-data-table td { padding-top: 9px !important; padding-bottom: 9px !important; }
+  .column-resizer { display: none; }
+}
+
 /* Shared data surfaces: every operational grid uses the same friendly, scannable treatment. */
 .data-table { border-collapse: separate !important; border-spacing: 0 7px !important; background: transparent !important; }
 .data-table thead th { position: sticky; top: 0; z-index: 1; border: 0 !important; background: #dff2f7 !important; color: #276273 !important; font-size: 10px !important; letter-spacing: 0 !important; }

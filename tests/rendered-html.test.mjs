@@ -28,6 +28,8 @@ test("keeps shared detail and responsive view primitives in place", async () => 
 
   assert.match(portal, /function DetailSheet/);
   assert.match(portal, /function DetailTabs/);
+  assert.match(portal, /function CourseCatalogueDrawer/);
+  assert.match(portal, /function ClassRunScheduleForm/);
   assert.match(portal, /function ResizableDataTable/);
   assert.match(portal, /function CalendarView/);
 

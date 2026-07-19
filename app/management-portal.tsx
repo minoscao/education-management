@@ -68,6 +68,17 @@ const portraitSpriteByPerson: Record<string, number> = {
   "Allen Tan": 0, "May Lee": 1, "Jerry Baker": 2, "Lina Wong": 3,
 };
 
+const teacherPortraitSpriteById: Record<string, number> = {
+  "teacher-zhang": 0,
+  "teacher-sophia": 1,
+  "teacher-lim": 2,
+  "teacher-olivia": 3,
+  "teacher-farid": 4,
+  "teacher-aina": 5,
+  "teacher-nurul": 6,
+  "teacher-raj": 7,
+};
+
 function portraitSprite(person: Row) {
   const stored = get(person, "avatar_url");
   if (stored.startsWith("sprite:")) return Number(stored.slice(7));
@@ -76,9 +87,12 @@ function portraitSprite(person: Row) {
 
 function Avatar({ person, className = "", alt = "" }: { person: Row; className?: string; alt?: string }) {
   const stored = get(person, "avatar_url");
+  if (stored && !stored.startsWith("sprite:")) return <img className={className} src={stored} alt={alt} />;
   const sprite = portraitSprite(person);
   if (Number.isFinite(sprite)) return <span role="img" aria-label={alt || get(person, "name")} className={`avatar-photo ${className}`} style={{ "--avatar-x": `${(sprite % 4) * 100 / 3}%`, "--avatar-y": `${Math.floor(sprite / 4) * 100}%` } as React.CSSProperties} />;
-  return <img className={className} src={stored || avatarUrl(person)} alt={alt} />;
+  const teacherSprite = teacherPortraitSpriteById[get(person, "id")];
+  if (Number.isFinite(teacherSprite)) return <span role="img" aria-label={alt || get(person, "name")} className={`avatar-photo teacher-photo ${className}`} style={{ "--avatar-x": `${(teacherSprite % 4) * 100 / 3}%`, "--avatar-y": `${Math.floor(teacherSprite / 4) * 100}%` } as React.CSSProperties} />;
+  return <img className={className} src={avatarUrl(person)} alt={alt} />;
 }
 
 async function fileAsDataUrl(file: File) {

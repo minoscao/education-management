@@ -1904,3 +1904,122 @@ button.status-cell {
   .course-card-gallery .student-course-card .course-visual { min-height: 112px; }
   .course-card-gallery .course-progress-number { font-size: 19px; }
 }
+
+/* Calendar is a contained work surface: only its own canvas scrolls. */
+.operation-app.calendar-screen {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.calendar-screen .operation-workspace {
+  display: flex;
+  min-height: 0;
+  height: 100dvh;
+  box-sizing: border-box;
+  flex-direction: column;
+  overflow: hidden;
+}
+.calendar-screen .operation-header { flex: 0 0 auto; }
+.calendar-operation {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.calendar-toolbar-stack { display: grid; gap: 8px; min-height: 0; }
+.calendar-stage { min-height: 0; overflow: hidden; }
+.calendar-stage > .week-timeline,
+.calendar-stage > .day-timeline,
+.calendar-stage > .resource-matrix,
+.calendar-stage > .month-calendar,
+.calendar-stage > .year-calendar {
+  height: 100%;
+  max-height: none;
+  box-sizing: border-box;
+}
+.calendar-stage > .week-timeline,
+.calendar-stage > .day-timeline,
+.calendar-stage > .resource-matrix,
+.calendar-stage > .month-calendar,
+.calendar-stage > .year-calendar { overflow: auto; overscroll-behavior: contain; }
+.calendar-stage > .week-timeline .week-timeline-body,
+.calendar-stage > .day-timeline .timeline-body { min-height: 100%; }
+
+/* Detail drawers are narrow right panels; section navigation floats outside on the left. */
+.detail-sheet {
+  position: relative;
+  width: min(clamp(480px, 36vw, 580px), calc(100vw - 88px)) !important;
+  min-height: 0 !important;
+  height: 100dvh;
+  overflow: visible !important;
+}
+.detail-sheet > header { position: relative; z-index: 2; overflow: visible !important; }
+.detail-workspace {
+  position: relative;
+  display: block !important;
+  min-height: 0 !important;
+  height: calc(100dvh - 118px);
+  overflow: visible !important;
+}
+.detail-workspace .entity-main {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #ffffff;
+}
+.detail-workspace .detail-tabs-right {
+  position: absolute !important;
+  z-index: 5;
+  top: 0 !important;
+  right: auto !important;
+  bottom: 0;
+  left: -78px !important;
+  display: flex !important;
+  width: 78px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 10px 6px !important;
+  box-sizing: border-box;
+  border: 1px solid #087d9b !important;
+  border-right: 0 !important;
+  border-radius: 7px 0 0 7px !important;
+  background: #1592ae !important;
+  box-shadow: -8px 8px 20px rgba(12, 89, 110, .18) !important;
+}
+.detail-workspace .detail-tabs-right button {
+  min-height: 60px;
+  padding: 7px 5px !important;
+  border: 1px solid transparent !important;
+  border-radius: 5px 0 0 5px !important;
+  color: #e9f9fc !important;
+  text-align: center;
+}
+.detail-workspace .detail-tabs-right button:hover { background: rgba(255,255,255,.16) !important; }
+.detail-workspace .detail-tabs-right button.active {
+  margin-right: -6px;
+  padding-right: 11px !important;
+  border-color: #ffffff !important;
+  border-radius: 5px 0 0 5px !important;
+  background: #ffffff !important;
+  color: #166276 !important;
+}
+.detail-workspace .detail-tabs-right button svg { color: currentColor !important; }
+.detail-workspace .detail-tabs-right b { background: rgba(255,255,255,.25) !important; color: #ffffff !important; }
+.detail-workspace .detail-tabs-right button.active b { background: #d7f1f6 !important; color: #087b99 !important; }
+.sheet-close-float { top: 17px; left: -45px; }
+.detail-teacher .detail-tabs-right { background: #7656be !important; border-color: #6547aa !important; }
+.detail-teacher .detail-tabs-right button.active { color: #5b4299 !important; }
+
+@media (max-width: 760px) {
+  .operation-app.calendar-screen,
+  .calendar-screen .operation-workspace { height: auto; overflow: visible; }
+  .calendar-operation { display: grid; overflow: visible; }
+  .calendar-stage { min-height: 470px; overflow: auto; }
+  .detail-sheet { width: 100vw !important; height: 100dvh; }
+  .detail-workspace { display: flex !important; height: calc(100dvh - 110px); flex-direction: column; overflow: hidden !important; }
+  .detail-workspace .detail-tabs-right { position: static !important; order: -1; width: auto !important; min-height: 0 !important; border: 0 !important; border-bottom: 1px solid #087d9b !important; border-radius: 0 !important; }
+  .detail-workspace .entity-main { height: auto; flex: 1 1 auto; }
+}

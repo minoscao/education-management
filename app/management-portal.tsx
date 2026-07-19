@@ -143,7 +143,7 @@ export function ManagementPortal() {
   const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
   function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "dashboard" : next === "teacher" ? "teacherHome" : "studentHome"); }
 
-  return <main className={`operation-app role-${role} student-theme-${studentTheme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+  return <main className={`operation-app role-${role} student-theme-${studentTheme}${view === "calendar" ? " calendar-screen" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <aside className="operation-sidebar">
       <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
       {role === "admin" ? <><NavGroup label="DAILY OPERATIONS" current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, "Schedule"], ["classes", BookOpen, "Classes"], ["campus", MapIcon, "Campus live"], ["students", Users, "Students"], ["enrollment", UserRoundPlus, "Enrolments"], ["payments", Banknote, "Payments"], ["reports", Settings2, "Reports"]]} /><NavGroup label="SETUP" current={view} setView={setView} items={[["courses", LayoutGrid, "Course catalogue"], ["teachers", UserRound, "Teacher setup"], ["classrooms", DoorOpen, "Campus setup"], ["settings", SlidersHorizontal, "Business rules"]]} /></> : null}
@@ -267,15 +267,17 @@ function CalendarView({ data, sessions: visibleSessions, t, language, onOpen }: 
       return new Date(current.getFullYear() + direction, current.getMonth(), 1, 12);
     });
   }
-  return <section className="operation-stack">
+  return <section className="operation-stack calendar-operation">
     <div className="view-intro"><div><h2>{t.calendar}</h2><p>{t.calendarHint}</p></div><MetricPills data={data} t={t} /></div>
-    <section className={`calendar-controls ${scope === "year" ? "year-controls" : ""}`} aria-label="Calendar view controls">
-      <div className="segmented-control">{(["year", "month", "week", "day"] as CalendarScope[]).map((item) => <button key={item} className={scope === item ? "active" : ""} type="button" onClick={() => { setScope(item); if (item === "year") setMode("time"); }}>{c[item]}</button>)}</div>
-      <div className="calendar-navigation"><button type="button" title={c.previous} onClick={() => shift(-1)}><ChevronLeft size={17} /></button><strong>{displayTitle}</strong><button type="button" title={c.next} onClick={() => shift(1)}><ChevronRight size={17} /></button><button className="today-button" type="button" onClick={() => setAnchor(firstSession)}>{c.today}</button></div>
-      {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button></div> : null}
-    </section>
-    {scope !== "year" && mode === "resource" ? <div className="resource-kind-tabs">{(["classroom", "teacher", "student"] as ResourceKind[]).map((item) => <button type="button" className={resourceKind === item ? "active" : ""} key={item} onClick={() => setResourceKind(item)}>{item === "classroom" ? <DoorOpen size={14} /> : item === "teacher" ? <UserRound size={14} /> : <GraduationCap size={14} />}{c[`${item}s` as "classrooms" | "teachers" | "students"]}</button>)}</div> : null}
-    {scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} />}
+    <div className="calendar-toolbar-stack">
+      <section className={`calendar-controls ${scope === "year" ? "year-controls" : ""}`} aria-label="Calendar view controls">
+        <div className="segmented-control">{(["year", "month", "week", "day"] as CalendarScope[]).map((item) => <button key={item} className={scope === item ? "active" : ""} type="button" onClick={() => { setScope(item); if (item === "year") setMode("time"); }}>{c[item]}</button>)}</div>
+        <div className="calendar-navigation"><button type="button" title={c.previous} onClick={() => shift(-1)}><ChevronLeft size={17} /></button><strong>{displayTitle}</strong><button type="button" title={c.next} onClick={() => shift(1)}><ChevronRight size={17} /></button><button className="today-button" type="button" onClick={() => setAnchor(firstSession)}>{c.today}</button></div>
+        {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button></div> : null}
+      </section>
+      {scope !== "year" && mode === "resource" ? <div className="resource-kind-tabs">{(["classroom", "teacher", "student"] as ResourceKind[]).map((item) => <button type="button" className={resourceKind === item ? "active" : ""} key={item} onClick={() => setResourceKind(item)}>{item === "classroom" ? <DoorOpen size={14} /> : item === "teacher" ? <UserRound size={14} /> : <GraduationCap size={14} />}{c[`${item}s` as "classrooms" | "teachers" | "students"]}</button>)}</div> : null}
+    </div>
+    <div className="calendar-stage">{scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} />}</div>
   </section>;
 }
 

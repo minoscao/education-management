@@ -2026,6 +2026,35 @@ button.status-cell {
 .detail-teacher .detail-tabs-right { background: #7656be !important; border-color: #6547aa !important; }
 .detail-teacher .detail-tabs-right button.active { color: #5b4299 !important; }
 
+/* Courses stay visually distinct from people: abstract subject shapes, never portrait photography. */
+.abstract-course-visual { isolation: isolate; background: linear-gradient(145deg, color-mix(in srgb, var(--course-colour, #0f8aa8) 88%, #132e4d), color-mix(in srgb, var(--course-colour, #0f8aa8) 32%, #eefbff)); }
+.abstract-course-visual::after { z-index: 0; background: linear-gradient(155deg, transparent 20%, rgba(255,255,255,.14) 20% 42%, transparent 42%); }
+.abstract-course-visual > i { position: absolute; z-index: 0; display: block; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; background: rgba(255,255,255,.12); }
+.abstract-course-visual > i:nth-of-type(1) { width: 78%; aspect-ratio: 1; top: -27%; left: -35%; }
+.abstract-course-visual > i:nth-of-type(2) { width: 48%; aspect-ratio: 1; right: -18%; bottom: 8%; }
+.abstract-course-visual > i:nth-of-type(3) { width: 20%; aspect-ratio: 1; top: 20%; right: 16%; background: rgba(255,255,255,.28); }
+.abstract-course-visual > div { z-index: 2; }
+
+/* Teacher portraits use rounded squares, leaving circular portraits for students. */
+.teacher-avatar,.teacher-avatar .avatar-photo,.teacher-table-person .avatar-photo,.detail-teacher .entity-avatar { border-radius: 8px !important; }
+.teacher-avatar .avatar-photo { width: 100%; height: 100%; }
+
+.notification-button { position: relative; }
+.notification-button b { position: absolute; top: -6px; right: -6px; display: grid; min-width: 16px; height: 16px; place-items: center; padding: 0 3px; border: 2px solid #ffffff; border-radius: 99px; background: #e45f56; color: #ffffff; font-size: 9px; }
+.notification-backdrop { position: fixed; z-index: 90; inset: 0; display: flex; justify-content: flex-end; background: rgba(15, 43, 53, .22); }
+.notification-drawer { width: min(390px, calc(100vw - 24px)); height: 100dvh; box-shadow: -14px 0 34px rgba(13, 51, 61, .18); background: #f7fcfd; }
+.notification-drawer > header { display: flex; align-items: center; justify-content: space-between; min-height: 86px; padding: 16px 18px; border-bottom: 1px solid #d9eaed; background: linear-gradient(135deg, #e7f7fa, #edf3ff); }
+.notification-drawer h2 { margin: 4px 0 0; color: #204854; font-size: 20px; }
+.notification-list { display: grid; gap: 8px; padding: 12px; overflow: auto; }
+.notification-list article { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 9px; padding: 12px; border: 1px solid #d6e6e9; border-radius: 7px; background: #ffffff; }
+.notification-list article.unread { border-left: 4px solid #1598b4; background: #f4fcfd; }
+.notification-list article > svg { color: #1291ad; }
+.notification-list strong,.notification-list p,.notification-list small { margin: 0; }
+.notification-list strong { color: #274c57; font-size: 13px; }.notification-list p { margin-top: 4px; color: #5d7982; font-size: 11px; line-height: 1.45; }.notification-list small { display: block; margin-top: 6px; color: #8499a0; font-size: 10px; }
+.session-modify > p { margin: -2px 0 12px; color: #66818a; font-size: 11px; line-height: 1.45; }
+.draggable-lesson { cursor: grab; }.draggable-lesson:active { cursor: grabbing; opacity: .68; }
+.week-timeline-column:has(.draggable-lesson):hover { background: rgba(23, 151, 180, .035); }
+
 /* Generated Malaysian portrait sheet is cropped consistently wherever a student avatar appears. */
 .avatar-photo { display: block; width: 100%; height: 100%; border-radius: inherit; background: url('/assets/students/malaysia-student-portraits.png') var(--avatar-x, 0%) var(--avatar-y, 0%) / 400% 200% no-repeat; }
 .table-person .avatar-photo { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid #d9ecf0; border-radius: 50%; }

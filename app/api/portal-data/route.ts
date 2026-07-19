@@ -236,6 +236,7 @@ async function ensureCommunicationData() {
   try { await execute("ALTER TABLE students ADD COLUMN email text DEFAULT ''"); } catch { /* Column is already available. */ }
   try { await execute("ALTER TABLE students ADD COLUMN avatar_url text DEFAULT ''"); } catch { /* Column is already available. */ }
   await execute("CREATE TABLE IF NOT EXISTS student_messages (id text PRIMARY KEY NOT NULL, student_id text NOT NULL, recipient text NOT NULL, subject text NOT NULL, body text NOT NULL, direction text DEFAULT 'outbound' NOT NULL, status text DEFAULT 'prepared' NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+  await execute("CREATE TABLE IF NOT EXISTS portal_notifications (id text PRIMARY KEY NOT NULL, recipient_type text NOT NULL, recipient_id text NOT NULL, title text NOT NULL, body text NOT NULL, status text DEFAULT 'unread' NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL)");
   await execute("UPDATE students SET email = lower(replace(replace(name, ' ', '.'), '''', '')) || '@family.example' WHERE email IS NULL OR email = ''");
   await executeBatch([
     ["student-allen", "sprite:0"], ["student-may", "sprite:1"], ["student-jerry", "sprite:2"], ["student-lina", "sprite:3"],
@@ -581,6 +582,33 @@ async function createSession(payload: ActionPayload) {
   }
 }
 
+async function updateSession(payload: ActionPayload) {
+  if (!payload.sessionId || !payload.classroomId || !payload.teacherId) throw new Error("Please select the lesson time, classroom and teacher.");
+  const current = await row<{ class_run_id: string; topic: string; starts_at: string; ends_at: string }>("SELECT class_run_id, topic, starts_at, ends_at FROM class_sessions WHERE id = ?", [payload.sessionId]);
+  if (!current) throw new Error("Lesson not found.");
+  const startsAt = payload.startsAt?.replace("T", " ");
+  const endsAt = payload.endsAt?.replace("T", " ");
+  if (!startsAt || !endsAt || new Date(startsAt.replace(" ", "T")) >= new Date(endsAt.replace(" ", "T"))) throw new Error("End time must be later than start time.");
+  const roomConflicts = await rows<{ class_session_id: string; starts_at: string; ends_at: string }>("SELECT class_session_id, starts_at, ends_at FROM class_resource_bookings WHERE classroom_id = ? AND class_session_id != ? AND status != 'cancelled'", [payload.classroomId, payload.sessionId]);
+  if (roomConflicts.some((item) => overlaps(startsAt, endsAt, item.starts_at, item.ends_at))) throw new Error("This classroom is already booked for that time.");
+  const teacherConflicts = await rows<{ class_session_id: string; starts_at: string; ends_at: string }>("SELECT class_session_id, starts_at, ends_at FROM class_teacher_bookings WHERE teacher_id = ? AND class_session_id != ? AND status != 'cancelled'", [payload.teacherId, payload.sessionId]);
+  if (teacherConflicts.some((item) => overlaps(startsAt, endsAt, item.starts_at, item.ends_at))) throw new Error("This teacher is already booked for that time.");
+  const bookedStudents = await rows<{ student_id: string; name: string }>("SELECT class_student_bookings.student_id, students.name FROM class_student_bookings JOIN students ON students.id = class_student_bookings.student_id WHERE class_student_bookings.class_session_id = ?", [payload.sessionId]);
+  for (const student of bookedStudents) {
+    const conflicts = await rows<{ class_session_id: string; starts_at: string; ends_at: string }>("SELECT class_student_bookings.class_session_id, class_sessions.starts_at, class_sessions.ends_at FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_student_bookings.student_id = ? AND class_student_bookings.class_session_id != ? AND class_student_bookings.status != 'cancelled'", [student.student_id, payload.sessionId]);
+    if (conflicts.some((item) => overlaps(startsAt, endsAt, item.starts_at, item.ends_at))) throw new Error(`${student.name} is already booked for this time.`);
+  }
+  await execute("UPDATE class_sessions SET topic = ?, starts_at = ?, ends_at = ? WHERE id = ?", [payload.topic?.trim() || current.topic, startsAt, endsAt, payload.sessionId]);
+  await execute("UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", [payload.classroomId, startsAt, endsAt, payload.sessionId]);
+  await execute("UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", [payload.teacherId, startsAt, endsAt, payload.sessionId]);
+  const teacher = await row<{ name: string }>("SELECT name FROM teachers WHERE id = ?", [payload.teacherId]);
+  const classroom = await row<{ name: string }>("SELECT name FROM classrooms WHERE id = ?", [payload.classroomId]);
+  const title = "Lesson updated";
+  const body = `${payload.topic?.trim() || current.topic} is now scheduled for ${startsAt} in ${classroom?.name ?? "the classroom"}.`;
+  await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')", [id("notice"), "teacher", payload.teacherId, title, body]);
+  for (const student of bookedStudents) await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')", [id("notice"), "student", student.student_id, title, body]);
+}
+
 async function enrollStudent(runId?: string, studentId?: string, contractedFee?: number, checkCapacity = true) {
   if (!runId || !studentId) throw new Error("Please select a class and student.");
   const run = await row<{ capacity: number; price: number; enrolled: number }>(
@@ -751,7 +779,7 @@ async function updateCampusFloorplan(payload: ActionPayload) {
 
 async function readPortal() {
   await seedDatabase();
-  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
+  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
@@ -779,6 +807,7 @@ async function readPortal() {
           JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN students ON students.id = student_payments.student_id
           ORDER BY student_payments.received_at DESC`),
     rows("SELECT * FROM student_messages ORDER BY created_at DESC"),
+    rows("SELECT * FROM portal_notifications ORDER BY created_at DESC LIMIT 80"),
     rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.class_run_id, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
           JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_sessions.starts_at ASC`),
@@ -811,7 +840,7 @@ async function readPortal() {
   let mail = { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" };
   try { mail = { ...mail, ...JSON.parse(mailSettingsSetting?.value ?? "{}") }; } catch { /* Use connection defaults. */ }
   return Response.json({
-    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
     settings: { businessHours, mail },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
@@ -852,6 +881,7 @@ export async function POST(request: Request) {
     if (payload.action === "createCourse") await createCourse(payload);
     if (payload.action === "createClassRun") await createClassRun(payload);
     if (payload.action === "createSession") await createSession(payload);
+    if (payload.action === "updateSession") await updateSession(payload);
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "setAttendance") await setAttendance(payload);

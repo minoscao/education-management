@@ -2144,6 +2144,31 @@ button.status-cell {
 .course-year-label { z-index: 4; border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.9); }
 .abstract-course-visual > .course-subject-label { z-index: 4; right: auto; bottom: 10px; left: 9px; color: #ffffff; font-size: 8px; text-shadow: 0 1px 3px rgba(5,25,42,.68); }
 
+/* Entity themes keep the drawer header and its section rail in the same visual language. */
+.detail-sheet.detail-course .entity-header { border-bottom-color: #b7e1e6 !important; background: #e4f7f8 !important; }
+.detail-sheet.detail-course .entity-icon { border-color: #c6e8ea; background: #f4ffff; color: #087f9f; }
+.detail-sheet.detail-course .detail-tabs-right { border-color: #0b738a !important; background: #0f8aa8 !important; }
+.detail-sheet.detail-course .detail-tabs-right button.active { color: #08758f !important; }
+.detail-sheet.detail-course .detail-tabs-right button.active b { background: #d9f5f8 !important; color: #08758f !important; }
+
+.detail-sheet.detail-teacher .entity-header { border-bottom-color: #d8cff1 !important; background: #f1edff !important; }
+.detail-sheet.detail-teacher .entity-icon,.detail-sheet.detail-teacher .entity-avatar { border-color: #dfd5fb; background: #fbf9ff; color: #7253b1; }
+.detail-sheet.detail-teacher .detail-tabs-right { border-color: #6145a4 !important; background: #7656be !important; }
+.detail-sheet.detail-teacher .detail-tabs-right button.active { color: #60469f !important; }
+.detail-sheet.detail-teacher .detail-tabs-right button.active b { background: #eee9ff !important; color: #60469f !important; }
+
+.detail-sheet.detail-room .entity-header { border-bottom-color: #cfdae5 !important; background: #edf3f8 !important; }
+.detail-sheet.detail-room .entity-icon { border-color: #d9e4ee; background: #f8fbfe; color: #5b7492; }
+.detail-sheet.detail-room .detail-tabs-right { border-color: #506c89 !important; background: #647a9c !important; }
+.detail-sheet.detail-room .detail-tabs-right button.active { color: #506c89 !important; }
+.detail-sheet.detail-room .detail-tabs-right button.active b { background: #e7eff7 !important; color: #506c89 !important; }
+
+.detail-sheet.detail-student .entity-header { border-bottom-color: #cde5c8 !important; background: #f0f8e9 !important; }
+.detail-sheet.detail-student .entity-icon,.detail-sheet.detail-student .entity-avatar { border-color: #d9edd4; background: #fbfff8; color: #4e9b50; }
+.detail-sheet.detail-student .detail-tabs-right { border-color: #3d7f40 !important; background: #4e9b50 !important; }
+.detail-sheet.detail-student .detail-tabs-right button.active { color: #3d7f40 !important; }
+.detail-sheet.detail-student .detail-tabs-right button.active b { background: #e8f6e3 !important; color: #3d7f40 !important; }
+
 /* Teacher portraits use rounded squares, leaving circular portraits for students. */
 .teacher-avatar,.teacher-avatar .avatar-photo,.teacher-table-person .avatar-photo,.detail-teacher .entity-avatar { border-radius: 8px !important; }
 .teacher-avatar .avatar-photo { width: 100%; height: 100%; }

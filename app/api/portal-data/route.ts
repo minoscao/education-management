@@ -815,9 +815,11 @@ async function readPortal() {
           ORDER BY student_payments.received_at DESC`),
     rows("SELECT * FROM student_messages ORDER BY created_at DESC"),
     rows("SELECT * FROM portal_notifications ORDER BY created_at DESC LIMIT 80"),
-    rows(`SELECT class_attendance.*, class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee, students.name AS student_name, class_sessions.class_run_id, class_sessions.topic, class_sessions.starts_at, class_sessions.ends_at, class_runs.name AS run_name, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color
+    rows(`SELECT class_attendance.id, class_attendance.student_booking_id, class_attendance.status, class_attendance.note, class_attendance.marked_at,
+          class_student_bookings.class_session_id, class_student_bookings.student_id, class_student_bookings.allocated_fee,
+          students.name AS student_name, class_sessions.class_run_id
           FROM class_attendance JOIN class_student_bookings ON class_student_bookings.id = class_attendance.student_booking_id JOIN students ON students.id = class_student_bookings.student_id
-          JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_sessions.starts_at ASC`),
+          JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id ORDER BY class_sessions.starts_at ASC`),
     rows(`SELECT class_resource_bookings.*, classrooms.name AS classroom_name, class_sessions.topic, class_sessions.starts_at AS session_starts_at, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM class_resource_bookings JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id JOIN class_sessions ON class_sessions.id = class_resource_bookings.class_session_id
           JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY class_resource_bookings.starts_at ASC`),

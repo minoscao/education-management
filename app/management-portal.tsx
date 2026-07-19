@@ -395,7 +395,7 @@ function ResourceCalendar({ scope, anchor, data, resources, kind, window, c, lan
 function resourceEvents(data: PortalData, kind: ResourceKind, id: string): Row[] {
   if (kind === "classroom") { const room = data.classrooms.find((item) => get(item, "id") === id); return data.sessions.filter((event) => get(event, "classroom_name") === get(room, "name")); }
   if (kind === "teacher") { const teacher = data.teachers.find((item) => get(item, "id") === id); return data.sessions.filter((event) => get(event, "teacher_name") === get(teacher, "name")); }
-  return data.attendance.filter((item) => get(item, "student_id") === id).map((item) => ({ ...item, id: `student-event-${get(item, "id")}`, calendar_session_id: get(item, "class_session_id") }));
+  return data.attendance.filter((item) => get(item, "student_id") === id).map((item) => ({ ...data.sessions.find((session) => get(session, "id") === get(item, "class_session_id")), ...item, id: `student-event-${get(item, "id")}`, calendar_session_id: get(item, "class_session_id") }));
 }
 
 function DayTimeline({ anchor, columns, eventsForColumn, window, c, onOpen }: { anchor: Date; columns: CalendarResource[]; eventsForColumn: (column: CalendarResource) => Row[]; window: ScheduleWindow; c: typeof calendarText.en; onOpen: (id: string) => void }) {

@@ -1698,6 +1698,10 @@ button.status-cell {
 .role-admin .operation-header { border-color: #cce0e5; background: linear-gradient(105deg, #ffffff 0%, #f7fcfd 62%, #ecf8fb 100%); box-shadow: 0 7px 22px rgba(27, 94, 113, .07); }
 .role-admin .nav-group button.active,.role-admin .role-switcher button.active { background: linear-gradient(135deg, #078bad, #0a9ca8); box-shadow: 0 7px 18px rgba(11, 105, 130, .22); }
 
+.campus-loading-state { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 10px; border: 1px solid #cfe3e8; border-radius: 7px; background: linear-gradient(135deg, #f8fcfd, #eef9fb); color: #16819b; text-align: center; }
+.campus-loading-state svg { width: 34px; height: 34px; padding: 8px; border-radius: 50%; background: #dcf2f6; }.campus-loading-state strong { color: #24505e; font-size: 14px; }.campus-loading-state span { color: #6c878f; font-size: 11px; }
+.panel-hint { margin: 3px 0 0; color: #718991; font-size: 11px; }
+
 /* Student home: progress belongs to a course, never to a mixed total. */
 .role-student .student-focus-grid-compact { grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); }
 .role-student .student-course-card { position: relative; grid-template-columns: 80px minmax(0, 1fr) auto; border-color: color-mix(in srgb, var(--course-colour, #3675f5) 32%, #c7d8ff); background: linear-gradient(112deg, color-mix(in srgb, var(--course-colour, #3675f5) 7%, #ffffff), #ffffff 66%); }

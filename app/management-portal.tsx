@@ -12,7 +12,7 @@ type Row = Record<string, unknown>;
 type Language = "en" | "zh";
 type Role = "admin" | "teacher" | "student";
 type StudentTheme = "sky" | "ocean" | "mint";
-type View = "dashboard" | "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "reports" | "settings" | "teacherHome" | "studentHome" | "studentCourses" | "studentCalendar";
+type View = "dashboard" | "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "payments" | "reports" | "settings" | "teacherHome" | "studentHome" | "studentCourses" | "studentCalendar";
 type Detail = { kind: "session" | "student" | "teacher" | "room" | "course"; id: string } | null;
 
 type PortalData = {
@@ -101,6 +101,7 @@ export function ManagementPortal() {
   const [role, setRole] = useState<Role>("admin");
   const [language, setLanguage] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [detail, setDetail] = useState<Detail>(null);
   const [search, setSearch] = useState("");
@@ -111,14 +112,14 @@ export function ManagementPortal() {
   const t = copy[language];
 
   async function load() {
-    setBusy(true); setMessage("");
+    setBusy(true); setLoading(true); setMessage("");
     try {
       const response = await fetch("/api/portal-data", { cache: "no-store" });
       const payload = await response.json() as PortalData & { error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load data");
       setData(payload);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load data"); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setLoading(false); }
   }
 
   async function run(action: string, values: Row = {}) {
@@ -145,14 +146,14 @@ export function ManagementPortal() {
   return <main className={`operation-app role-${role} student-theme-${studentTheme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
     <aside className="operation-sidebar">
       <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
-      {role === "admin" ? <><NavGroup label={t.operate} current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, t.calendar], ["classes", BookOpen, "Courses"], ["campus", MapIcon, t.campus], ["students", Users, t.students], ["teachers", UserRound, t.teachers]]} /><NavGroup label={t.manage} current={view} setView={setView} items={[["courses", LayoutGrid, "Course setup"], ["classrooms", DoorOpen, t.classrooms], ["enrollment", Banknote, t.enrollment], ["reports", Settings2, t.reports], ["settings", SlidersHorizontal, "Settings"]]} /></> : null}
+      {role === "admin" ? <><NavGroup label="DAILY OPERATIONS" current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, "Schedule"], ["classes", BookOpen, "Classes"], ["campus", MapIcon, "Campus live"], ["students", Users, "Students"], ["enrollment", UserRoundPlus, "Enrolments"], ["payments", Banknote, "Payments"], ["reports", Settings2, "Reports"]]} /><NavGroup label="SETUP" current={view} setView={setView} items={[["courses", LayoutGrid, "Course catalogue"], ["teachers", UserRound, "Teacher setup"], ["classrooms", DoorOpen, "Campus setup"], ["settings", SlidersHorizontal, "Business rules"]]} /></> : null}
       {role === "teacher" ? <NavGroup label="TEACH" current={view} setView={setView} items={[["teacherHome", Home, "Today"], ["calendar", CalendarDays, "My schedule"], ["classes", BookOpen, "My courses"], ["students", Users, "Students"]]} /> : null}
       {role === "student" ? <NavGroup label="LEARN" current={view} setView={setView} items={[["studentHome", Home, "Home"], ["studentCourses", BookOpen, "My courses"], ["studentCalendar", CalendarDays, "My timetable"]]} /> : null}
       <div className="sidebar-bottom"><RoleSwitcher role={role} onChange={changeRole} /><div className="sidebar-footer"><School size={17} /><span>{get(data.campuses[0], "name") || "Campus"}</span></div></div>
     </aside>
     <section className="operation-workspace">
       <header className="operation-header">
-        <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : view === "calendar" || view === "classes" || view === "campus" || view === "students" || view === "teachers" ? t.operate : t.manage}</p><h1>{pageTitle(view, t)}</h1></div>
+        <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : ["dashboard", "calendar", "classes", "campus", "students", "enrollment", "payments", "reports"].includes(view) ? "DAILY OPERATIONS" : "SETUP"}</p><h1>{pageTitle(view, t)}</h1></div>
         <div className="header-tools">
           {role === "student" ? <StudentThemePicker value={studentTheme} onChange={setStudentTheme} /> : null}
           {role !== "admin" ? <PersonaPicker role={role} rows={role === "student" ? data.students : data.teachers} value={role === "student" ? selectedStudentId : selectedTeacherId} onChange={role === "student" ? setSelectedStudentId : setSelectedTeacherId} /> : null}
@@ -164,13 +165,14 @@ export function ManagementPortal() {
       </header>
       {view === "dashboard" ? <AdminDashboard data={data} onOpen={(id) => setDetail({ kind: "session", id })} onNavigate={setView} /> : null}
       {view === "calendar" ? <CalendarView data={data} sessions={role === "teacher" ? data.sessions.filter((item) => get(item, "teacher_name") === get(data.teachers.find((teacher) => get(teacher, "id") === selectedTeacherId) ?? {}, "name")) : undefined} t={t} language={language} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
-      {view === "campus" ? <CampusView data={data} t={t} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
+        {view === "campus" ? <CampusView data={data} t={t} loading={loading} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
       {view === "students" ? <DirectoryViewV2 type="student" rows={filteredStudents} data={data} t={t} onOpen={(id) => setDetail({ kind: "student", id })} /> : null}
       {view === "teachers" ? <DirectoryViewV2 type="teacher" rows={filteredTeachers} data={data} t={t} onOpen={(id) => setDetail({ kind: "teacher", id })} /> : null}
       {view === "courses" ? <CourseManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "classrooms" ? <ClassroomManager data={data} run={run} busy={busy} t={t} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
       {view === "classes" ? <ClassManager data={data} run={run} busy={busy} t={t} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
       {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
+      {view === "payments" ? <PaymentWorkspace data={data} run={run} busy={busy} /> : null}
       {view === "reports" ? <ReportView data={data} t={t} /> : null}
       {view === "settings" ? <><SettingsView data={data} run={run} busy={busy} /><EmailSettings data={data} run={run} busy={busy} /></> : null}
       {view === "teacherHome" ? <TeacherHome data={data} teacherId={selectedTeacherId} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
@@ -183,7 +185,7 @@ export function ManagementPortal() {
 }
 
 function pageTitle(view: View, t: typeof copy.en) {
-  const titles: Record<View, string> = { dashboard: "Dashboard", calendar: t.calendar, campus: t.campus, students: t.students, teachers: t.teachers, courses: "Course setup", classrooms: t.classrooms, classes: "Courses", enrollment: t.enrollment, reports: t.reports, settings: "Settings", teacherHome: "Today", studentHome: "My learning", studentCourses: "My courses", studentCalendar: "My timetable" };
+  const titles: Record<View, string> = { dashboard: "Dashboard", calendar: "Schedule", campus: "Campus live", students: t.students, teachers: "Teacher setup", courses: "Course catalogue", classrooms: "Campus setup", classes: "Classes", enrollment: "Enrolments", payments: "Payments", reports: t.reports, settings: "Business rules", teacherHome: "Today", studentHome: "My learning", studentCourses: "My courses", studentCalendar: "My timetable" };
   return titles[view];
 }
 
@@ -352,7 +354,7 @@ function ResourceMatrixRow({ resource, columns, events, compact, onOpen }: { res
   return <><div className="matrix-resource"><span>{resource.icon === "teacher" ? <UserRound size={15} /> : resource.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}</span><strong>{resource.name}</strong></div>{columns.map((day) => { const cellEvents = events.filter((event) => datePart(event.starts_at) === toKey(day)); return <div className="matrix-cell" key={`${resource.id}-${toKey(day)}`}>{cellEvents.slice(0, compact ? 1 : 2).map((event) => <button type="button" key={get(event, "id")} className="matrix-event" style={eventStyle(event)} onClick={() => onOpen(eventSessionId(event))}>{compact ? <span>{cellEvents.length}</span> : <><b>{timePart(event.starts_at)}</b><span>{get(event, "course_title")}</span></>}</button>)}{cellEvents.length > (compact ? 1 : 2) ? <small>+{cellEvents.length - (compact ? 1 : 2)}</small> : null}</div>; })}</>;
 }
 
-function CampusView({ data, t, onOpenRoom }: { data: PortalData; t: typeof copy.en; onOpenRoom: (id: string) => void }) {
+function CampusView({ data, t, loading, onOpenRoom }: { data: PortalData; t: typeof copy.en; loading: boolean; onOpenRoom: (id: string) => void }) {
   const [campusId, setCampusId] = useState("");
   const [viewDate, setViewDate] = useState(() => toKey(new Date()));
   const [timeMode, setTimeMode] = useState<"now" | "day">("now");
@@ -364,7 +366,7 @@ function CampusView({ data, t, onOpenRoom }: { data: PortalData; t: typeof copy.
   function selectToday() { setViewDate(today); setTimeMode("now"); }
   function selectNow() { setViewDate(today); setTimeMode("now"); }
   function selectTomorrow() { setViewDate(tomorrow); setTimeMode("day"); }
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div><section className="map-time-controls"><div className="map-time-actions"><button className={timeMode === "now" && viewDate === today ? "active" : ""} type="button" onClick={selectToday}>Today</button><button className={timeMode === "now" ? "active" : ""} type="button" onClick={selectNow}><Clock3 size={15} />Now onward</button><button className={timeMode === "day" && viewDate === tomorrow ? "active" : ""} type="button" onClick={selectTomorrow}>Tomorrow</button><label><span>Date</span><input type="date" value={viewDate} onChange={(event) => { setViewDate(event.target.value); setTimeMode(event.target.value === today ? "now" : "day"); }} /></label></div><strong>{label}</strong></section>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} viewDate={viewDate} referenceTime={referenceTime} onOpenRoom={onOpenRoom} /> : <Empty text={t.noData} />}</section>;
+  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div><section className="map-time-controls"><div className="map-time-actions"><button className={timeMode === "now" && viewDate === today ? "active" : ""} type="button" onClick={selectToday}>Today</button><button className={timeMode === "now" ? "active" : ""} type="button" onClick={selectNow}><Clock3 size={15} />Now onward</button><button className={timeMode === "day" && viewDate === tomorrow ? "active" : ""} type="button" onClick={selectTomorrow}>Tomorrow</button><label><span>Date</span><input type="date" value={viewDate} onChange={(event) => { setViewDate(event.target.value); setTimeMode(event.target.value === today ? "now" : "day"); }} /></label></div><strong>{label}</strong></section>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} viewDate={viewDate} referenceTime={referenceTime} onOpenRoom={onOpenRoom} /> : loading ? <section className="campus-loading-state"><MapIcon size={26} /><div><strong>Loading campus map</strong><span>Preparing rooms and today’s schedule.</span></div></section> : <Empty text="No campus is configured yet." />}</section>;
 }
 
 function LegacyFloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
@@ -597,6 +599,14 @@ function CourseRunEditor({ runItem, data, run, busy, t, onBack, onOpen }: { runI
 function EnrollmentManager({ data, run, busy, t }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en }) {
   function enroll(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("enrollStudent", values); event.currentTarget.reset(); }
   return <section className="operation-stack"><div className="view-intro"><div><h2>{t.enrollment}</h2><p>{t.billingHint}</p></div></div><section className="management-panel"><h3>{t.enroll}</h3><form className="inline-form compact" onSubmit={enroll}><SelectField name="runId" label={t.classRun} rows={data.runs.filter((item) => get(item, "status") === "open")} value="" /><SelectField name="studentId" label={t.students} rows={data.students.filter((item) => get(item, "status") === "active")} value="" /><button className="primary-button" disabled={busy} type="submit"><UserRoundPlus size={16} />{t.enroll}</button></form></section><section className="management-panel"><h3>{t.enrollment}</h3><Table columns={[["student_name", t.students], ["course_title", t.courses], ["run_name", t.classRun], ["contracted_fee", "Contract"], ["invoice_no", "Invoice"], ["paid_amount", "Paid"], ["invoice_status", "Invoice status"], ["status", t.status]]} rows={data.enrollments} moneyKeys={["contracted_fee", "paid_amount"]} empty={t.noData} /></section><section className="management-panel"><h3>Invoices</h3><InvoiceTable rows={data.invoices} run={run} busy={busy} /></section></section>;
+}
+
+function PaymentWorkspace({ data, run, busy }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) {
+  const invoiced = data.invoices.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+  const received = data.invoices.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
+  const outstanding = Math.max(0, invoiced - received);
+  const openInvoices = data.invoices.filter((item) => Number(item.total_amount || 0) > Number(item.paid_amount || 0)).sort((left, right) => (Number(right.total_amount || 0) - Number(right.paid_amount || 0)) - (Number(left.total_amount || 0) - Number(left.paid_amount || 0)));
+  return <section className="operation-stack"><div className="view-intro"><div><h2>Payments</h2><p>Record payments, follow up open balances and review recent collections.</p></div></div><div className="admin-metric-grid payment-workspace-metrics"><DashboardMetric icon={<ReceiptText size={19} />} label="Invoiced" value={amount(invoiced)} note="Course contracts" tone="blue" /><DashboardMetric icon={<Banknote size={19} />} label="Received" value={amount(received)} note="Payments recorded" tone="teal" /><DashboardMetric icon={<Clock3 size={19} />} label="Outstanding" value={amount(outstanding)} note={`${openInvoices.length} families to follow up`} tone="amber" /><DashboardMetric icon={<Check size={19} />} label="Paid invoices" value={String(data.invoices.filter((item) => get(item, "status") === "paid").length)} note="Fully settled" tone="purple" /></div><section className="management-panel"><div className="panel-row"><div><h3>Payment follow-up</h3><p className="panel-hint">Record the amount received directly from each open invoice.</p></div><span className="record-count">{openInvoices.length}</span></div><InvoiceTable rows={openInvoices} run={run} busy={busy} /></section><section className="management-panel"><div className="panel-row"><h3>Recent payment activity</h3><span className="record-count">{data.payments.length}</span></div><Table columns={[["received_at", "Received"], ["student_name", "Student"], ["course_title", "Course"], ["method", "Method"], ["amount", "Amount"], ["proof_reference", "Proof"], ["status", "Status"]]} rows={data.payments} moneyKeys={["amount"]} empty="No payments recorded yet." /></section></section>;
 }
 
 type ReportColumn = { key: string; label: string; money?: boolean; status?: boolean };

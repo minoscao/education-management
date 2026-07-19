@@ -2016,6 +2016,13 @@ button.status-cell {
 .detail-workspace .themed-list-details > div { display: grid; min-width: 0; gap: 4px; padding: 10px 12px; background: color-mix(in srgb, var(--course-colour, #0f8aa8) 5%, #ffffff); }
 .detail-workspace .themed-list-details span { color: #6b838c; font-size: 10px; font-weight: 750; }
 .detail-workspace .themed-list-details strong { overflow: hidden; color: #294c57; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.interactive-list-row { cursor: pointer; transition: transform .16s ease, box-shadow .16s ease, filter .16s ease; }
+.interactive-list-row:hover { transform: translateY(-1px); filter: saturate(1.05); box-shadow: 0 7px 16px rgba(23, 78, 94, .12); }
+.detail-metric-link { min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.detail-metric-link:hover { background: #f0fbfd; }
+.current-lesson-card.interactive-list-row { width: 100%; padding: 0; font: inherit; text-align: left; }
+.sheet-roster .roster-student { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.sheet-roster .roster-student:hover strong { color: #087f9f; }
 
 .room-schedule-section { padding-bottom: 22px !important; }
 .room-schedule-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 12px; }

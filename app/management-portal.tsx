@@ -71,7 +71,7 @@ type CalendarMode = "time" | "resource";
 type ScheduleScope = Exclude<CalendarScope, "year">;
 type ResourceKind = "classroom" | "teacher" | "student";
 type CalendarResource = { id: string; name: string; icon: "classroom" | "teacher" | "student" };
-type ScheduleWindow = { start: number; end: number; labels: string[]; height: number };
+type ScheduleWindow = { start: number; end: number; businessStart: number; businessEnd: number; labels: string[]; height: number };
 
 function fromKey(value: string) { return new Date(`${value}T12:00:00`); }
 function toKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
@@ -84,15 +84,15 @@ function eventStyle(row: Row) { return { "--course-colour": eventColour(row) } a
 
 function scheduleWindow(hours: PortalData["settings"]["businessHours"]): ScheduleWindow {
   const start = minutesForTime(hours.start); const end = minutesForTime(hours.end);
-  const safeStart = Number.isFinite(start) ? start : 8 * 60;
-  const safeEnd = Number.isFinite(end) && end > safeStart ? end : 20 * 60;
-  const firstHour = Math.floor(safeStart / 60) * 60;
-  const lastHour = Math.ceil(safeEnd / 60) * 60;
+  const businessStart = Number.isFinite(start) ? start : 8 * 60;
+  const businessEnd = Number.isFinite(end) && end > businessStart ? end : 20 * 60;
+  const firstHour = Math.max(0, Math.floor((businessStart - 60) / 60) * 60);
+  const lastHour = Math.min(24 * 60, Math.ceil((businessEnd + 60) / 60) * 60);
   const labels = Array.from({ length: Math.max(1, (lastHour - firstHour) / 60) }, (_, index) => {
     const hour = Math.floor((firstHour + index * 60) / 60);
     return `${String(hour).padStart(2, "0")}:00`;
   });
-  return { start: safeStart, end: safeEnd, labels, height: Math.max(480, labels.length * 72) };
+  return { start: firstHour, end: lastHour, businessStart, businessEnd, labels, height: Math.max(480, labels.length * 72) };
 }
 
 export function ManagementPortal() {
@@ -170,7 +170,7 @@ export function ManagementPortal() {
       {view === "teachers" ? <DirectoryViewV2 type="teacher" rows={filteredTeachers} data={data} t={t} onOpen={(id) => setDetail({ kind: "teacher", id })} /> : null}
       {view === "courses" ? <CourseManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "classrooms" ? <ClassroomManager data={data} run={run} busy={busy} t={t} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
-      {view === "classes" ? <ClassManager data={data} run={run} busy={busy} t={t} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
+      {view === "classes" ? <ClassManager data={data} run={run} busy={busy} t={t} onOpen={(id) => setDetail({ kind: "course", id })} /> : null}
       {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
       {view === "payments" ? <PaymentWorkspace data={data} run={run} busy={busy} /> : null}
       {view === "reports" ? <ReportView data={data} t={t} /> : null}
@@ -314,7 +314,7 @@ function MonthCalendar({ anchor, events, c, language, onOpen, onSelectDate }: { 
 
 function WeekCalendar({ anchor, events, window, language, onOpen }: { anchor: Date; events: Row[]; window: ScheduleWindow; language: Language; onOpen: (id: string) => void }) {
   const start = startOfWeek(anchor); const days = Array.from({ length: 7 }, (_, index) => addDays(start, index)); const locale = language === "zh" ? "zh-CN" : "en-US";
-  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length } as React.CSSProperties;
+  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length, "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`, "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%` } as React.CSSProperties;
   return <section className="week-timeline"><div className="week-timeline-head"><div className="week-time-corner">Time</div>{days.map((day) => <div className="week-timeline-day-head" key={toKey(day)}><span>{day.toLocaleDateString(locale, { weekday: "short" })}</span><strong>{day.getDate()}</strong></div>)}</div><div className="week-timeline-body" style={bodyStyle}><div className="week-time-labels">{window.labels.map((label) => <span key={label}>{label}</span>)}</div>{days.map((day) => <div className="week-timeline-column" key={toKey(day)}>{events.filter((event) => datePart(event.starts_at) === toKey(day)).map((event) => <TimelineEvent key={get(event, "id")} event={event} window={window} onOpen={onOpen} />)}</div>)}</div></section>;
 }
 
@@ -334,7 +334,7 @@ function resourceEvents(data: PortalData, kind: ResourceKind, id: string): Row[]
 
 function DayTimeline({ anchor, columns, eventsForColumn, window, c, onOpen }: { anchor: Date; columns: CalendarResource[]; eventsForColumn: (column: CalendarResource) => Row[]; window: ScheduleWindow; c: typeof calendarText.en; onOpen: (id: string) => void }) {
   const visible = columns.length ? columns : [{ id: "none", name: c.allSchedule, icon: "classroom" }];
-  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length } as React.CSSProperties;
+  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length, "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`, "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%` } as React.CSSProperties;
   return <section className="day-timeline"><div className="timeline-head"><div>{toKey(anchor)}</div>{visible.map((column) => <div key={column.id}>{column.icon === "teacher" ? <UserRound size={15} /> : column.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}<span>{column.name}</span></div>)}</div><div className="timeline-body" style={bodyStyle}><div className="timeline-hours">{window.labels.map((label) => <span key={label}>{label}</span>)}</div><div className="timeline-columns">{visible.map((column) => <div className="timeline-column" key={column.id}>{eventsForColumn(column).filter((event) => datePart(event.starts_at) === toKey(anchor)).map((event) => <TimelineEvent key={get(event, "id")} event={event} window={window} onOpen={onOpen} />)}</div>)}</div></div></section>;
 }
 
@@ -575,10 +575,7 @@ function ClassroomManager({ data, run, busy, t, onOpenRoom }: { data: PortalData
 }
 
 function ClassManager({ data, run, busy, t, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpen: (id: string) => void }) {
-  const [runId, setRunId] = useState("");
-  const selected = data.runs.find((item) => get(item, "id") === runId);
-  if (selected) return <CourseRunEditor runItem={selected} data={data} run={run} busy={busy} t={t} onBack={() => setRunId("")} onOpen={onOpen} />;
-  return <CourseRunLibrary data={data} run={run} busy={busy} t={t} onOpen={setRunId} />;
+  return <CourseRunLibrary data={data} run={run} busy={busy} t={t} onOpen={onOpen} />;
 }
 
 function CourseRunLibrary({ data, run, busy, t, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpen: (id: string) => void }) {
@@ -751,8 +748,9 @@ function DetailSheet({ detail, data, t, busy, run, close }: { detail: Exclude<De
   const teacherLessons = detail.kind === "teacher" ? data.teacherBookings.filter((row) => get(row, "teacher_id") === detail.id) : [];
   const roomLessons = detail.kind === "room" ? data.sessions.filter((row) => get(row, "classroom_name") === get(item, "name")) : [];
   const sessionRoster = detail.kind === "session" ? data.attendance.filter((row) => get(row, "class_session_id") === detail.id) : [];
-  const title = detail.kind === "session" ? get(item, "course_title") : get(item, "name");
+  const title = detail.kind === "session" || detail.kind === "course" ? get(item, "course_title") : get(item, "name");
   const subtitle = detail.kind === "session" ? `${get(item, "topic")} · ${get(item, "starts_at")}` : detail.kind === "student" ? get(item, "level") : detail.kind === "teacher" ? get(item, "subject") : `${get(item, "location")} · ${get(item, "capacity")} seats`;
+  const courseSubtitle = detail.kind === "course" ? `${get(item, "name")} - ${get(item, "term_name")}` : subtitle;
   const courseSessions = detail.kind === "session" ? data.sessions.filter((row) => get(row, "class_run_id") === get(item, "class_run_id")) : [];
   const tabs = detail.kind === "student" ? [{ id: "summary", label: "Summary" }, { id: "courses", label: "Courses" }, { id: "payments", label: "Payments", count: studentInvoices.length }, { id: "communication", label: "Email", count: studentMessages.length }] : detail.kind === "teacher" ? [{ id: "summary", label: "Summary" }, { id: "courses", label: "Courses", count: teacherLessons.length }, { id: "income", label: "Income" }] : detail.kind === "session" ? [{ id: "summary", label: "Summary" }, { id: "lessons", label: "Lessons", count: courseSessions.length }] : detail.kind === "course" ? [{ id: "summary", label: "Summary" }, { id: "lessons", label: "Lessons", count: runLessons.length }, { id: "students", label: "Students", count: runStudents.length }] : [{ id: "summary", label: "Summary" }, { id: "schedule", label: "Schedule", count: roomLessons.length }];
   const incomeTotal = teacherLessons.reduce((sum, row) => sum + Number(row.pay_amount ?? 0), 0);
@@ -760,7 +758,7 @@ function DetailSheet({ detail, data, t, busy, run, close }: { detail: Exclude<De
   const outstanding = studentInvoices.reduce((sum, row) => sum + Math.max(0, Number(row.total_amount ?? 0) - Number(row.paid_amount ?? 0)), 0);
   function saveProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run(detail.kind === "student" ? "updateStudent" : "updateTeacher", { ...values, [detail.kind === "student" ? "studentId" : "teacherId"]: detail.id }).then(() => setEditing(false)); }
   const openStudents = () => setTab("summary");
-  return <div className="sheet-backdrop" role="presentation" onMouseDown={close}><aside className={`detail-sheet detail-${detail.kind}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="sheet-close-float" type="button" onClick={close} title={t.cancel}><X size={18} /></button><header className="entity-header"><div className="entity-heading">{detail.kind === "student" || detail.kind === "teacher" ? <img className="entity-avatar" src={avatarUrl(item)} alt="" /> : <div className="entity-icon">{detail.kind === "session" ? <ClipboardCheck size={22} /> : detail.kind === "course" ? <BookOpen size={22} /> : <DoorOpen size={22} />}</div>}<div><span className="sheet-eyebrow">{detail.kind === "session" ? "Lesson" : detail.kind === "course" ? "Course" : detail.kind === "student" ? "Student" : detail.kind === "teacher" ? "Teacher" : "Classroom"}</span><h2>{title}</h2><p>{subtitle}</p></div></div><div className="entity-header-actions">{detail.kind === "student" || detail.kind === "teacher" ? <button className="quiet-button" type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit profile"}</button> : null}{detail.kind === "session" ? <button className="primary-button" type="button" onClick={openStudents}>Check in</button> : null}</div></header><div className="entity-workspace detail-workspace"><main className="entity-main">{detail.kind === "student" ? <StudentDetailContent tab={tab} editing={editing} item={item} enrollments={studentEnrollments} invoices={studentInvoices} payments={studentPayments} attendance={studentAttendance} sessions={data.sessions} messages={studentMessages} outstanding={outstanding} busy={busy} saveProfile={saveProfile} run={run} /> : null}{detail.kind === "teacher" ? <TeacherDetailContent tab={tab} editing={editing} item={item} lessons={teacherLessons} total={incomeTotal} paid={incomePaid} busy={busy} saveProfile={saveProfile} /> : null}{detail.kind === "session" ? <SessionDetailContent tab={tab} item={item} courseSessions={courseSessions} roster={sessionRoster} students={data.students} enrollStudentId={enrollStudentId} setEnrollStudentId={setEnrollStudentId} busy={busy} run={run} t={t} /> : null}{detail.kind === "course" ? <CourseDetailContent tab={tab} item={item} lessons={runLessons} students={runStudents} /> : null}{detail.kind === "room" ? <RoomDetailContent tab={tab} item={item} lessons={roomLessons} /> : null}</main><DetailTabs active={tab} onChange={setTab} tabs={tabs} /></div></aside></div>;
+  return <div className="sheet-backdrop" role="presentation" onMouseDown={close}><aside className={`detail-sheet detail-${detail.kind}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="sheet-close-float" type="button" onClick={close} title={t.cancel}><X size={18} /></button><header className="entity-header"><div className="entity-heading">{detail.kind === "student" || detail.kind === "teacher" ? <img className="entity-avatar" src={avatarUrl(item)} alt="" /> : <div className="entity-icon">{detail.kind === "session" ? <ClipboardCheck size={22} /> : detail.kind === "course" ? <BookOpen size={22} /> : <DoorOpen size={22} />}</div>}<div><span className="sheet-eyebrow">{detail.kind === "session" ? "Lesson" : detail.kind === "course" ? "Course" : detail.kind === "student" ? "Student" : detail.kind === "teacher" ? "Teacher" : "Classroom"}</span><h2>{title}</h2><p>{courseSubtitle}</p></div></div><div className="entity-header-actions">{detail.kind === "student" || detail.kind === "teacher" ? <button className="quiet-button" type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit profile"}</button> : null}{detail.kind === "session" ? <button className="primary-button" type="button" onClick={openStudents}>Check in</button> : null}</div></header><div className="entity-workspace detail-workspace"><main className="entity-main">{detail.kind === "student" ? <StudentDetailContent tab={tab} editing={editing} item={item} enrollments={studentEnrollments} invoices={studentInvoices} payments={studentPayments} attendance={studentAttendance} sessions={data.sessions} messages={studentMessages} outstanding={outstanding} busy={busy} saveProfile={saveProfile} run={run} /> : null}{detail.kind === "teacher" ? <TeacherDetailContent tab={tab} editing={editing} item={item} lessons={teacherLessons} total={incomeTotal} paid={incomePaid} busy={busy} saveProfile={saveProfile} /> : null}{detail.kind === "session" ? <SessionDetailContent tab={tab} item={item} courseSessions={courseSessions} roster={sessionRoster} students={data.students} enrollStudentId={enrollStudentId} setEnrollStudentId={setEnrollStudentId} busy={busy} run={run} t={t} /> : null}{detail.kind === "course" ? <CourseDetailContent tab={tab} item={item} lessons={runLessons} students={runStudents} /> : null}{detail.kind === "room" ? <RoomDetailContent tab={tab} item={item} lessons={roomLessons} /> : null}</main><DetailTabs active={tab} onChange={setTab} tabs={tabs} /></div></aside></div>;
 }
 
 function DetailTabs({ active, onChange, tabs }: { active: string; onChange: (value: string) => void; tabs: { id: string; label: string; count?: number }[] }) { return <nav className="detail-tabs-right" aria-label="Details sections">{tabs.map((tab) => <button type="button" className={active === tab.id ? "active" : ""} onClick={() => onChange(tab.id)} key={tab.id}><DetailTabIcon id={tab.id} /><span>{tab.label}</span>{tab.count !== undefined ? <b>{tab.count}</b> : null}</button>)}</nav>; }

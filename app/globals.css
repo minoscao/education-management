@@ -627,6 +627,96 @@ button:disabled {
   width: max-content;
   height: fit-content;
 }
+
+/* Calendar is a self-contained work surface: its scroll stays inside the timetable. */
+.week-timeline,
+.day-timeline,
+.resource-matrix,
+.month-calendar,
+.year-calendar {
+  max-height: calc(100vh - 286px);
+  overscroll-behavior: contain;
+}
+.week-timeline,
+.day-timeline { height: clamp(500px, calc(100vh - 286px), 760px); }
+.week-timeline-head,
+.timeline-head { position: sticky; top: 0; z-index: 5; }
+.week-time-labels,
+.timeline-hours {
+  background: linear-gradient(to bottom, #eef2f3 0 var(--business-start), #ffffff var(--business-start) var(--business-end), #eef2f3 var(--business-end) 100%);
+}
+.week-timeline-column::before,
+.week-timeline-column::after,
+.timeline-column::before,
+.timeline-column::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  background: rgba(105, 124, 132, .13);
+  content: "";
+  pointer-events: none;
+}
+.week-timeline-column::before,
+.timeline-column::before { top: 0; height: var(--business-start); }
+.week-timeline-column::after,
+.timeline-column::after { bottom: 0; height: calc(100% - var(--business-end)); }
+.week-timeline-column .timeline-event,
+.timeline-column .timeline-event { z-index: 1; }
+
+/* Every entity uses the same half-width drawer and a left-hand, dark navigation rail. */
+.detail-sheet { width: clamp(480px, 48vw, 680px) !important; }
+.detail-workspace {
+  display: grid !important;
+  grid-template-columns: 86px minmax(0, 1fr) !important;
+  min-height: calc(100vh - 126px);
+  background: #ffffff;
+}
+.detail-workspace .detail-tabs-right {
+  position: static !important;
+  order: 0;
+  width: auto !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  padding: 12px 8px !important;
+  border: 0 !important;
+  border-right: 1px solid #0a4c62 !important;
+  border-left: 0 !important;
+  border-radius: 0 !important;
+  background: #0d5b73 !important;
+  box-shadow: none !important;
+}
+.detail-workspace .entity-main { order: 1; min-width: 0; padding-right: 0 !important; }
+.detail-workspace .detail-tabs-right button {
+  min-height: 66px;
+  margin: 0;
+  border-radius: 6px 0 0 6px !important;
+  color: #eaf9fc !important;
+}
+.detail-workspace .detail-tabs-right button svg { color: #eaf9fc !important; }
+.detail-workspace .detail-tabs-right button:hover,
+.detail-workspace .detail-tabs-right button:focus-visible { background: #237f99 !important; }
+.detail-workspace .detail-tabs-right button.active {
+  margin-right: -8px;
+  border-color: #ffffff !important;
+  border-radius: 6px 0 0 6px !important;
+  background: #ffffff !important;
+  color: #164d5e !important;
+  box-shadow: none !important;
+}
+.detail-workspace .detail-tabs-right button.active svg { color: #087f9f !important; }
+.detail-sheet.detail-teacher .detail-tabs-right { border-right-color: #49357f !important; background: #694aa9 !important; }
+.detail-sheet.detail-teacher .detail-tabs-right button:hover,
+.detail-sheet.detail-teacher .detail-tabs-right button:focus-visible { background: #8b6bc4 !important; }
+.detail-sheet.detail-teacher .detail-tabs-right button.active svg { color: #7253b1 !important; }
+@media (max-width: 760px) {
+  .week-timeline,.day-timeline { height: clamp(430px, calc(100vh - 230px), 680px); }
+  .detail-sheet { width: 100vw !important; }
+  .detail-workspace { display: flex !important; flex-direction: column; }
+  .detail-workspace .detail-tabs-right { display: flex !important; order: -1; min-height: 0 !important; overflow-x: auto; border-right: 0 !important; border-bottom: 1px solid #0a4c62 !important; }
+  .detail-workspace .detail-tabs-right button,
+  .detail-workspace .detail-tabs-right button.active { flex: 0 0 68px; margin: 0; border-radius: 5px !important; }
+}
 .status-finished {
   border-color: #c9d5d8;
   background: #f1f4f4;

@@ -2226,3 +2226,117 @@ button.status-cell {
   .detail-workspace .detail-tabs-right { position: static !important; order: -1; width: auto !important; min-height: 0 !important; border: 0 !important; border-bottom: 1px solid #087d9b !important; border-radius: 0 !important; }
   .detail-workspace .entity-main { height: auto; flex: 1 1 auto; }
 }
+
+/* Responsive audit: shared surfaces own their overflow so the page itself never crushes data. */
+.operation-app,
+.operation-workspace,
+.operation-stack,
+.management-panel,
+.dashboard-panel,
+.report-table-panel,
+.entity-main,
+.sheet-section { min-width: 0; }
+
+.operation-workspace { overflow-x: hidden; }
+.table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: #8abfcb #edf5f6;
+  scrollbar-width: thin;
+}
+.table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.table-scroll::-webkit-scrollbar-track { background: #edf5f6; }
+.table-scroll::-webkit-scrollbar-thumb { border: 2px solid #edf5f6; border-radius: 99px; background: #8abfcb; }
+.table-scroll > .data-table:not(.resizable-data-table) { min-width: 760px; }
+.student-timetable-grid > .data-table { min-width: 940px !important; }
+.data-table th,
+.data-table td { overflow-wrap: anywhere; white-space: normal !important; }
+.data-table thead th > span { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; }
+.data-table tbody td { line-height: 1.35; }
+.data-table .table-actions { min-width: max-content; }
+.data-table .table-button { white-space: nowrap; }
+
+.operation-header,
+.header-tools,
+.view-intro,
+.grid-toolbar,
+.action-group,
+.calendar-controls,
+.map-time-controls,
+.room-schedule-toolbar { min-width: 0; }
+.header-tools,
+.action-group,
+.grid-toolbar { flex-wrap: wrap; }
+.view-intro > div:first-child,
+.operation-header .page-title { min-width: 0; }
+.view-intro h2,
+.view-intro p,
+.page-title h1 { overflow-wrap: anywhere; }
+
+.directory-grid,
+.course-grid,
+.run-card-grid,
+.course-card-gallery { grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); }
+.person-card,
+.course-card,
+.run-card,
+.student-course-card { min-width: 0; }
+.person-card strong,
+.person-card span,
+.course-card h3,
+.course-card p,
+.run-card strong,
+.run-card p { overflow-wrap: anywhere; }
+.course-card-gallery .student-course-card h4,
+.course-card-gallery .student-course-card p,
+.course-card-gallery .student-course-card span,
+.course-card-gallery .student-course-card small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.course-card-gallery .student-course-card h4,
+.course-card-gallery .student-course-card p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+.calendar-screen .operation-sidebar { height: 100dvh; overflow-y: auto; }
+.calendar-screen .calendar-stage { min-width: 0; }
+.calendar-stage > .week-timeline,
+.calendar-stage > .day-timeline,
+.calendar-stage > .resource-matrix,
+.calendar-stage > .month-calendar,
+.calendar-stage > .year-calendar { scrollbar-gutter: stable both-edges; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible { outline: 3px solid rgba(14, 147, 180, .32); outline-offset: 2px; }
+
+@media (max-width: 980px) {
+  .operation-header { align-items: flex-start; flex-wrap: wrap; }
+  .header-tools { width: 100%; justify-content: flex-end; }
+  .search-box { flex: 1 1 180px; width: auto; }
+  .view-intro { align-items: flex-start; flex-wrap: wrap; }
+  .view-intro > .metric-pills,
+  .view-intro > .directory-view-actions,
+  .view-intro > .action-group { width: 100%; justify-content: flex-start; }
+  .grid-toolbar > label { flex: 1 1 220px; }
+}
+
+@media (max-width: 760px) {
+  .operation-workspace { padding: 10px; }
+  .operation-header { gap: 9px; padding: 10px; }
+  .header-tools { justify-content: stretch; }
+  .header-tools .search-box { display: flex; min-width: 0; }
+  .view-intro { gap: 9px; }
+  .view-intro p { line-height: 1.45; }
+  .action-group > button,
+  .directory-view-actions > button { flex: 1 1 auto; }
+  .grid-toolbar select,
+  .grid-toolbar .column-menu,
+  .grid-toolbar .view-switch { flex: 1 1 auto; }
+  .calendar-controls { padding: 7px; }
+  .calendar-navigation { width: 100%; }
+  .calendar-navigation strong { white-space: normal; line-height: 1.25; }
+  .calendar-stage { min-height: 420px; }
+  .table-scroll > .data-table:not(.resizable-data-table) { min-width: 720px; }
+}

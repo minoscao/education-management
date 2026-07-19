@@ -2,9 +2,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {
-  Banknote, BookOpen, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
+  Banknote, BookOpen, Building2, CalendarDays, Calculator, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
   ClipboardCheck, Home, LayoutGrid, List, Map as MapIcon, MapPin, Minus, Music2, PanelLeftClose, PanelLeftOpen, Plus, School, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, UserRound, ZoomIn,
-  UserRoundPlus, UsersRound, MoreHorizontal, Mail, Send, X, Download, ReceiptText, Bell,
+  UserRoundPlus, UsersRound, MoreHorizontal, Mail, Send, X, Download, ReceiptText, Bell, FlaskConical, Languages, PenTool,
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -589,7 +589,21 @@ function CourseManager({ data, run, busy, t }: { data: PortalData; run: (action:
   return <section className="operation-stack"><div className="view-intro"><div><h2>{t.courses}</h2><p>{t.courseHint}</p></div><button className="primary-button" type="button" onClick={() => setShowForm(!showForm)}><Plus size={16} />{t.newCourse}</button></div>{showForm ? <CourseForm run={run} busy={busy} close={() => setShowForm(false)} t={t} /> : null}<div className="course-grid">{data.courses.map((course) => <article key={get(course, "id")} className="course-card"><CourseVisual course={course} /><div className="course-body"><span className="code">{get(course, "code")}</span><h3>{get(course, "title")}</h3><p>{get(course, "subject")} · {get(course, "level")}</p><div className="course-facts"><span><CalendarDays size={15} />{get(course, "default_sessions")} lessons</span><span><Banknote size={15} />{amount(course.list_price)}</span></div><CourseColourPicker value={eventColour({ course_color: get(course, "display_color") })} onChange={(color) => updateColour(course, color)} disabled={busy} compact /><footer><Status value={get(course, "status")} /><span>{get(course, "run_count")} classes</span></footer></div></article>)}</div></section>;
 }
 
-function CourseVisual({ course }: { course: Row }) { const subject = get(course, "subject").toLowerCase(); const Icon = subject.includes("music") || subject.includes("violin") ? Music2 : subject.includes("math") ? LayoutGrid : BookOpen; return <div className="course-visual abstract-course-visual" style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") || get(course, "run_course_color") || get(course, "course_color") }) } as React.CSSProperties}><i /><i /><i /><div><Icon size={22} /><span>{get(course, "subject").slice(0, 2).toUpperCase()}</span></div></div>; }
+function CourseVisual({ course }: { course: Row }) {
+  const descriptor = `${get(course, "subject")} ${get(course, "title")} ${get(course, "course_title")}`.toLowerCase();
+  const subject = descriptor.includes("math") ? "math" : descriptor.includes("science") ? "science" : descriptor.includes("chinese") ? "chinese" : descriptor.includes("bahasa") || descriptor.includes("malay") ? "bahasa" : descriptor.includes("music") || descriptor.includes("violin") ? "music" : "english";
+  const year = descriptor.match(/year\s*(\d+)/)?.[1] || (subject === "music" ? "starter" : "mixed");
+  const visual = {
+    math: { Icon: Calculator, prop: "÷", label: "MATH" },
+    science: { Icon: FlaskConical, prop: "✦", label: "SCIENCE" },
+    chinese: { Icon: PenTool, prop: "文", label: "中文" },
+    bahasa: { Icon: Languages, prop: "MY", label: "BAHASA" },
+    music: { Icon: Music2, prop: "♪", label: "MUSIC" },
+    english: { Icon: BookOpen, prop: "Aa", label: "ENGLISH" },
+  }[subject];
+  const Icon = visual.Icon;
+  return <div className={`course-visual abstract-course-visual course-subject-${subject} course-year-${year}`} style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") || get(course, "run_course_color") || get(course, "course_color") }) } as React.CSSProperties}><i className="course-orbit" /><i className="course-dot" /><i className="course-grid-mark" /><span className="course-year-label">{year === "starter" ? "START" : year === "mixed" ? "ALL" : `Y${year}`}</span><div className="course-prop"><Icon size={25} strokeWidth={2.25} /><b>{visual.prop}</b></div><div className="course-subject-label"><span>{visual.label}</span></div></div>;
+}
 
 function CourseForm({ run, busy, close, t }: { run: (action: string, values?: Row) => Promise<void>; busy: boolean; close: () => void; t: typeof copy.en }) {
   const [color, setColor] = useState(defaultCourseColour);

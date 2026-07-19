@@ -2026,14 +2026,17 @@ button.status-cell {
 .detail-teacher .detail-tabs-right { background: #7656be !important; border-color: #6547aa !important; }
 .detail-teacher .detail-tabs-right button.active { color: #5b4299 !important; }
 
-/* Courses stay visually distinct from people: abstract subject shapes, never portrait photography. */
-.abstract-course-visual { isolation: isolate; background: linear-gradient(145deg, color-mix(in srgb, var(--course-colour, #0f8aa8) 88%, #132e4d), color-mix(in srgb, var(--course-colour, #0f8aa8) 32%, #eefbff)); }
-.abstract-course-visual::after { z-index: 0; background: linear-gradient(155deg, transparent 20%, rgba(255,255,255,.14) 20% 42%, transparent 42%); }
-.abstract-course-visual > i { position: absolute; z-index: 0; display: block; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; background: rgba(255,255,255,.12); }
-.abstract-course-visual > i:nth-of-type(1) { width: 78%; aspect-ratio: 1; top: -27%; left: -35%; }
-.abstract-course-visual > i:nth-of-type(2) { width: 48%; aspect-ratio: 1; right: -18%; bottom: 8%; }
-.abstract-course-visual > i:nth-of-type(3) { width: 20%; aspect-ratio: 1; top: 20%; right: 16%; background: rgba(255,255,255,.28); }
-.abstract-course-visual > div { z-index: 2; }
+/* Subject props and year accents make course cards readable at a glance without using people imagery. */
+.abstract-course-visual { isolation: isolate; overflow: hidden; background: linear-gradient(145deg, color-mix(in srgb, var(--course-colour, #0f8aa8) 88%, #132e4d), color-mix(in srgb, var(--course-colour, #0f8aa8) 30%, #e9fbff)); }
+.abstract-course-visual::after { z-index: 0; background: linear-gradient(155deg, transparent 20%, rgba(255,255,255,.13) 20% 42%, transparent 42%); }
+.course-subject-math { --year-accent: #d1ecff; }.course-subject-science { --year-accent: #bcf5d4; }.course-subject-chinese { --year-accent: #c7f0f4; }.course-subject-bahasa { --year-accent: #d9efff; }.course-subject-music { --year-accent: #e9d6ff; }.course-subject-english { --year-accent: #e1ddff; }
+.course-year-8 { --year-accent: #cbe8ff; }.course-year-9 { --year-accent: #c8f2df; }.course-year-starter { --year-accent: #efdcff; }
+.abstract-course-visual > i { position: absolute; z-index: 0; display: block; border: 1px solid rgba(255,255,255,.38); border-radius: 50%; background: rgba(255,255,255,.1); }
+.course-orbit { width: 82%; aspect-ratio: 1; top: -30%; left: -37%; }.course-dot { width: 25%; aspect-ratio: 1; right: 11%; top: 15%; background: rgba(255,255,255,.28) !important; }.course-grid-mark { width: 57%; height: 16%; right: -22%; bottom: 16%; border-radius: 99px !important; transform: rotate(-28deg); }
+.course-year-label { position: absolute; z-index: 3; top: 8px; left: 8px; padding: 3px 5px; border: 1px solid rgba(255,255,255,.52); border-radius: 4px; background: color-mix(in srgb, var(--year-accent, #e1ddff) 70%, rgba(255,255,255,.16)); color: #24434d; font-size: 9px; font-weight: 950; letter-spacing: .06em; }
+.abstract-course-visual > .course-prop { position: absolute; z-index: 2; right: 8px; bottom: 8px; display: grid; width: 47px; height: 47px; place-items: center; gap: 0; padding: 0; border: 1px solid rgba(255,255,255,.6); border-radius: 12px; background: rgba(18, 52, 76, .38); color: #ffffff; box-shadow: 0 7px 16px rgba(6, 42, 59, .14); }
+.course-prop svg { filter: drop-shadow(0 1px 0 rgba(7,45,59,.24)); }.course-prop b { position: absolute; right: -5px; bottom: -7px; min-width: 19px; padding: 1px 4px; border: 1px solid rgba(255,255,255,.62); border-radius: 99px; background: var(--year-accent, #e1ddff); color: #27444c; font-size: 10px; text-align: center; }
+.abstract-course-visual > .course-subject-label { position: absolute; z-index: 2; top: auto; right: auto; bottom: 9px; left: 9px; display: block; padding: 0; border: 0; border-radius: 0; background: transparent; color: rgba(255,255,255,.83); font-size: 8px; font-weight: 900; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); }
 
 /* Teacher portraits use rounded squares, leaving circular portraits for students. */
 .teacher-avatar,.teacher-avatar .avatar-photo,.teacher-table-person .avatar-photo,.detail-teacher .entity-avatar { border-radius: 8px !important; }

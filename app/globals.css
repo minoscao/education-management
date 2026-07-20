@@ -2375,6 +2375,123 @@ button.status-cell {
 .calendar-stage > .month-calendar,
 .calendar-stage > .year-calendar { scrollbar-gutter: stable both-edges; }
 
+/* App shell: the navigation stays full-height while only the work area scrolls. */
+@media (min-width: 761px) {
+  .operation-app {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .operation-sidebar {
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .operation-workspace {
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.persona-picker {
+  flex: 0 1 260px;
+  max-width: min(260px, 100%);
+}
+
+.persona-picker > .avatar-photo,
+.persona-picker > img {
+  flex: 0 0 auto;
+}
+
+.persona-picker > span {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.persona-picker select {
+  max-width: 100%;
+}
+
+.payment-record-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(140px, .7fr) repeat(2, minmax(130px, .55fr)) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 0 12px 12px;
+}
+
+.payment-record-toolbar label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #55727c;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.payment-record-toolbar input,
+.payment-record-toolbar select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #cbdfe4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #244b56;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payment-record-toolbar .payment-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid #cbdfe4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #5e7b84;
+}
+
+.payment-record-toolbar .payment-search input {
+  height: auto;
+  padding: 0;
+  border: 0;
+  outline: 0;
+}
+
+.payment-record-toolbar .quiet-button {
+  min-height: 34px;
+  align-self: end;
+}
+
+@media (max-width: 980px) {
+  .payment-record-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .payment-record-toolbar .payment-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .payment-record-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

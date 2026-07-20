@@ -32,6 +32,7 @@ test("keeps shared detail and responsive view primitives in place", async () => 
   assert.match(portal, /function ClassRunScheduleForm/);
   assert.match(portal, /function ResizableDataTable/);
   assert.match(portal, /function CalendarView/);
+  assert.match(portal, /function SmartDatePicker/);
 
   assert.match(css, /\.table-scroll\s*\{[\s\S]*overflow:\s*auto/);
   assert.match(css, /\.course-card-gallery[\s\S]*minmax\(min\(100%, 270px\)/);

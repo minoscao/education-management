@@ -31,7 +31,10 @@ test("keeps shared detail and responsive view primitives in place", async () => 
   assert.match(portal, /function CourseCatalogueDrawer/);
   assert.match(portal, /function CourseIntakeCards/);
   assert.match(portal, /function cohortPhase/);
-  assert.match(portal, /function ClassRunScheduleForm/);
+  assert.match(portal, /function ClassSettingsDialog/);
+  assert.match(portal, /function ClassScheduleDialog/);
+  assert.match(portal, /function QuickScheduleDialog/);
+  assert.doesNotMatch(portal, /id: "configure"/);
   assert.match(portal, /function ResizableDataTable/);
   assert.match(portal, /function CalendarView/);
   assert.match(portal, /function SmartDatePicker/);

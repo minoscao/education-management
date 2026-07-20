@@ -18,6 +18,7 @@ type ActionPayload = {
   price?: number | string;
   color?: string;
   lessonPlan?: string;
+  sessionIds?: string;
   name?: string;
   termId?: string;
   capacity?: number | string;
@@ -250,13 +251,32 @@ async function seedDatabase() {
 
 async function ensureCourseLessonBlueprints() {
   await execute("CREATE TABLE IF NOT EXISTS course_lesson_templates (id text PRIMARY KEY NOT NULL, course_id text NOT NULL, lesson_no integer NOT NULL, title text NOT NULL, default_duration_minutes integer DEFAULT 90 NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL, UNIQUE(course_id, lesson_no))");
+  const columns = await rows<{ name: string }>("PRAGMA table_info(course_lesson_templates)");
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has("default_teacher_id")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_teacher_id text");
+  if (!names.has("default_classroom_id")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_classroom_id text");
+  if (!names.has("default_pay_amount")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_pay_amount real DEFAULT 0");
   const courses = await rows<{ id: string; default_sessions: number; default_minutes: number }>("SELECT id, default_sessions, default_minutes FROM course_catalogs");
   for (const course of courses) {
     const existing = await row<{ count: number }>("SELECT COUNT(*) AS count FROM course_lesson_templates WHERE course_id = ?", [course.id]);
-    if (number(existing?.count)) continue;
-    const source = await rows<{ session_no: number; topic: string }>("SELECT session_no, topic FROM class_sessions WHERE class_run_id = (SELECT id FROM class_runs WHERE course_id = ? ORDER BY created_at DESC LIMIT 1) ORDER BY session_no LIMIT ?", [course.id, Math.max(1, number(course.default_sessions, 1))]);
-    const count = Math.max(1, number(course.default_sessions, source.length || 1));
-    await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), course.id, index + 1, source[index]?.topic || `Lesson ${index + 1}`, Math.max(30, number(course.default_minutes, 90))] })));
+    if (!number(existing?.count)) {
+      const source = await rows<{ session_no: number; topic: string }>("SELECT session_no, topic FROM class_sessions WHERE class_run_id = (SELECT id FROM class_runs WHERE course_id = ? ORDER BY created_at DESC LIMIT 1) ORDER BY session_no LIMIT ?", [course.id, Math.max(1, number(course.default_sessions, 1))]);
+      const count = Math.max(1, number(course.default_sessions, source.length || 1));
+      await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), course.id, index + 1, source[index]?.topic || `Lesson ${index + 1}`, Math.max(30, number(course.default_minutes, 90))] })));
+    }
+    const assignment = await row<{ teacher_id: string; classroom_id: string; pay_amount: number }>(
+      `SELECT class_teacher_bookings.teacher_id, class_resource_bookings.classroom_id, class_teacher_bookings.pay_amount
+       FROM class_sessions
+       JOIN class_runs ON class_runs.id = class_sessions.class_run_id
+       LEFT JOIN class_teacher_bookings ON class_teacher_bookings.class_session_id = class_sessions.id
+       LEFT JOIN class_resource_bookings ON class_resource_bookings.class_session_id = class_sessions.id
+       WHERE class_runs.course_id = ? ORDER BY class_sessions.starts_at DESC LIMIT 1`,
+      [course.id],
+    );
+    if (assignment) await execute(
+      "UPDATE course_lesson_templates SET default_teacher_id = COALESCE(default_teacher_id, ?), default_classroom_id = COALESCE(default_classroom_id, ?), default_pay_amount = CASE WHEN COALESCE(default_pay_amount, 0) = 0 THEN ? ELSE default_pay_amount END WHERE course_id = ?",
+      [assignment.teacher_id, assignment.classroom_id, number(assignment.pay_amount), course.id],
+    );
   }
 }
 
@@ -604,17 +624,79 @@ async function createCourse(payload: ActionPayload) {
   await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), courseId, index + 1, `Lesson ${index + 1}`, Math.max(30, number(payload.minutes, 90))] })));
 }
 
+type LessonTemplateInput = { title?: unknown; durationMinutes?: unknown; teacherId?: unknown; classroomId?: unknown; payAmount?: unknown };
+
 async function saveCourseLessons(payload: ActionPayload) {
   if (!payload.courseId) throw new Error("Course not found.");
-  let titles: string[] = [];
-  try { titles = JSON.parse(payload.lessonPlan || "[]"); } catch { throw new Error("Unable to read the lesson plan."); }
-  const lessons = titles.map((title) => String(title).trim()).filter(Boolean);
+  let draft: unknown[] = [];
+  try { draft = JSON.parse(payload.lessonPlan || "[]"); } catch { throw new Error("Unable to read the lesson plan."); }
+  const lessons = draft.map((item) => typeof item === "string" ? { title: item } : item as LessonTemplateInput)
+    .map((item) => ({ title: String(item.title ?? "").trim(), duration: Math.max(30, number(item.durationMinutes, 90)), teacherId: String(item.teacherId ?? "").trim(), classroomId: String(item.classroomId ?? "").trim(), pay: Math.max(0, number(item.payAmount)) }))
+    .filter((item) => item.title);
   if (!lessons.length) throw new Error("Add at least one lesson to the course plan.");
   const course = await row<{ default_minutes: number }>("SELECT default_minutes FROM course_catalogs WHERE id = ?", [payload.courseId]);
   if (!course) throw new Error("Course not found.");
   await execute("DELETE FROM course_lesson_templates WHERE course_id = ?", [payload.courseId]);
-  await executeBatch(lessons.map((title, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), payload.courseId, index + 1, title, Math.max(30, number(course.default_minutes, 90))] })));
+  await executeBatch(lessons.map((lesson, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes, default_teacher_id, default_classroom_id, default_pay_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values: [id("lesson-template"), payload.courseId, index + 1, lesson.title, lesson.duration || Math.max(30, number(course.default_minutes, 90)), lesson.teacherId || null, lesson.classroomId || null, lesson.pay] })));
   await execute("UPDATE course_catalogs SET default_sessions = ? WHERE id = ?", [lessons.length, payload.courseId]);
+}
+
+function selectedSessionIds(value: unknown) {
+  try {
+    const ids = JSON.parse(String(value ?? "[]"));
+    return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+  } catch { return []; }
+}
+
+async function applyClassAssignments(payload: ActionPayload) {
+  if (!payload.runId || !payload.teacherId || !payload.classroomId) throw new Error("Choose a teacher and classroom.");
+  const picked = selectedSessionIds(payload.sessionIds);
+  const all = await rows<{ id: string; topic: string; starts_at: string; ends_at: string }>("SELECT id, topic, starts_at, ends_at FROM class_sessions WHERE class_run_id = ? ORDER BY starts_at, session_no", [payload.runId]);
+  const sessions = picked.length ? all.filter((session) => picked.includes(session.id)) : all;
+  if (!sessions.length) throw new Error("No lessons are available to update.");
+  const duration = Math.max(30, number(payload.durationMinutes, minutesBetween(sessions[0].starts_at, sessions[0].ends_at)));
+  const students = await rows<{ student_id: string; name: string }>("SELECT students.id AS student_id, students.name FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id WHERE class_enrollments.class_run_id = ? AND class_enrollments.status = 'enrolled'", [payload.runId]);
+  const planned = sessions.map((session) => ({ ...session, ends_at: later(session.starts_at, duration) }));
+  for (const session of planned) {
+    const roomConflicts = await rows<{ starts_at: string; ends_at: string }>("SELECT starts_at, ends_at FROM class_resource_bookings WHERE classroom_id = ? AND class_session_id != ? AND status != 'cancelled'", [payload.classroomId, session.id]);
+    if (roomConflicts.some((item) => overlaps(session.starts_at, session.ends_at, item.starts_at, item.ends_at))) throw new Error(`The classroom is not available for ${session.topic}.`);
+    const teacherConflicts = await rows<{ starts_at: string; ends_at: string }>("SELECT starts_at, ends_at FROM class_teacher_bookings WHERE teacher_id = ? AND class_session_id != ? AND status != 'cancelled'", [payload.teacherId, session.id]);
+    if (teacherConflicts.some((item) => overlaps(session.starts_at, session.ends_at, item.starts_at, item.ends_at))) throw new Error(`The teacher is not available for ${session.topic}.`);
+    for (const student of students) {
+      const conflicts = await rows<{ starts_at: string; ends_at: string }>("SELECT class_sessions.starts_at, class_sessions.ends_at FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_student_bookings.student_id = ? AND class_student_bookings.class_session_id != ? AND class_student_bookings.status != 'cancelled'", [student.student_id, session.id]);
+      if (conflicts.some((item) => overlaps(session.starts_at, session.ends_at, item.starts_at, item.ends_at))) throw new Error(`${student.name} has another class at ${session.topic}.`);
+    }
+  }
+  for (const session of planned) {
+    await execute("UPDATE class_sessions SET ends_at = ? WHERE id = ?", [session.ends_at, session.id]);
+    const roomBooking = await row<{ id: string }>("SELECT id FROM class_resource_bookings WHERE class_session_id = ?", [session.id]);
+    if (roomBooking) await execute("UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ?, status = 'reserved' WHERE id = ?", [payload.classroomId, session.starts_at, session.ends_at, roomBooking.id]);
+    else await execute("INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", [id("room-booking"), session.id, payload.classroomId, session.starts_at, session.ends_at]);
+    const teacherBooking = await row<{ id: string }>("SELECT id FROM class_teacher_bookings WHERE class_session_id = ?", [session.id]);
+    if (teacherBooking) await execute("UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ?, pay_amount = ? WHERE id = ?", [payload.teacherId, session.starts_at, session.ends_at, number(payload.payAmount), teacherBooking.id]);
+    else await execute("INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')", [id("teacher-booking"), session.id, payload.teacherId, session.starts_at, session.ends_at, number(payload.payAmount)]);
+  }
+  const teacher = await row<{ name: string }>("SELECT name FROM teachers WHERE id = ?", [payload.teacherId]);
+  const room = await row<{ name: string }>("SELECT name FROM classrooms WHERE id = ?", [payload.classroomId]);
+  const message = `${sessions.length} lesson${sessions.length === 1 ? "" : "s"} updated with ${teacher?.name ?? "the selected teacher"} in ${room?.name ?? "the selected classroom"}.`;
+  await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')", [id("notice"), "teacher", payload.teacherId, "Class assignment updated", message]);
+  for (const student of students) await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')", [id("notice"), "student", student.student_id, "Class assignment updated", message]);
+}
+
+function minutesBetween(startsAt: string, endsAt: string) {
+  const start = new Date(startsAt.replace(" ", "T")).getTime();
+  const end = new Date(endsAt.replace(" ", "T")).getTime();
+  return Math.max(30, Math.round((end - start) / 60000));
+}
+
+async function resortClassLessons(payload: ActionPayload) {
+  if (!payload.runId) throw new Error("Class not found.");
+  const run = await row<{ course_id: string }>("SELECT course_id FROM class_runs WHERE id = ?", [payload.runId]);
+  if (!run) throw new Error("Class not found.");
+  const sessions = await rows<{ id: string }>("SELECT id FROM class_sessions WHERE class_run_id = ? ORDER BY starts_at, ends_at, id", [payload.runId]);
+  const templates = await rows<{ lesson_no: number; title: string }>("SELECT lesson_no, title FROM course_lesson_templates WHERE course_id = ? ORDER BY lesson_no", [run.course_id]);
+  if (!sessions.length || !templates.length) throw new Error("Schedule lessons and save the Course plan before sorting.");
+  await executeBatch(sessions.map((session, index) => ({ sql: "UPDATE class_sessions SET session_no = ?, topic = ? WHERE id = ?", values: [index + 1, templates[index]?.title ?? `Lesson ${index + 1}`, session.id] })));
 }
 
 async function createClassRun(payload: ActionPayload) {
@@ -941,7 +1023,11 @@ async function readPortal(includeAttendance = false) {
   const [terms, courses, courseLessons, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
-    rows("SELECT * FROM course_lesson_templates ORDER BY course_id, lesson_no"),
+    rows(`SELECT course_lesson_templates.*, teachers.name AS teacher_name, classrooms.name AS classroom_name
+          FROM course_lesson_templates
+          LEFT JOIN teachers ON teachers.id = course_lesson_templates.default_teacher_id
+          LEFT JOIN classrooms ON classrooms.id = course_lesson_templates.default_classroom_id
+          ORDER BY course_lesson_templates.course_id, course_lesson_templates.lesson_no`),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
           FROM class_runs JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN academic_terms ON academic_terms.id = class_runs.term_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
@@ -1050,6 +1136,8 @@ export async function POST(request: Request) {
     if (payload.action === "createSession") await createSession(payload);
     if (payload.action === "updateSession") await updateSession(payload);
     if (payload.action === "configureClassRun") await configureClassRun(payload);
+    if (payload.action === "applyClassAssignments") await applyClassAssignments(payload);
+    if (payload.action === "resortClassLessons") await resortClassLessons(payload);
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "requestLeave") await requestLeave(payload);

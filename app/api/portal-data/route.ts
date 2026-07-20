@@ -256,6 +256,7 @@ async function ensureCourseLessonBlueprints() {
   if (!names.has("default_teacher_id")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_teacher_id text");
   if (!names.has("default_classroom_id")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_classroom_id text");
   if (!names.has("default_pay_amount")) await execute("ALTER TABLE course_lesson_templates ADD COLUMN default_pay_amount real DEFAULT 0");
+  const assignmentsBackfilled = await row("SELECT value FROM app_settings WHERE key = ?", ["course_template_assignments_v6"]);
   const courses = await rows<{ id: string; default_sessions: number; default_minutes: number }>("SELECT id, default_sessions, default_minutes FROM course_catalogs");
   for (const course of courses) {
     const existing = await row<{ count: number }>("SELECT COUNT(*) AS count FROM course_lesson_templates WHERE course_id = ?", [course.id]);
@@ -264,6 +265,7 @@ async function ensureCourseLessonBlueprints() {
       const count = Math.max(1, number(course.default_sessions, source.length || 1));
       await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), course.id, index + 1, source[index]?.topic || `Lesson ${index + 1}`, Math.max(30, number(course.default_minutes, 90))] })));
     }
+    if (assignmentsBackfilled) continue;
     const assignment = await row<{ teacher_id: string; classroom_id: string; pay_amount: number }>(
       `SELECT class_teacher_bookings.teacher_id, class_resource_bookings.classroom_id, class_teacher_bookings.pay_amount
        FROM class_sessions
@@ -278,6 +280,7 @@ async function ensureCourseLessonBlueprints() {
       [assignment.teacher_id, assignment.classroom_id, number(assignment.pay_amount), course.id],
     );
   }
+  if (!assignmentsBackfilled) await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["course_template_assignments_v6", "true"]);
 }
 
 async function ensureCommunicationData() {

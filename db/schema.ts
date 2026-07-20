@@ -163,6 +163,7 @@ export const classRuns = sqliteTable("class_runs", {
   status: text("status").notNull().default("draft"),
   enrollmentOpenAt: text("enrollment_open_at").notNull().default(""),
   enrollmentCloseAt: text("enrollment_close_at").notNull().default(""),
+  allowLateJoin: integer("allow_late_join").notNull().default(1),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

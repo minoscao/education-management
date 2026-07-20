@@ -27,6 +27,7 @@ type ActionPayload = {
   name?: string;
   termId?: string;
   capacity?: number | string;
+  allowLateJoin?: boolean | string | number;
   topic?: string;
   startsAt?: string;
   endsAt?: string;
@@ -143,6 +144,7 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 
 async function seedDatabase() {
   await ensureCourseLessonBlueprints();
+  await ensureClassRunEnrollmentRules();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
   const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["portal_bootstrap_v5"]);
@@ -255,6 +257,13 @@ async function seedDatabase() {
   await ensureCourseLessonBlueprints();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
+}
+
+async function ensureClassRunEnrollmentRules() {
+  const columns = await rows<{ name: string }>("PRAGMA table_info('class_runs')");
+  const names = new Set(columns.map((item) => item.name));
+  if (!names.has("allow_late_join")) await execute("ALTER TABLE class_runs ADD COLUMN allow_late_join integer DEFAULT 1 NOT NULL");
+  await execute("UPDATE class_runs SET allow_late_join = 1 WHERE allow_late_join IS NULL");
 }
 
 async function ensureCourseLessonBlueprints() {

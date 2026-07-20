@@ -53,6 +53,7 @@ type ActionPayload = {
   mapHeight?: number | string;
   businessStart?: string;
   businessEnd?: string;
+  businessDays?: string;
   mapImage?: string;
   sender?: string;
   inboundProtocol?: string;
@@ -1040,7 +1041,21 @@ async function updateBusinessHours(payload: ActionPayload) {
   const start = validTime(payload.businessStart);
   const end = validTime(payload.businessEnd);
   if (!start || !end || end <= start) throw new Error("Please enter a valid operating time range.");
-  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["business_hours", JSON.stringify({ start, end })]);
+  let days = [1, 2, 3, 4, 5, 6, 0];
+  try { const parsed = JSON.parse(payload.businessDays || "[]"); if (Array.isArray(parsed) && parsed.length) days = parsed.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6); } catch { /* Keep the full-week default. */ }
+  if (!days.length) throw new Error("Choose at least one operating day.");
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["business_hours", JSON.stringify({ start, end, days })]);
+}
+
+async function setCurrentLesson(payload: ActionPayload) {
+  if (!payload.sessionId) throw new Error("Lesson not found.");
+  const session = await row<{ class_run_id: string; topic: string }>("SELECT class_run_id, topic FROM class_sessions WHERE id = ?", [payload.sessionId]);
+  if (!session) throw new Error("Lesson not found.");
+  await execute("UPDATE class_sessions SET status = 'scheduled' WHERE class_run_id = ? AND status = 'current'", [session.class_run_id]);
+  await execute("UPDATE class_sessions SET status = 'current' WHERE id = ?", [payload.sessionId]);
+  const students = await rows<{ student_id: string }>("SELECT student_id FROM class_enrollments WHERE class_run_id = ? AND status = 'enrolled'", [session.class_run_id]);
+  const notice = `${session.topic} is now the current lesson.`;
+  for (const student of students) await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, 'Current lesson updated', ?, 'unread')", [id("notice"), student.student_id, notice]);
 }
 
 async function updateMailSettings(payload: ActionPayload) {
@@ -1113,16 +1128,17 @@ async function readPortal(includeAttendance = false) {
     ...await findConflicts(teacherBookings, "teacher_id", "teacher_name", "Teacher"),
   ];
   const outstanding = invoices.reduce((sum, invoice) => sum + Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)), 0);
-  let businessHours: { start: string; end: string; source: "configured" | "bookings" } | null = null;
+  let businessHours: { start: string; end: string; days: number[]; source: "configured" | "bookings" } | null = null;
   try {
-    const parsed = JSON.parse(businessHoursSetting?.value ?? "") as { start?: string; end?: string };
+    const parsed = JSON.parse(businessHoursSetting?.value ?? "") as { start?: string; end?: string; days?: number[] };
     const start = validTime(parsed.start); const end = validTime(parsed.end);
-    if (start && end && end > start) businessHours = { start, end, source: "configured" };
+    const days = Array.isArray(parsed.days) && parsed.days.length ? parsed.days.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6) : [1, 2, 3, 4, 5, 6, 0];
+    if (start && end && end > start) businessHours = { start, end, days, source: "configured" };
   } catch { /* Fall back to the booked lesson range. */ }
   if (!businessHours) {
     const starts = sessions.map((item) => String(item.starts_at).slice(11, 16)).filter(validTime).sort();
     const ends = sessions.map((item) => String(item.ends_at).slice(11, 16)).filter(validTime).sort();
-    businessHours = { start: starts[0] ?? "08:00", end: ends.at(-1) ?? "20:00", source: "bookings" };
+    businessHours = { start: starts[0] ?? "08:00", end: ends.at(-1) ?? "20:00", days: [1, 2, 3, 4, 5, 6, 0], source: "bookings" };
   }
   let mail = { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" };
   try { mail = { ...mail, ...JSON.parse(mailSettingsSetting?.value ?? "{}") }; } catch { /* Use connection defaults. */ }
@@ -1192,6 +1208,7 @@ export async function POST(request: Request) {
     if (payload.action === "createStudent" || payload.action === "createTeacher" || payload.action === "createClassroom") await createBaseRecord(payload);
     if (payload.action === "updateClassroomMap") await updateClassroomMap(payload);
     if (payload.action === "updateBusinessHours") await updateBusinessHours(payload);
+    if (payload.action === "setCurrentLesson") await setCurrentLesson(payload);
     if (payload.action === "updateMailSettings") await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
     return await readPortal(payload.action === "enrollStudent");

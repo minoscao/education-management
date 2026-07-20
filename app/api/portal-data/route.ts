@@ -17,12 +17,16 @@ type ActionPayload = {
   minutes?: number | string;
   price?: number | string;
   color?: string;
+  lessonPlan?: string;
   name?: string;
   termId?: string;
   capacity?: number | string;
   topic?: string;
   startsAt?: string;
   endsAt?: string;
+  startDate?: string;
+  startTime?: string;
+  durationMinutes?: number | string;
   classroomId?: string;
   teacherId?: string;
   payAmount?: number | string;
@@ -129,6 +133,7 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
 }
 
 async function seedDatabase() {
+  await ensureCourseLessonBlueprints();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
   const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["portal_bootstrap_v5"]);
@@ -145,6 +150,7 @@ async function seedDatabase() {
     await ensureMalaysiaTermSampleData();
     await ensureRichCampusSampleData();
     await ensureCourseIntakeSampleData();
+    await ensureCourseLessonBlueprints();
     await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
     return;
   }
@@ -237,8 +243,21 @@ async function seedDatabase() {
   await ensureMalaysiaTermSampleData();
   await ensureRichCampusSampleData();
   await ensureCourseIntakeSampleData();
+  await ensureCourseLessonBlueprints();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
+}
+
+async function ensureCourseLessonBlueprints() {
+  await execute("CREATE TABLE IF NOT EXISTS course_lesson_templates (id text PRIMARY KEY NOT NULL, course_id text NOT NULL, lesson_no integer NOT NULL, title text NOT NULL, default_duration_minutes integer DEFAULT 90 NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL, UNIQUE(course_id, lesson_no))");
+  const courses = await rows<{ id: string; default_sessions: number; default_minutes: number }>("SELECT id, default_sessions, default_minutes FROM course_catalogs");
+  for (const course of courses) {
+    const existing = await row<{ count: number }>("SELECT COUNT(*) AS count FROM course_lesson_templates WHERE course_id = ?", [course.id]);
+    if (number(existing?.count)) continue;
+    const source = await rows<{ session_no: number; topic: string }>("SELECT session_no, topic FROM class_sessions WHERE class_run_id = (SELECT id FROM class_runs WHERE course_id = ? ORDER BY created_at DESC LIMIT 1) ORDER BY session_no LIMIT ?", [course.id, Math.max(1, number(course.default_sessions, 1))]);
+    const count = Math.max(1, number(course.default_sessions, source.length || 1));
+    await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), course.id, index + 1, source[index]?.topic || `Lesson ${index + 1}`, Math.max(30, number(course.default_minutes, 90))] })));
+  }
 }
 
 async function ensureCommunicationData() {
@@ -577,10 +596,25 @@ async function createCourse(payload: ActionPayload) {
   const title = payload.title?.trim() || "New course";
   const count = Math.max(1, Math.floor(number(payload.sessions, 8)));
   const code = `CRS-${Date.now().toString().slice(-6)}`;
+  const courseId = id("course");
   await execute(
     "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [id("course"), code, title, payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", count, Math.max(30, number(payload.minutes, 90)), number(payload.price), courseColour(payload.color), "active"],
+    [courseId, code, title, payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", count, Math.max(30, number(payload.minutes, 90)), number(payload.price), courseColour(payload.color), "active"],
   );
+  await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), courseId, index + 1, `Lesson ${index + 1}`, Math.max(30, number(payload.minutes, 90))] })));
+}
+
+async function saveCourseLessons(payload: ActionPayload) {
+  if (!payload.courseId) throw new Error("Course not found.");
+  let titles: string[] = [];
+  try { titles = JSON.parse(payload.lessonPlan || "[]"); } catch { throw new Error("Unable to read the lesson plan."); }
+  const lessons = titles.map((title) => String(title).trim()).filter(Boolean);
+  if (!lessons.length) throw new Error("Add at least one lesson to the course plan.");
+  const course = await row<{ default_minutes: number }>("SELECT default_minutes FROM course_catalogs WHERE id = ?", [payload.courseId]);
+  if (!course) throw new Error("Course not found.");
+  await execute("DELETE FROM course_lesson_templates WHERE course_id = ?", [payload.courseId]);
+  await executeBatch(lessons.map((title, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), payload.courseId, index + 1, title, Math.max(30, number(course.default_minutes, 90))] })));
+  await execute("UPDATE course_catalogs SET default_sessions = ? WHERE id = ?", [lessons.length, payload.courseId]);
 }
 
 async function createClassRun(payload: ActionPayload) {
@@ -684,9 +718,16 @@ function weeklyDateTime(startDate: string, startTime: string, weekOffset: number
 
 async function configureClassRun(payload: ActionPayload) {
   if (!payload.runId || !payload.teacherId || !payload.classroomId || !payload.startDate || !payload.startTime) throw new Error("Choose a teacher, classroom and weekly start time.");
+  const run = await row<{ course_id: string }>("SELECT course_id FROM class_runs WHERE id = ?", [payload.runId]);
+  if (!run) throw new Error("Class not found.");
   const duration = Math.max(30, number(payload.durationMinutes, 90));
-  const sessions = await rows<{ id: string; session_no: number }>("SELECT id, session_no FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [payload.runId]);
-  if (!sessions.length) throw new Error("Add at least one lesson before applying a class schedule.");
+  let sessions = await rows<{ id: string; session_no: number; topic: string }>("SELECT id, session_no, topic FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [payload.runId]);
+  const generatedFromPlan = !sessions.length;
+  if (generatedFromPlan) {
+    const templates = await rows<{ lesson_no: number; title: string }>("SELECT lesson_no, title FROM course_lesson_templates WHERE course_id = ? ORDER BY lesson_no", [run.course_id]);
+    sessions = templates.map((lesson) => ({ id: id("session"), session_no: lesson.lesson_no, topic: lesson.title }));
+  }
+  if (!sessions.length) throw new Error("Add at least one lesson to the Course plan before scheduling this class.");
   const studentRows = await rows<{ student_id: string; name: string }>("SELECT students.id AS student_id, students.name FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id WHERE class_enrollments.class_run_id = ? AND class_enrollments.status = 'enrolled'", [payload.runId]);
   const planned = sessions.map((session, index) => {
     const startsAt = weeklyDateTime(String(payload.startDate), String(payload.startTime), index);
@@ -703,9 +744,14 @@ async function configureClassRun(payload: ActionPayload) {
     }
   }
   for (const session of planned) {
-    await execute("UPDATE class_sessions SET starts_at = ?, ends_at = ? WHERE id = ?", [session.startsAt, session.endsAt, session.id]);
-    await execute("UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", [payload.classroomId, session.startsAt, session.endsAt, session.id]);
-    await execute("UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", [payload.teacherId, session.startsAt, session.endsAt, session.id]);
+    if (generatedFromPlan) await execute("INSERT INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')", [session.id, payload.runId, session.session_no, session.topic, session.startsAt, session.endsAt]);
+    else await execute("UPDATE class_sessions SET starts_at = ?, ends_at = ?, status = 'scheduled' WHERE id = ?", [session.startsAt, session.endsAt, session.id]);
+    const resource = await row<{ id: string }>("SELECT id FROM class_resource_bookings WHERE class_session_id = ?", [session.id]);
+    if (resource) await execute("UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ?, status = 'reserved' WHERE id = ?", [payload.classroomId, session.startsAt, session.endsAt, resource.id]);
+    else await execute("INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", [id("room-booking"), session.id, payload.classroomId, session.startsAt, session.endsAt]);
+    const teacherBooking = await row<{ id: string }>("SELECT id FROM class_teacher_bookings WHERE class_session_id = ?", [session.id]);
+    if (teacherBooking) await execute("UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ?, pay_amount = ? WHERE id = ?", [payload.teacherId, session.startsAt, session.endsAt, number(payload.payAmount), teacherBooking.id]);
+    else await execute("INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')", [id("teacher-booking"), session.id, payload.teacherId, session.startsAt, session.endsAt, number(payload.payAmount)]);
   }
   const teacher = await row<{ name: string }>("SELECT name FROM teachers WHERE id = ?", [payload.teacherId]);
   const classroom = await row<{ name: string }>("SELECT name FROM classrooms WHERE id = ?", [payload.classroomId]);
@@ -892,9 +938,10 @@ async function readAttendance() {
 
 async function readPortal(includeAttendance = false) {
   await seedDatabase();
-  const [terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
+  const [terms, courses, courseLessons, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
+    rows("SELECT * FROM course_lesson_templates ORDER BY course_id, lesson_no"),
     rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
           FROM class_runs JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN academic_terms ON academic_terms.id = class_runs.term_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
@@ -951,7 +998,7 @@ async function readPortal(includeAttendance = false) {
   let mail = { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" };
   try { mail = { ...mail, ...JSON.parse(mailSettingsSetting?.value ?? "{}") }; } catch { /* Use connection defaults. */ }
   return Response.json({
-    terms, courses, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    terms, courses, courseLessons, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
     settings: { businessHours, mail },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
@@ -998,6 +1045,7 @@ export async function POST(request: Request) {
       return Response.json({ attendanceUpdate: { studentBookingId: payload.studentBookingId, status: payload.attendanceStatus ?? "present", note: payload.note ?? "" } });
     }
     if (payload.action === "createCourse") await createCourse(payload);
+    if (payload.action === "saveCourseLessons") await saveCourseLessons(payload);
     if (payload.action === "createClassRun") await createClassRun(payload);
     if (payload.action === "createSession") await createSession(payload);
     if (payload.action === "updateSession") await updateSession(payload);

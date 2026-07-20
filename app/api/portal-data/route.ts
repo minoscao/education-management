@@ -8,6 +8,10 @@ type ActionPayload = {
   runId?: string;
   sessionId?: string;
   studentId?: string;
+  studentName?: string;
+  studentLevel?: string;
+  studentPhone?: string;
+  studentEmail?: string;
   studentBookingId?: string;
   invoiceId?: string;
   title?: string;
@@ -34,6 +38,8 @@ type ActionPayload = {
   payAmount?: number | string;
   amount?: number | string;
   discount?: number | string;
+  contractedFee?: number | string;
+  payNow?: boolean | string;
   method?: string;
   proofReference?: string;
   attendanceStatus?: string;
@@ -976,6 +982,26 @@ async function enrollStudent(runId?: string, studentId?: string, contractedFee?:
     "INSERT INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
     [invoiceId, `INV-${Date.now().toString().slice(-7)}`, enrollmentId, studentId, fee, 0, "unpaid", localDate(14, "00:00").slice(0, 10)],
   );
+  return { enrollmentId, invoiceId };
+}
+
+async function createStudentForEnrollment(payload: ActionPayload) {
+  const label = payload.studentName?.trim();
+  if (!label) throw new Error("Please select or add a student.");
+  const studentId = id("student");
+  await execute(
+    "INSERT INTO students (id, code, name, level, guardian_phone, email, avatar_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [studentId, `STU-${Date.now().toString().slice(-6)}`, label, payload.studentLevel?.trim() || "Year 7", payload.studentPhone?.trim() || "", payload.studentEmail?.trim() || "", payload.avatarUrl?.trim() || "sprite:0", "active"],
+  );
+  return studentId;
+}
+
+async function enrollStudentWithPayment(payload: ActionPayload) {
+  const studentId = payload.studentId || await createStudentForEnrollment(payload);
+  const payNow = payload.payNow === true || payload.payNow === "true";
+  const fee = number(payload.contractedFee, number(payload.price));
+  const result = await enrollStudent(payload.runId, studentId, fee || undefined);
+  if (payNow) await recordPayment({ ...payload, invoiceId: result.invoiceId });
 }
 
 async function recordPayment(payload: ActionPayload) {
@@ -1250,6 +1276,7 @@ export async function POST(request: Request) {
     if (payload.action === "applyClassAssignments") await applyClassAssignments(payload);
     if (payload.action === "resortClassLessons") await resortClassLessons(payload);
     if (payload.action === "enrollStudent") await enrollStudent(payload.runId, payload.studentId);
+    if (payload.action === "enrollStudentWithPayment") await enrollStudentWithPayment(payload);
     if (payload.action === "recordPayment") await recordPayment(payload);
     if (payload.action === "requestLeave") await requestLeave(payload);
     if (payload.action === "sendMessage") await sendMessage(payload);
@@ -1262,7 +1289,7 @@ export async function POST(request: Request) {
     if (payload.action === "setCurrentLesson") await setCurrentLesson(payload);
     if (payload.action === "updateMailSettings") await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan") await updateCampusFloorplan(payload);
-    return await readPortal(payload.action === "enrollStudent");
+    return await readPortal(payload.action === "enrollStudent" || payload.action === "enrollStudentWithPayment");
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save data." }, { status: 400 });
   }

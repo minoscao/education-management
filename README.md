@@ -96,10 +96,20 @@ Use Cloudflare Workers Builds and connect the GitHub repository.
 Recommended settings:
 
 - Framework preset: none / custom
-- Build command: `npm run build`
-- Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
+- Build command: leave empty, or `npm run build`
+- Deploy command: `npm run deploy`
 - Node version: `22`
 - D1 binding: `DB`
+
+If the dashboard only gives you one deploy command field, use the same command:
+
+```bash
+npm run deploy
+```
+
+Do not use plain `npx wrangler deploy`. This app is built by `vinext`, so the
+Worker must be deployed from the generated `dist/server/wrangler.json` config.
+The `npm run deploy` script handles that order.
 
 Before the first production deployment, apply migrations once:
 
@@ -129,6 +139,7 @@ npm run db:migrate:local    # apply migrations to local D1
 npm run db:migrate:remote   # apply migrations to Cloudflare D1
 npm run cf:preview          # build and preview Worker locally
 npm run cf:deploy           # build and deploy Worker to Cloudflare
+npm run deploy              # same as cf:deploy, intended for Cloudflare Builds
 ```
 
 ## Data Model Direction

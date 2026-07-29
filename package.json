@@ -15,7 +15,8 @@
     "db:migrate:local": "wrangler d1 migrations apply education-management-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply education-management-db --remote",
     "cf:preview": "npm run build && wrangler dev --config dist/server/wrangler.json",
-    "cf:deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json"
+    "cf:deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
+    "deploy": "npm run cf:deploy"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

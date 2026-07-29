@@ -1,9 +1,19 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "education-management",
-  "main": "./worker/index.ts",
+  "main": "./dist/server/index.js",
   "compatibility_date": "2026-07-29",
   "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": ["**/*.js", "**/*.mjs"]
+    }
+  ],
+  "build": {
+    "command": "npm run build"
+  },
   "observability": {
     "enabled": true
   },

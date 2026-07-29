@@ -1,9 +1,20 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
 import { sites } from "./build/sites-vite-plugin";
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
+
+const deployConfig = JSON.parse(readFileSync("wrangler.jsonc", "utf8"));
+
+const buildConfig = {
+  ...deployConfig,
+  main: "./worker/index.ts",
+  no_bundle: undefined,
+  rules: undefined,
+  build: undefined,
+};
 
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -24,6 +35,7 @@ export default defineConfig(async () => {
       sites(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+        config: buildConfig,
       }),
     ],
   };

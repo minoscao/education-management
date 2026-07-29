@@ -1,98 +1,141 @@
-# vinext-starter
+# Education Management Portal
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Teaching operations portal for Malaysia-based tuition and enrichment centres.
 
-## Prerequisites
+The app is a Cloudflare Worker application with:
+
+- Next.js-style app routes through `vinext`
+- Cloudflare D1 as the shared database
+- Drizzle migrations in `drizzle/`
+- Static images and frontend assets served by the Worker assets binding
+
+## Local Setup
+
+Requirements:
 
 - Node.js `>=22.13.0`
+- A Cloudflare account when deploying
 
-## Quick Start
+Install and run:
 
 ```bash
 npm install
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Verify a production build:
 
-## Included Shape
+```bash
+npm test
+```
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+## Cloudflare Setup
 
-## Workspace Auth Headers
+### 1. Create the D1 database
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+In Cloudflare, create a D1 database. Recommended name:
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+```text
+education-management-db
+```
 
-Treat the full name as optional and fall back to email when it is absent:
+Copy the database ID into `wrangler.jsonc`:
 
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
+```json
+{
+  "binding": "DB",
+  "database_name": "education-management-db",
+  "database_id": "YOUR_REAL_D1_DATABASE_ID"
 }
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+The binding name must stay as:
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+```text
+DB
+```
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+### 2. Apply database migrations
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+For local testing:
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+```bash
+npm run db:migrate:local
+```
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+For the real Cloudflare D1 database:
+
+```bash
+npm run db:migrate:remote
+```
+
+### 3. Preview the Cloudflare Worker locally
+
+```bash
+npm run cf:preview
+```
+
+### 4. Deploy manually
+
+```bash
+npm run cf:deploy
+```
+
+## GitHub + Cloudflare Deployment
+
+Repository:
+
+[minoscao/education-management](https://github.com/minoscao/education-management)
+
+You can deploy in either way:
+
+### Option A: Cloudflare Dashboard
+
+Use Cloudflare Workers Builds and connect the GitHub repository.
+
+Recommended settings:
+
+- Framework preset: none / custom
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
+- Node version: `22`
+- D1 binding: `DB`
+
+Before the first production deployment, apply migrations once:
+
+```bash
+npm run db:migrate:remote
+```
+
+### Option B: GitHub Actions
+
+Use `.github/workflows/cloudflare-deploy.yml`.
+
+Add these GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+The workflow builds the app, applies D1 migrations, and deploys the Worker.
 
 ## Useful Commands
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+```bash
+npm run dev                 # local development
+npm run build               # production build
+npm test                    # build + rendered HTML check
+npm run db:generate         # generate migrations after schema changes
+npm run db:migrate:local    # apply migrations to local D1
+npm run db:migrate:remote   # apply migrations to Cloudflare D1
+npm run cf:preview          # build and preview Worker locally
+npm run cf:deploy           # build and deploy Worker to Cloudflare
+```
 
-## Learn More
+## Data Model Direction
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The portal uses a shared database model:
+
+- Storage/setup layer: course catalogue, reusable lesson plan, teachers, students, campuses, classrooms, rules
+- Runtime/operations layer: class intakes, scheduled lessons, room bookings, teacher bookings, student enrollments, invoices, payments, attendance, notifications
+
+Current prototype seed data is still present for first-run testing. Before real school data goes live, remove or gate the sample seed path in `app/api/portal-data/route.ts`.

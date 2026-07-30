@@ -11,6 +11,9 @@ const deployConfig = JSON.parse(readFileSync("wrangler.jsonc", "utf8"));
 const buildConfig = {
   ...deployConfig,
   main: "./worker/index.ts",
+  assets: undefined,
+  compatibility_flags: undefined,
+  d1_databases: undefined,
   no_bundle: undefined,
   rules: undefined,
   build: undefined,

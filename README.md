@@ -39,13 +39,13 @@ In Cloudflare, create a D1 database. Recommended name:
 education-management-db
 ```
 
-Copy the database ID into `wrangler.jsonc`:
+`wrangler.jsonc` binds this database by name:
 
 ```json
 {
   "binding": "DB",
   "database_name": "education-management-db",
-  "database_id": "YOUR_REAL_D1_DATABASE_ID"
+  "migrations_dir": "./drizzle"
 }
 ```
 
@@ -54,6 +54,9 @@ The binding name must stay as:
 ```text
 DB
 ```
+
+Do not commit a placeholder `database_id`. Wrangler accepts `database_id`, but
+it is optional; a fake value will fail Cloudflare deployment validation.
 
 ### 2. Apply database migrations
 

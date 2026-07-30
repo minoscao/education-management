@@ -39,7 +39,9 @@ In Cloudflare, create a D1 database. Recommended name:
 education-management-db
 ```
 
-`wrangler.jsonc` binds this database by name:
+`wrangler.jsonc` binds this database by name. During build, the project tries to
+resolve the real Cloudflare D1 id automatically and writes it into the temporary
+build checkout:
 
 ```json
 {
@@ -55,8 +57,8 @@ The binding name must stay as:
 DB
 ```
 
-Do not commit a placeholder `database_id`. Wrangler accepts `database_id`, but
-it is optional; a fake value will fail Cloudflare deployment validation.
+Do not commit a placeholder `database_id`. A fake value will fail Cloudflare
+deployment validation.
 
 ### 2. Apply database migrations
 
@@ -99,20 +101,31 @@ Use Cloudflare Workers Builds and connect the GitHub repository.
 Recommended settings:
 
 - Framework preset: none / custom
-- Build command: leave empty, or `npm run build`
-- Deploy command: `npm run deploy`
+- Build command: leave empty
+- Deploy command: `npx wrangler deploy`
 - Node version: `22`
 - D1 binding: `DB`
 
-If the dashboard only gives you one deploy command field, use the same command:
+If the dashboard only gives you one deploy command field, use:
 
 ```bash
-npm run deploy
+npx wrangler deploy
 ```
 
-Do not use plain `npx wrangler deploy`. This app is built by `vinext`, so the
-Worker must be deployed from the generated `dist/server/wrangler.json` config.
-The `npm run deploy` script handles that order.
+`wrangler.jsonc` has a build command, so Cloudflare will run the app build before
+uploading the Worker. The build also prepares the D1 binding.
+
+If the D1 database already exists, the deploy step will try to find it by name.
+If Cloudflare does not expose that lookup to the build, add this environment
+variable:
+
+- `CLOUDFLARE_D1_DATABASE_ID`
+
+If the database does not exist yet, add these environment variables so the
+script can create or resolve it:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
 
 Before the first production deployment, apply migrations once:
 

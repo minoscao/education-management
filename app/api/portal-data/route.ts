@@ -151,7 +151,6 @@ async function seedDatabase() {
   if (ready) return;
 
   await ensurePaymentData();
-  await ensureCommunicationData();
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
   if (seeded) {
     await ensureCampuses();
@@ -162,6 +161,7 @@ async function seedDatabase() {
     await ensureRichCampusSampleData();
     await ensureCourseIntakeSampleData();
     await ensureCourseLessonBlueprints();
+    await ensureCommunicationData();
     await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
     return;
   }
@@ -255,6 +255,7 @@ async function seedDatabase() {
   await ensureRichCampusSampleData();
   await ensureCourseIntakeSampleData();
   await ensureCourseLessonBlueprints();
+  await ensureCommunicationData();
   await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
 }

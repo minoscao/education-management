@@ -1006,8 +1006,11 @@ async function enrollStudent(runId?: string, studentId?: string, contractedFee?:
   );
   if (!run) throw new Error("Class not found.");
   if (checkCapacity && number(run.enrolled) >= number(run.capacity)) throw new Error("This class is full.");
-  const existing = await row("SELECT id FROM class_enrollments WHERE class_run_id = ? AND student_id = ?", [runId, studentId]);
-  if (existing) throw new Error("This student is already enrolled in the class.");
+  const existing = await row<{ id: string }>("SELECT id FROM class_enrollments WHERE class_run_id = ? AND student_id = ?", [runId, studentId]);
+  if (existing) {
+    if (!checkCapacity) return { enrollmentId: existing.id, invoiceId: "" };
+    throw new Error("This student is already enrolled in the class.");
+  }
 
   const enrollmentId = id("enrollment");
   const fee = contractedFee ?? number(run.price);

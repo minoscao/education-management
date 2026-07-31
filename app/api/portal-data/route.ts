@@ -142,13 +142,57 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
   return db().batch(statements.map((statement) => db().prepare(statement.sql).bind(...statement.values)));
 }
 
+const portalBootstrapKey = "portal_bootstrap_v6";
+const sampleSeedKeys = [
+  "v2_seeded",
+  "portal_bootstrap_v5",
+  portalBootstrapKey,
+  "operational_sample_v2",
+  "malaysia_term_sample_v3",
+  "rich_campus_sample_v4",
+  "course_intakes_v5",
+  "course_template_assignments_v6",
+];
+
+async function coreSeedCounts() {
+  return row<{
+    courses: number;
+    teachers: number;
+    students: number;
+    runs: number;
+    sessions: number;
+  }>(`SELECT
+      (SELECT COUNT(*) FROM course_catalogs) AS courses,
+      (SELECT COUNT(*) FROM teachers) AS teachers,
+      (SELECT COUNT(*) FROM students) AS students,
+      (SELECT COUNT(*) FROM class_runs) AS runs,
+      (SELECT COUNT(*) FROM class_sessions) AS sessions`);
+}
+
+function hasUsableSeedData(counts?: { courses: number; teachers: number; students: number; runs: number; sessions: number } | null) {
+  return number(counts?.courses) > 0
+    && number(counts?.teachers) > 0
+    && number(counts?.students) > 0
+    && number(counts?.runs) > 0
+    && number(counts?.sessions) > 0;
+}
+
+async function resetSeedMarkers() {
+  const placeholders = sampleSeedKeys.map(() => "?").join(", ");
+  await execute(`DELETE FROM app_settings WHERE key IN (${placeholders})`, sampleSeedKeys);
+}
+
 async function seedDatabase() {
   await ensureCourseLessonBlueprints();
   await ensureClassRunEnrollmentRules();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
-  const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["portal_bootstrap_v5"]);
-  if (ready) return;
+  const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]);
+  if (ready) {
+    const counts = await coreSeedCounts();
+    if (hasUsableSeedData(counts)) return;
+    await resetSeedMarkers();
+  }
 
   await ensurePaymentData();
   const seeded = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["v2_seeded"]);
@@ -162,7 +206,7 @@ async function seedDatabase() {
     await ensureCourseIntakeSampleData();
     await ensureCourseLessonBlueprints();
     await ensureCommunicationData();
-    await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
+    await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
     return;
   }
 
@@ -256,8 +300,8 @@ async function seedDatabase() {
   await ensureCourseIntakeSampleData();
   await ensureCourseLessonBlueprints();
   await ensureCommunicationData();
-  await execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
-  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["portal_bootstrap_v5", "true"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
 }
 
 async function ensureClassRunEnrollmentRules() {

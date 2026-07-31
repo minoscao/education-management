@@ -113,7 +113,8 @@ npx wrangler deploy
 ```
 
 `wrangler.jsonc` has a build command, so Cloudflare will run the app build before
-uploading the Worker. The build also prepares the D1 binding.
+uploading the Worker. The build also prepares the D1 binding and applies any
+pending D1 migrations before the Worker is uploaded.
 
 If the D1 database already exists, the deploy step will try to find it by name.
 If Cloudflare does not expose that lookup to the build, add this environment
@@ -127,7 +128,7 @@ script can create or resolve it:
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-Before the first production deployment, apply migrations once:
+You can still apply migrations manually when needed:
 
 ```bash
 npm run db:migrate:remote

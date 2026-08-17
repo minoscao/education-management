@@ -152,6 +152,18 @@ export const courseCatalogs = sqliteTable("course_catalogs", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const teachingLanguages = sqliteTable("teaching_languages", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  displayColor: text("display_color").notNull().default("#0F8AA8"),
+});
+
+export const teacherLanguages = sqliteTable("teacher_languages", {
+  teacherId: text("teacher_id").notNull().references(() => teachers.id),
+  languageId: text("language_id").notNull().references(() => teachingLanguages.id),
+});
+
 export const classRuns = sqliteTable("class_runs", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -164,6 +176,8 @@ export const classRuns = sqliteTable("class_runs", {
   enrollmentOpenAt: text("enrollment_open_at").notNull().default(""),
   enrollmentCloseAt: text("enrollment_close_at").notNull().default(""),
   allowLateJoin: integer("allow_late_join").notNull().default(1),
+  languageId: text("language_id").references(() => teachingLanguages.id),
+  teacherId: text("teacher_id").references(() => teachers.id),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

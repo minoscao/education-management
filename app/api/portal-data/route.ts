@@ -493,6 +493,13 @@ async function resetToClientTeachingPlan() {
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["client_ppm_plan_v1", "34 class plan loaded"]);
 }
 
+async function refreshClientPlanStudentNames() {
+  const students = await rows<{ id: string }>("SELECT id FROM students WHERE id LIKE 'plan-student-%' ORDER BY id");
+  const givenNames = ["Ahmad", "Aina", "Aisyah", "Amir", "Arjun", "Aryan", "Daniel", "Darren", "Divya", "Ethan", "Farah", "Hannah", "Iman", "Izzat", "Jia En", "Kavin", "Kavya", "Mei Xin", "Nadia", "Nisha", "Nur", "Priya", "Rayyan", "Siti", "Sofia", "Wei Jian", "Xin Yi", "Yash", "Zara", "Zoey", "Hakim"];
+  const familyNames = ["Tan", "Lim", "Lee", "Wong", "Goh", "Chong", "Ng", "Ong", "Yap", "Lau", "Kumar", "Raj", "Nair", "Singh", "Kaur", "Subramaniam", "Aziz", "Hassan", "Rahman", "Ismail", "Hamid", "Yusof", "Zainal", "Ibrahim", "Abdullah", "Yap", "Chew", "Teo", "Low", "Chan", "Ho"];
+  await executeBatchInChunks(students.map((student, index) => ({ sql: "UPDATE students SET name = ? WHERE id = ?", values: [`${givenNames[index % givenNames.length]} ${familyNames[Math.floor(index / givenNames.length) % familyNames.length]}`, student.id] })));
+}
+
 async function ensureCourseLessonBlueprints() {
   await execute("CREATE TABLE IF NOT EXISTS course_lesson_templates (id text PRIMARY KEY NOT NULL, course_id text NOT NULL, lesson_no integer NOT NULL, title text NOT NULL, default_duration_minutes integer DEFAULT 90 NOT NULL, created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL, UNIQUE(course_id, lesson_no))");
   const columns = await rows<{ name: string }>("PRAGMA table_info(course_lesson_templates)");
@@ -1509,6 +1516,10 @@ export async function POST(request: Request) {
     const payload = await request.json<ActionPayload>();
     if (payload.action === "resetClientTeachingPlan") {
       await resetToClientTeachingPlan();
+      return await readPortal();
+    }
+    if (payload.action === "refreshClientPlanStudentNames") {
+      await refreshClientPlanStudentNames();
       return await readPortal();
     }
     if (payload.action === "setAttendance") {

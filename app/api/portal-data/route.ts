@@ -36,6 +36,7 @@ type ActionPayload = {
   durationMinutes?: number | string;
   classroomId?: string;
   teacherId?: string;
+  languageId?: string;
   payAmount?: number | string;
   amount?: number | string;
   discount?: number | string;
@@ -142,6 +143,10 @@ async function executeBatch(statements: { sql: string; values: unknown[] }[]) {
   return db().batch(statements.map((statement) => db().prepare(statement.sql).bind(...statement.values)));
 }
 
+async function executeBatchInChunks(statements: { sql: string; values: unknown[] }[], size = 80) {
+  for (let index = 0; index < statements.length; index += size) await executeBatch(statements.slice(index, index + size));
+}
+
 const portalBootstrapKey = "portal_bootstrap_v6";
 const sampleSeedKeys = [
   "v2_seeded",
@@ -185,6 +190,7 @@ async function resetSeedMarkers() {
 async function seedDatabase() {
   await ensureCourseLessonBlueprints();
   await ensureClassRunEnrollmentRules();
+  await ensureTeachingConfiguration();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
   const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]);
@@ -309,6 +315,179 @@ async function ensureClassRunEnrollmentRules() {
   const names = new Set(columns.map((item) => item.name));
   if (!names.has("allow_late_join")) await execute("ALTER TABLE class_runs ADD COLUMN allow_late_join integer DEFAULT 1 NOT NULL");
   await execute("UPDATE class_runs SET allow_late_join = 1 WHERE allow_late_join IS NULL");
+}
+
+async function ensureTeachingConfiguration() {
+  await execute("CREATE TABLE IF NOT EXISTS teaching_languages (id text PRIMARY KEY NOT NULL, code text UNIQUE NOT NULL, name text NOT NULL, display_color text NOT NULL DEFAULT '#0F8AA8')");
+  await execute("CREATE TABLE IF NOT EXISTS teacher_languages (teacher_id text NOT NULL, language_id text NOT NULL, PRIMARY KEY (teacher_id, language_id))");
+  const columns = await rows<{ name: string }>("PRAGMA table_info('class_runs')");
+  const names = new Set(columns.map((item) => item.name));
+  if (!names.has("language_id")) await execute("ALTER TABLE class_runs ADD COLUMN language_id text");
+  if (!names.has("teacher_id")) await execute("ALTER TABLE class_runs ADD COLUMN teacher_id text");
+}
+
+function dateAfter(startDate: string, days: number) {
+  const date = new Date(`${startDate}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+async function resetToClientTeachingPlan() {
+  await ensureTeachingConfiguration();
+  await ensureCommunicationData();
+
+  // This replaces the old demo catalogue only. Campus and room records are kept
+  // as operational resources, while all teaching, people and enrollment samples are rebuilt.
+  const clears = [
+    "DELETE FROM class_attendance",
+    "DELETE FROM class_student_bookings",
+    "DELETE FROM student_payments",
+    "DELETE FROM student_invoices",
+    "DELETE FROM class_enrollments",
+    "DELETE FROM class_teacher_bookings",
+    "DELETE FROM class_resource_bookings",
+    "DELETE FROM class_sessions",
+    "DELETE FROM course_lesson_templates",
+    "DELETE FROM class_runs",
+    "DELETE FROM course_catalogs",
+    "DELETE FROM student_messages",
+    "DELETE FROM portal_notifications",
+    "DELETE FROM attendance_records",
+    "DELETE FROM student_bookings",
+    "DELETE FROM teacher_bookings",
+    "DELETE FROM resource_bookings",
+    "DELETE FROM course_sessions",
+    "DELETE FROM enrollments",
+    "DELETE FROM courses",
+    "DELETE FROM teacher_languages",
+    "DELETE FROM teaching_languages",
+    "DELETE FROM teachers",
+    "DELETE FROM students",
+  ];
+  for (const sql of clears) await execute(sql);
+
+  const languages = [
+    ["lang-ce", "CE", "华语 / English", "#2563EB"],
+    ["lang-me", "ME", "Bahasa Melayu / English", "#7C3AED"],
+    ["lang-zh", "ZH", "华文（UEC）", "#0F766E"],
+  ];
+  const teachers = [
+    ["teacher-lim-wei", "TCH-PPM-01", "Teacher Lim Wei", "Mathematics + Sudoku", "012-410 2101", "available", ["lang-ce"]],
+    ["teacher-lee-hui", "TCH-PPM-02", "Teacher Lee Hui", "Mathematics + Sudoku", "012-410 2102", "available", ["lang-ce"]],
+    ["teacher-aisyah", "TCH-PPM-03", "Cikgu Aisyah", "Matematik + Sudoku", "012-410 2103", "available", ["lang-me"]],
+    ["teacher-ng-jun", "TCH-PPM-04", "Teacher Ng Jun", "Mathematics + Sudoku", "012-410 2104", "available", ["lang-ce"]],
+    ["teacher-chen-yi", "TCH-PPM-05", "Teacher Chen Yi", "Mathematics + Sudoku", "012-410 2105", "available", ["lang-ce"]],
+    ["teacher-farah", "TCH-PPM-06", "Cikgu Farah", "Matematik + Sudoku", "012-410 2106", "available", ["lang-me"]],
+    ["teacher-wong-kai", "TCH-PPM-07", "Teacher Wong Kai", "Mathematics + Sudoku", "012-410 2107", "available", ["lang-ce"]],
+    ["teacher-nadia", "TCH-PPM-08", "Cikgu Nadia", "Matematik + Sudoku", "012-410 2108", "available", ["lang-me"]],
+    ["teacher-hana", "TCH-PPM-09", "Ms Hana", "Communication", "012-410 2109", "available", ["lang-ce"]],
+    ["teacher-zara", "TCH-PPM-10", "Ms Zara", "Communication", "012-410 2110", "available", ["lang-ce"]],
+    ["teacher-tan-uec", "TCH-PPM-11", "Teacher Tan", "华文沟通", "012-410 2111", "available", ["lang-zh"]],
+  ] as const;
+  const courses = [
+    ["course-math-primary", "PPM-MATH-P", "Mathematics + Sudoku", "Mathematics", "Primary SJK · G4–G6", 12, 90, 360, "#2563EB", "active"],
+    ["course-math-lower", "PPM-MATH-L", "Mathematics + Sudoku", "Mathematics", "Lower Secondary · F1–F3 / L1–L3", 12, 90, 420, "#2563EB", "active"],
+    ["course-math-higher", "PPM-MATH-H", "Mathematics + Sudoku", "Mathematics", "Higher Secondary · F4–F5 / H1–H3", 12, 90, 460, "#2563EB", "active"],
+    ["course-comm-primary", "PPM-COMM-P", "Communication", "Communication", "Primary SJK · G4–G6", 12, 90, 330, "#0F8AA8", "active"],
+    ["course-comm-lower", "PPM-COMM-L", "Communication", "Communication", "Lower Secondary · F1–F3 / L1–L3", 12, 90, 390, "#0F8AA8", "active"],
+    ["course-comm-higher", "PPM-COMM-H", "Communication", "Communication", "Higher Secondary · F4–F5 / H1–H3", 12, 90, 430, "#0F8AA8", "active"],
+  ] as const;
+  const topicSets: Record<string, string[]> = {
+    "course-math-primary": ["Whole numbers and operations", "Fractions, decimals and percentages", "Ratio and proportion", "Measurement", "Geometry", "Data handling", "Patterns and sequences", "Problem-solving strategies", "Sudoku logic foundations", "Sudoku deduction", "Mixed application", "Revision and challenge"],
+    "course-math-lower": ["Integers and indices", "Algebraic expressions", "Linear equations", "Ratio, rate and proportion", "Coordinates and graphs", "Geometry and transformation", "Statistics and probability", "Financial mathematics", "Sudoku logic foundations", "Sudoku deduction", "KSSM problem solving", "Revision and challenge"],
+    "course-math-higher": ["Functions and algebra", "Quadratic relationships", "Trigonometry", "Coordinate geometry", "Statistics and probability", "Financial mathematics", "Reasoning and proof", "Modelling and problem solving", "Sudoku strategy", "Advanced deduction", "Exam application", "Revision and challenge"],
+    "course-comm-primary": ["Listening with purpose", "Everyday speaking", "Reading for meaning", "Useful vocabulary", "Sentence building", "Clear writing", "Presentation practice", "Conversation skills", "Audience awareness", "Storytelling", "Project rehearsal", "Communication showcase"],
+    "course-comm-lower": ["Active listening", "Structured discussion", "Reading and inference", "Vocabulary in context", "Paragraph organisation", "Presentation skills", "Persuasive communication", "Team collaboration", "Audience and tone", "Interview practice", "Project rehearsal", "Communication showcase"],
+    "course-comm-higher": ["Professional communication", "Critical listening", "Argument and evidence", "Formal writing", "Presentation structure", "Discussion leadership", "Interview communication", "Audience adaptation", "Collaborative problem solving", "Project rehearsal", "Public speaking", "Communication showcase"],
+  };
+
+  await executeBatchInChunks([
+    ...languages.map((item) => ({ sql: "INSERT INTO teaching_languages (id, code, name, display_color) VALUES (?, ?, ?, ?)", values: [...item] })),
+    ...teachers.map(([idValue, code, name, subject, phone, status]) => ({ sql: "INSERT INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, ?, ?)", values: [idValue, code, name, subject, phone, status] })),
+    ...teachers.flatMap(([teacherId, , , , , , languageIds]) => languageIds.map((languageId) => ({ sql: "INSERT INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)", values: [teacherId, languageId] }))),
+    ...courses.map((item) => ({ sql: "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", values: [...item] })),
+    ...courses.flatMap(([courseId]) => topicSets[courseId].map((title, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [`plan-template-${courseId}-${index + 1}`, courseId, index + 1, title, 90] }))),
+  ]);
+
+  const rooms = [
+    ["plan-room-p1", "P-01", "P-01", "Primary classroom", 26],
+    ["plan-room-p2", "P-02", "P-02", "Primary classroom", 26],
+    ["plan-room-s1", "S-01", "S-01", "Secondary classroom", 26],
+    ["plan-room-s2", "S-02", "S-02", "Secondary classroom", 26],
+  ];
+  await executeBatchInChunks(rooms.map(([idValue, code, name, location, capacity]) => ({ sql: "INSERT OR REPLACE INTO classrooms (id, code, name, location, capacity, status, campus_id, room_type, resources) VALUES (?, ?, ?, ?, ?, 'active', 'campus-one', 'classroom', 'Whiteboard, projector')", values: [idValue, code, name, location, capacity] })));
+  await execute("INSERT OR REPLACE INTO academic_terms (id, code, name, starts_on, ends_on, status) VALUES (?, ?, ?, ?, ?, ?)", ["term-ppm-2026", "PPM-2026-Q3", "PPM Opening Plan · 2026", "2026-08-24", "2026-11-15", "active"]);
+
+  type PlanRun = { courseId: string; code: string; name: string; languageId: string; teacherId: string; weekday: number; time: string; roomId: string; students: number };
+  const plan: PlanRun[] = [];
+  const add = (courseId: string, code: string, name: string, languageId: string, teacherId: string, weekday: number, time: string, roomId: string) => plan.push({ courseId, code, name, languageId, teacherId, weekday, time, roomId, students: 18 + (plan.length * 5) % 9 });
+  add("course-math-primary", "PPM-P-01", "G4 · Monday PM", "lang-ce", "teacher-lim-wei", 1, "14:30", "plan-room-p1");
+  add("course-math-primary", "PPM-P-02", "G4 · Monday PM", "lang-ce", "teacher-lee-hui", 1, "16:00", "plan-room-p2");
+  add("course-math-primary", "PPM-P-03", "G5 · Tuesday PM", "lang-ce", "teacher-lim-wei", 2, "14:30", "plan-room-p1");
+  add("course-math-primary", "PPM-P-04", "G5 · Tuesday PM", "lang-ce", "teacher-lee-hui", 2, "16:00", "plan-room-p2");
+  add("course-math-primary", "PPM-P-05", "G6 · Wednesday PM", "lang-ce", "teacher-lim-wei", 3, "14:30", "plan-room-p1");
+  add("course-math-primary", "PPM-P-06", "G6 · Wednesday PM", "lang-ce", "teacher-lee-hui", 3, "16:00", "plan-room-p2");
+  add("course-math-primary", "PPM-P-07", "G4 · Thursday PM", "lang-me", "teacher-aisyah", 4, "14:30", "plan-room-p2");
+  add("course-math-primary", "PPM-P-08", "G5 · Thursday PM", "lang-me", "teacher-aisyah", 4, "16:00", "plan-room-p2");
+  add("course-math-primary", "PPM-P-09", "G6 · Friday PM", "lang-me", "teacher-aisyah", 5, "14:30", "plan-room-p2");
+  add("course-math-primary", "PPM-P-10", "G6 · Friday PM", "lang-me", "teacher-aisyah", 5, "16:00", "plan-room-p2");
+  add("course-comm-primary", "PPM-P-11", "Primary Communication · Saturday AM", "lang-ce", "teacher-hana", 6, "09:00", "plan-room-p1");
+  add("course-comm-primary", "PPM-P-12", "Primary 华文沟通 · Sunday AM", "lang-zh", "teacher-tan-uec", 0, "09:00", "plan-room-p1");
+  add("course-math-lower", "PPM-L-01", "F1 · Monday PM", "lang-ce", "teacher-ng-jun", 1, "18:30", "plan-room-s1");
+  add("course-math-lower", "PPM-L-02", "L1 · Monday PM", "lang-ce", "teacher-chen-yi", 1, "20:00", "plan-room-s2");
+  add("course-math-lower", "PPM-L-03", "F2 · Tuesday PM", "lang-ce", "teacher-ng-jun", 2, "18:30", "plan-room-s1");
+  add("course-math-lower", "PPM-L-04", "L2 · Tuesday PM", "lang-ce", "teacher-chen-yi", 2, "20:00", "plan-room-s2");
+  add("course-math-lower", "PPM-L-05", "F3 · Wednesday PM", "lang-ce", "teacher-ng-jun", 3, "18:30", "plan-room-s1");
+  add("course-math-lower", "PPM-L-06", "L3 · Wednesday PM", "lang-ce", "teacher-chen-yi", 3, "20:00", "plan-room-s2");
+  add("course-math-lower", "PPM-L-07", "F1 · Thursday PM", "lang-ce", "teacher-ng-jun", 4, "18:30", "plan-room-s1");
+  add("course-math-lower", "PPM-L-08", "F2 · Thursday PM", "lang-ce", "teacher-chen-yi", 4, "20:00", "plan-room-s2");
+  add("course-math-lower", "PPM-L-09", "F3 · Friday PM", "lang-me", "teacher-farah", 5, "18:30", "plan-room-s1");
+  add("course-math-lower", "PPM-L-10", "L1 · Friday PM", "lang-me", "teacher-farah", 5, "20:00", "plan-room-s2");
+  add("course-math-lower", "PPM-L-11", "L2 · Saturday AM", "lang-me", "teacher-farah", 6, "10:30", "plan-room-s1");
+  add("course-comm-lower", "PPM-L-12", "Lower Communication · Saturday AM", "lang-ce", "teacher-zara", 6, "09:00", "plan-room-s2");
+  add("course-comm-lower", "PPM-L-13", "Lower 华文沟通 · Sunday AM", "lang-zh", "teacher-tan-uec", 0, "10:30", "plan-room-s1");
+  add("course-math-higher", "PPM-H-01", "F4 · Saturday PM", "lang-ce", "teacher-wong-kai", 6, "13:00", "plan-room-s1");
+  add("course-math-higher", "PPM-H-02", "F5 · Saturday PM", "lang-ce", "teacher-wong-kai", 6, "14:30", "plan-room-s2");
+  add("course-math-higher", "PPM-H-03", "H1 · Saturday PM", "lang-ce", "teacher-wong-kai", 6, "16:00", "plan-room-s1");
+  add("course-math-higher", "PPM-H-04", "H2 · Saturday PM", "lang-ce", "teacher-wong-kai", 6, "17:30", "plan-room-s2");
+  add("course-math-higher", "PPM-H-05", "H3 · Sunday PM", "lang-ce", "teacher-wong-kai", 0, "13:00", "plan-room-s1");
+  add("course-math-higher", "PPM-H-06", "F4 · Saturday PM", "lang-me", "teacher-nadia", 6, "16:00", "plan-room-s2");
+  add("course-math-higher", "PPM-H-07", "F5 · Sunday PM", "lang-me", "teacher-nadia", 0, "14:30", "plan-room-s2");
+  add("course-comm-higher", "PPM-H-08", "Higher Communication · Sunday PM", "lang-ce", "teacher-zara", 0, "16:00", "plan-room-s1");
+  add("course-comm-higher", "PPM-H-09", "Higher 华文沟通 · Sunday PM", "lang-zh", "teacher-tan-uec", 0, "17:30", "plan-room-s2");
+  if (plan.length !== 34) throw new Error("The PPM opening plan must contain exactly 34 classes.");
+
+  await executeBatchInChunks(plan.map((run, index) => ({ sql: "INSERT INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at, language_id, teacher_id) VALUES (?, ?, ?, ?, ?, 26, ?, 'open', '2026-08-17 09:00', '2026-09-30 18:00', ?, ?)", values: [`plan-run-${String(index + 1).padStart(2, "0")}`, run.code, run.courseId, "term-ppm-2026", run.name, courses.find((course) => course[0] === run.courseId)?.[7] ?? 0, run.languageId, run.teacherId] })));
+
+  const sessions: { sql: string; values: unknown[] }[] = [];
+  const students: { sql: string; values: unknown[] }[] = [];
+  const enrollments: { sql: string; values: unknown[] }[] = [];
+  plan.forEach((run, runIndex) => {
+    const runId = `plan-run-${String(runIndex + 1).padStart(2, "0")}`;
+    const weekdayOffset = (run.weekday - 1 + 7) % 7;
+    const firstDate = dateAfter("2026-08-24", weekdayOffset);
+    const topics = topicSets[run.courseId];
+    topics.forEach((topic, lessonIndex) => {
+      const startsAt = `${dateAfter(firstDate, lessonIndex * 7)} ${run.time}`;
+      const sessionId = `plan-session-${String(runIndex + 1).padStart(2, "0")}-${String(lessonIndex + 1).padStart(2, "0")}`;
+      sessions.push(
+        { sql: "INSERT INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')", values: [sessionId, runId, lessonIndex + 1, topic, startsAt, later(startsAt, 90)] },
+        { sql: "INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", values: [`plan-rb-${sessionId}`, sessionId, run.roomId, startsAt, later(startsAt, 90)] },
+        { sql: "INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, 90, 'unpaid', 'confirmed')", values: [`plan-tb-${sessionId}`, sessionId, run.teacherId, startsAt, later(startsAt, 90)] },
+      );
+    });
+    for (let studentIndex = 0; studentIndex < run.students; studentIndex += 1) {
+      const studentId = `plan-student-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`;
+      const studentName = `Learner ${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`;
+      students.push({ sql: "INSERT INTO students (id, code, name, level, guardian_phone, status, email, avatar_url) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", values: [studentId, `STU-PPM-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`, studentName, run.name.split(" · ")[0], "", `learner.${runIndex + 1}.${studentIndex + 1}@family.example`, `sprite:${(runIndex + studentIndex) % 8}`] });
+      enrollments.push({ sql: "INSERT INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, 'enrolled', '2026-08-17 09:00')", values: [`plan-enrollment-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`, runId, studentId, courses.find((course) => course[0] === run.courseId)?.[7] ?? 0] });
+    }
+  });
+  await executeBatchInChunks(sessions);
+  await executeBatchInChunks(students);
+  await executeBatchInChunks(enrollments);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["client_ppm_plan_v1", "34 class plan loaded"]);
 }
 
 async function ensureCourseLessonBlueprints() {
@@ -765,13 +944,15 @@ async function resortClassLessons(payload: ActionPayload) {
 }
 
 async function createClassRun(payload: ActionPayload) {
-  if (!payload.courseId || !payload.termId) throw new Error("Please select a course and term.");
+  if (!payload.courseId || !payload.termId || !payload.languageId || !payload.teacherId) throw new Error("Please select a course, term, teaching language and class teacher.");
   const course = await row<{ title: string; list_price: number }>("SELECT title, list_price FROM course_catalogs WHERE id = ?", [payload.courseId]);
   if (!course) throw new Error("Course not found.");
+  const compatibleTeacher = await row("SELECT 1 AS available FROM teacher_languages WHERE teacher_id = ? AND language_id = ?", [payload.teacherId, payload.languageId]);
+  if (!compatibleTeacher) throw new Error("The selected teacher is not set up for this teaching language.");
   const code = `RUN-${Date.now().toString().slice(-6)}`;
   await execute(
-    "INSERT INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [id("run"), code, payload.courseId, payload.termId, payload.name?.trim() || `${course.title} class`, Math.max(1, Math.floor(number(payload.capacity, 16))), number(payload.price, course.list_price), "open", localDate(-1), localDate(30)],
+    "INSERT INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at, language_id, teacher_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [id("run"), code, payload.courseId, payload.termId, payload.name?.trim() || `${course.title} class`, Math.max(1, Math.floor(number(payload.capacity, 16))), number(payload.price, course.list_price), "open", localDate(-1), localDate(30), payload.languageId, payload.teacherId],
   );
 }
 
@@ -1211,7 +1392,7 @@ async function readAttendance() {
 
 async function readPortal(includeAttendance = false) {
   await seedDatabase();
-  const [terms, courses, courseLessons, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
+  const [terms, courses, courseLessons, runs, sessions, students, teachers, languages, teacherLanguages, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
     rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
     rows(`SELECT course_lesson_templates.*, teachers.name AS teacher_name, classrooms.name AS classroom_name
@@ -1219,8 +1400,9 @@ async function readPortal(includeAttendance = false) {
           LEFT JOIN teachers ON teachers.id = course_lesson_templates.default_teacher_id
           LEFT JOIN classrooms ON classrooms.id = course_lesson_templates.default_classroom_id
           ORDER BY course_lesson_templates.course_id, course_lesson_templates.lesson_no`),
-    rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
+    rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, teaching_languages.name AS language_name, teaching_languages.display_color AS language_color, teachers.name AS teacher_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
           FROM class_runs JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN academic_terms ON academic_terms.id = class_runs.term_id
+          LEFT JOIN teaching_languages ON teaching_languages.id = class_runs.language_id LEFT JOIN teachers ON teachers.id = class_runs.teacher_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
           GROUP BY class_runs.id ORDER BY class_runs.created_at DESC`),
     rows(`SELECT class_sessions.*, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color, class_resource_bookings.classroom_id, classrooms.name AS classroom_name, class_teacher_bookings.teacher_id, teachers.name AS teacher_name, class_teacher_bookings.pay_amount AS pay_amount, class_teacher_bookings.pay_status
@@ -1229,7 +1411,11 @@ async function readPortal(includeAttendance = false) {
           LEFT JOIN class_teacher_bookings ON class_teacher_bookings.class_session_id = class_sessions.id LEFT JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id
           ORDER BY class_sessions.starts_at ASC`),
     rows("SELECT * FROM students ORDER BY code"),
-    rows("SELECT * FROM teachers ORDER BY code"),
+    rows(`SELECT teachers.*, COALESCE(GROUP_CONCAT(teaching_languages.name, ' · '), '') AS language_names
+          FROM teachers LEFT JOIN teacher_languages ON teacher_languages.teacher_id = teachers.id LEFT JOIN teaching_languages ON teaching_languages.id = teacher_languages.language_id
+          GROUP BY teachers.id ORDER BY teachers.code`),
+    rows("SELECT * FROM teaching_languages ORDER BY code"),
+    rows("SELECT * FROM teacher_languages ORDER BY teacher_id, language_id"),
     rows("SELECT campuses.*, COALESCE((SELECT value FROM app_settings WHERE key = 'floorplan_' || campuses.id), '') AS floorplan_url FROM campuses ORDER BY code"),
     rows(`SELECT classrooms.*, campuses.name AS campus_name, campuses.map_label AS campus_map_label
           FROM classrooms LEFT JOIN campuses ON campuses.id = classrooms.campus_id
@@ -1276,7 +1462,7 @@ async function readPortal(includeAttendance = false) {
   let mail = { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" };
   try { mail = { ...mail, ...JSON.parse(mailSettingsSetting?.value ?? "{}") }; } catch { /* Use connection defaults. */ }
   return Response.json({
-    terms, courses, courseLessons, runs, sessions, students, teachers, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
+    terms, courses, courseLessons, runs, sessions, students, teachers, languages, teacherLanguages, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, conflicts: conflictRows,
     settings: { businessHours, mail },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
@@ -1318,6 +1504,10 @@ export async function POST(request: Request) {
   try {
     await seedDatabase();
     const payload = await request.json<ActionPayload>();
+    if (payload.action === "resetClientTeachingPlan") {
+      await resetToClientTeachingPlan();
+      return await readPortal();
+    }
     if (payload.action === "setAttendance") {
       await setAttendance(payload);
       return Response.json({ attendanceUpdate: { studentBookingId: payload.studentBookingId, status: payload.attendanceStatus ?? "present", note: payload.note ?? "" } });

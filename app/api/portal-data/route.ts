@@ -462,6 +462,8 @@ async function resetToClientTeachingPlan() {
   const sessions: { sql: string; values: unknown[] }[] = [];
   const students: { sql: string; values: unknown[] }[] = [];
   const enrollments: { sql: string; values: unknown[] }[] = [];
+  const givenNames = ["Ahmad", "Aina", "Aisyah", "Amir", "Arjun", "Aryan", "Daniel", "Darren", "Divya", "Ethan", "Farah", "Hannah", "Iman", "Izzat", "Jia En", "Kavin", "Kavya", "Mei Xin", "Nadia", "Nisha", "Nur", "Priya", "Rayyan", "Siti", "Sofia", "Wei Jian", "Xin Yi", "Yash", "Zara", "Zoey", "Hakim"];
+  const familyNames = ["Tan", "Lim", "Lee", "Wong", "Goh", "Chong", "Ng", "Ong", "Yap", "Lau", "Kumar", "Raj", "Nair", "Singh", "Kaur", "Subramaniam", "Aziz", "Hassan", "Rahman", "Ismail", "Hamid", "Yusof", "Zainal", "Ibrahim", "Abdullah", "Yap", "Chew", "Teo", "Low", "Chan", "Ho"];
   plan.forEach((run, runIndex) => {
     const runId = `plan-run-${String(runIndex + 1).padStart(2, "0")}`;
     const weekdayOffset = (run.weekday - 1 + 7) % 7;
@@ -478,7 +480,8 @@ async function resetToClientTeachingPlan() {
     });
     for (let studentIndex = 0; studentIndex < run.students; studentIndex += 1) {
       const studentId = `plan-student-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`;
-      const studentName = `Learner ${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`;
+      const studentOrdinal = runIndex * 26 + studentIndex;
+      const studentName = `${givenNames[studentOrdinal % givenNames.length]} ${familyNames[Math.floor(studentOrdinal / givenNames.length) % familyNames.length]}`;
       students.push({ sql: "INSERT INTO students (id, code, name, level, guardian_phone, status, email, avatar_url) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", values: [studentId, `STU-PPM-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`, studentName, run.name.split(" · ")[0], "", `learner.${runIndex + 1}.${studentIndex + 1}@family.example`, `sprite:${(runIndex + studentIndex) % 8}`] });
       enrollments.push({ sql: "INSERT INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, ?, 'enrolled', '2026-08-17 09:00')", values: [`plan-enrollment-${String(runIndex + 1).padStart(2, "0")}-${String(studentIndex + 1).padStart(2, "0")}`, runId, studentId, courses.find((course) => course[0] === run.courseId)?.[7] ?? 0] });
     }

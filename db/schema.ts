@@ -138,6 +138,13 @@ export const academicTerms = sqliteTable("academic_terms", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const teachingCentres = sqliteTable("teaching_centres", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+});
+
 export const courseCatalogs = sqliteTable("course_catalogs", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -149,6 +156,7 @@ export const courseCatalogs = sqliteTable("course_catalogs", {
   listPrice: real("list_price").notNull().default(0),
   displayColor: text("display_color").notNull().default("#0F8AA8"),
   status: text("status").notNull().default("active"),
+  teachingCentreId: text("teaching_centre_id").references(() => teachingCentres.id),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

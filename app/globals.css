@@ -794,6 +794,11 @@ button:disabled {
   background: linear-gradient(106deg, #ffffff 0%, #f6f7ff 58%, #e9fbf7 100%);
   box-shadow: 0 7px 22px rgba(62, 91, 184, .07);
 }
+
+/* Course detail refinements: preserve the existing course cover, make the current selection unmistakable, and keep learner records scannable. */
+.course-sidebar-heading .course-prop-image { display: block; }.course-sidebar-heading .course-image-scrim { display: block; }
+.course-run-nav-card.active { border: 2px solid #10c8c4; border-left: 6px solid #10c8c4; background: #e8fffc; box-shadow: 0 0 0 3px rgba(16,200,196,.22), 0 10px 22px rgba(1,31,41,.28); }.course-run-nav-card.active::after { content: "正在查看"; justify-self: start; padding: 2px 6px; border-radius: 99px; background: #087f7d; color: #fff; font-size: 9px; font-weight: 850; }.course-run-nav-card.all.active { border-color: #ffe08a; border-left-color: #ffe08a; background: rgba(255,198,65,.24); box-shadow: 0 0 0 3px rgba(255,224,138,.24); }.course-run-nav-card.all.active::after { content: "全部"; background: #f6c45b; color: #173d49; }
+.course-student-list { display: grid; gap: 0; padding: 16px; border: 1px solid #dbe8ea; border-radius: 8px; background: #fff; }.course-student-row { display: grid; grid-template-columns: 38px minmax(180px,1fr) minmax(120px,.7fr) auto; gap: 11px; align-items: center; width: 100%; min-height: 62px; padding: 9px 2px; border: 0; border-bottom: 1px solid #e5eef0; background: transparent; color: #264653; cursor: pointer; font: inherit; text-align: left; }.course-student-row:last-of-type { border-bottom: 0; }.course-student-row:hover { background: #f0fbfa; }.course-student-row .avatar-photo,.course-student-row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }.course-student-row > div { display: grid; gap: 3px; }.course-student-row strong { font-size: 13px; }.course-student-row small { color: #6b838b; font-size: 10px; }.course-student-row > span { display: grid; gap: 3px; }.course-student-row b { color: #214b57; font-size: 12px; }
 .role-student .page-title p,
 .role-student .student-simple-heading span,
 .role-student .student-section-title > div > span { color: #3668dc; }

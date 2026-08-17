@@ -221,6 +221,7 @@ async function seedDatabase() {
     await ensureCourseIntakeSampleData();
     await ensureCourseLessonBlueprints();
     await ensureCommunicationData();
+    await syncPptOperatingResources();
     await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
     return;
   }
@@ -315,6 +316,7 @@ async function seedDatabase() {
   await ensureCourseIntakeSampleData();
   await ensureCourseLessonBlueprints();
   await ensureCommunicationData();
+  await syncPptOperatingResources();
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
 }
@@ -655,6 +657,141 @@ async function applyPpmAndPbTeachingPlan() {
   await executeBatchInChunks(sessions);
   await executeBatchInChunks(students);
   await executeBatchInChunks(enrollments);
+  await syncPptOperatingResources(true);
+}
+
+const pptOperatingTeacherIds = [
+  "teacher-lim-wei",
+  "teacher-ng-jun",
+  "teacher-chen-yi",
+  "teacher-wong-kai",
+  "teacher-nadia",
+  "teacher-hana",
+  "teacher-farah",
+  "teacher-mira",
+  "teacher-zara",
+  "teacher-tan-uec",
+] as const;
+
+/**
+ * The launch deck defines teaching bands, not a separate teacher for every
+ * course or class.  Keep the operational roster small and reuse it across
+ * its teachable band.  Historical rows are retained as inactive records.
+ */
+async function syncPptOperatingResources(force = false) {
+  const marker = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["ppt_operating_resources_v1"]);
+  if (marker && !force) return;
+
+  await ensureTeachingConfiguration();
+  await ensureCampuses();
+  const teachers = [
+    ["teacher-lim-wei", "TCH-PPM-01", "Teacher Lim Wei", "Primary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-ng-jun", "TCH-PPM-02", "Teacher Ng Jun", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-chen-yi", "TCH-PPM-03", "Teacher Chen Yi", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-wong-kai", "TCH-PPM-04", "Teacher Wong Kai", "Advanced Mathematics + Sudoku", "lang-ce"],
+    ["teacher-nadia", "TCH-PPM-05", "Cikgu Nadia", "Advanced Mathematics + Sudoku · weekend cover", "lang-me"],
+    ["teacher-hana", "TCH-LANG-01", "Ms Hana", "Languages · Mandarin + English stream", "lang-ce"],
+    ["teacher-farah", "TCH-LANG-02", "Cikgu Farah", "Communication · Bahasa + English stream", "lang-me"],
+    ["teacher-mira", "TCH-LANG-03", "Cikgu Mira", "English & Bahasa · Bahasa + English stream", "lang-me"],
+    ["teacher-zara", "TCH-LANG-04", "Ms Zara", "Advanced languages · weekend cover", "lang-ce,lang-me"],
+    ["teacher-tan-uec", "TCH-LANG-05", "Teacher Tan", "Chinese", "lang-zh"],
+  ] as const;
+  const classrooms = [
+    ["plan-room-math-sci", "ROOM-MATH-SCI", "数理化教室", "Kluang learning hub", "数理化课程使用", 26],
+    ["plan-room-language", "ROOM-LANGUAGE", "语言教室", "Kluang learning hub", "语言课程使用", 26],
+  ] as const;
+
+  await executeBatchInChunks([
+    ...teachers.map(([teacherId, code, name, subject]) => ({
+      sql: "INSERT INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, '', 'available') ON CONFLICT(id) DO UPDATE SET code = excluded.code, name = excluded.name, subject = excluded.subject, status = 'available'",
+      values: [teacherId, code, name, subject],
+    })),
+    ...classrooms.map(([roomId, code, name, location, resources, capacity]) => ({
+      sql: "INSERT INTO classrooms (id, code, name, location, campus_id, capacity, room_type, resources, status) VALUES (?, ?, ?, ?, 'campus-one', ?, 'classroom', ?, 'active') ON CONFLICT(id) DO UPDATE SET code = excluded.code, name = excluded.name, location = excluded.location, campus_id = 'campus-one', capacity = excluded.capacity, room_type = 'classroom', resources = excluded.resources, status = 'active'",
+      values: [roomId, code, name, location, capacity, resources],
+    })),
+  ]);
+  await execute(`UPDATE teachers SET status = 'inactive' WHERE id NOT IN (${pptOperatingTeacherIds.map(() => "?").join(", ")})`, [...pptOperatingTeacherIds]);
+  await execute("UPDATE classrooms SET status = 'inactive' WHERE id NOT IN ('plan-room-math-sci', 'plan-room-language')");
+  await execute(`DELETE FROM teacher_languages WHERE teacher_id IN (${pptOperatingTeacherIds.map(() => "?").join(", ")})`, [...pptOperatingTeacherIds]);
+  await executeBatchInChunks(teachers.flatMap(([teacherId, , , , languageIds]) => languageIds.split(",").map((languageId) => ({
+    sql: "INSERT OR IGNORE INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)",
+    values: [teacherId, languageId],
+  }))));
+
+  // PPM uses the maths/science classroom and PB uses the language classroom.
+  // This follows the two source timetable tables rather than inventing a room
+  // for each class.
+  await execute(`UPDATE class_resource_bookings
+    SET classroom_id = CASE
+      WHEN EXISTS (SELECT 1 FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id WHERE class_sessions.id = class_resource_bookings.class_session_id AND course_catalogs.teaching_centre_id = 'centre-ppm') THEN 'plan-room-math-sci'
+      ELSE 'plan-room-language'
+    END
+    WHERE EXISTS (SELECT 1 FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id WHERE class_sessions.id = class_resource_bookings.class_session_id AND course_catalogs.teaching_centre_id IN ('centre-ppm', 'centre-pb'))`);
+
+  await execute(`UPDATE class_runs SET teacher_id = CASE
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PPM-MATH-%' AND level LIKE 'Primary%') THEN 'teacher-lim-wei'
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PPM-MATH-%' AND level LIKE 'Lower Secondary%') THEN CASE WHEN name LIKE 'L%' THEN 'teacher-chen-yi' ELSE 'teacher-ng-jun' END
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PPM-MATH-%' AND level LIKE 'Higher Secondary%') THEN CASE WHEN language_id = 'lang-me' THEN 'teacher-nadia' ELSE 'teacher-wong-kai' END
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PPM-COMM-%') THEN CASE WHEN language_id = 'lang-me' THEN 'teacher-farah' ELSE 'teacher-hana' END
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PB-CHN-%') THEN 'teacher-tan-uec'
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PB-%' AND level LIKE 'Higher Secondary%') THEN 'teacher-zara'
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PB-%' AND language_id = 'lang-me') THEN 'teacher-mira'
+    WHEN course_id IN (SELECT id FROM course_catalogs WHERE code LIKE 'PB-%') THEN 'teacher-hana'
+    ELSE teacher_id END`);
+  await execute(`UPDATE class_teacher_bookings
+    SET teacher_id = (SELECT class_runs.teacher_id FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id WHERE class_sessions.id = class_teacher_bookings.class_session_id)
+    WHERE EXISTS (SELECT 1 FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id WHERE class_sessions.id = class_teacher_bookings.class_session_id AND course_catalogs.teaching_centre_id IN ('centre-ppm', 'centre-pb'))`);
+
+  // The PB deck describes one language timetable, so its 34 launch cohorts
+  // occupy distinct recurring windows in the single language classroom.
+  const pbSlots = [
+    [1, "14:30"], [1, "16:00"], [2, "14:30"], [2, "16:00"], [3, "14:30"], [3, "16:00"],
+    [1, "18:30"], [1, "20:00"], [2, "18:30"], [2, "20:00"], [3, "18:30"], [3, "20:00"],
+    [4, "18:30"], [5, "18:30"], [6, "18:30"], [6, "09:00"], [6, "10:30"], [6, "13:00"], [6, "14:30"], [6, "16:00"],
+    [0, "13:00"], [0, "14:30"], [4, "14:30"], [4, "16:00"], [5, "14:30"], [4, "20:00"], [5, "20:00"], [6, "20:00"],
+    [0, "16:00"], [0, "17:30"], [0, "18:30"], [5, "16:00"], [0, "10:30"], [0, "20:00"],
+  ] as const;
+  const pbRuns = await rows<{ id: string }>("SELECT id FROM class_runs WHERE id LIKE 'pb-run-%' ORDER BY id");
+  const slotUpdates: { sql: string; values: unknown[] }[] = [];
+  for (const [index, run] of pbRuns.entries()) {
+    const slot = pbSlots[index];
+    if (!slot) continue;
+    const [weekday, time] = slot;
+    const firstDate = dateAfter("2026-08-24", (weekday - 1 + 7) % 7);
+    const sessions = await rows<{ id: string; session_no: number }>("SELECT id, session_no FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [run.id]);
+    for (const session of sessions) {
+      const startsAt = `${dateAfter(firstDate, (number(session.session_no) - 1) * 7)} ${time}`;
+      const endsAt = later(startsAt, 90);
+      slotUpdates.push(
+        { sql: "UPDATE class_sessions SET starts_at = ?, ends_at = ? WHERE id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_resource_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_teacher_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+      );
+    }
+  }
+  // The original sample put two PPM cohorts into the same room at the same
+  // time. Keep the class records, but place them in unused protected windows.
+  const ppmAdjustments = [
+    ["plan-run-24", 6, "20:00", "Lower Communication · Saturday PM"],
+    ["plan-run-31", 0, "18:30", "F4 · Sunday PM"],
+  ] as const;
+  await executeBatchInChunks(ppmAdjustments.map(([runId, , , name]) => ({ sql: "UPDATE class_runs SET name = ? WHERE id = ?", values: [name, runId] })));
+  for (const [runId, weekday, time] of ppmAdjustments) {
+    const sessions = await rows<{ id: string; session_no: number }>("SELECT id, session_no FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [runId]);
+    const firstDate = dateAfter("2026-08-24", (weekday - 1 + 7) % 7);
+    for (const session of sessions) {
+      const startsAt = `${dateAfter(firstDate, (number(session.session_no) - 1) * 7)} ${time}`;
+      const endsAt = later(startsAt, 90);
+      slotUpdates.push(
+        { sql: "UPDATE class_sessions SET starts_at = ?, ends_at = ? WHERE id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_resource_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_teacher_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+      );
+    }
+  }
+  await executeBatchInChunks(slotUpdates);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["ppt_operating_resources_v1", "2 rooms and shared teacher pool applied"]);
 }
 
 async function ensureCourseLessonBlueprints() {
@@ -1618,12 +1755,14 @@ async function readPortal(includeAttendance = false) {
     rows("SELECT * FROM students ORDER BY code"),
     rows(`SELECT teachers.*, COALESCE(GROUP_CONCAT(teaching_languages.name, ' · '), '') AS language_names
           FROM teachers LEFT JOIN teacher_languages ON teacher_languages.teacher_id = teachers.id LEFT JOIN teaching_languages ON teaching_languages.id = teacher_languages.language_id
+          WHERE teachers.status != 'inactive'
           GROUP BY teachers.id ORDER BY teachers.code`),
     rows("SELECT * FROM teaching_languages ORDER BY code"),
     rows("SELECT * FROM teacher_languages ORDER BY teacher_id, language_id"),
     rows("SELECT campuses.*, COALESCE((SELECT value FROM app_settings WHERE key = 'floorplan_' || campuses.id), '') AS floorplan_url FROM campuses ORDER BY code"),
     rows(`SELECT classrooms.*, campuses.name AS campus_name, campuses.map_label AS campus_map_label
           FROM classrooms LEFT JOIN campuses ON campuses.id = classrooms.campus_id
+          WHERE classrooms.status = 'active'
           ORDER BY campuses.code, classrooms.code`),
     rows(`SELECT class_enrollments.*, students.name AS student_name, students.guardian_phone, students.email AS student_email, class_runs.name AS run_name, class_runs.code AS run_code, class_runs.status AS run_status, course_catalogs.title AS course_title, student_invoices.id AS invoice_id, student_invoices.invoice_no, student_invoices.total_amount, student_invoices.paid_amount, student_invoices.status AS invoice_status
           FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id JOIN class_runs ON class_runs.id = class_enrollments.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id

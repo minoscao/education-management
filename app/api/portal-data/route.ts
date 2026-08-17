@@ -191,6 +191,7 @@ async function seedDatabase() {
   await ensureCourseLessonBlueprints();
   await ensureClassRunEnrollmentRules();
   await ensureTeachingConfiguration();
+  await ensureTeachingCentres();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
   const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]);
@@ -324,6 +325,12 @@ async function ensureTeachingConfiguration() {
   const names = new Set(columns.map((item) => item.name));
   if (!names.has("language_id")) await execute("ALTER TABLE class_runs ADD COLUMN language_id text");
   if (!names.has("teacher_id")) await execute("ALTER TABLE class_runs ADD COLUMN teacher_id text");
+}
+
+async function ensureTeachingCentres() {
+  await execute("CREATE TABLE IF NOT EXISTS teaching_centres (id text PRIMARY KEY NOT NULL, code text UNIQUE NOT NULL, name text NOT NULL, status text NOT NULL DEFAULT 'active')");
+  const columns = await rows<{ name: string }>("PRAGMA table_info('course_catalogs')");
+  if (!columns.some((item) => item.name === "teaching_centre_id")) await execute("ALTER TABLE course_catalogs ADD COLUMN teaching_centre_id text");
 }
 
 function dateAfter(startDate: string, days: number) {
@@ -541,6 +548,95 @@ async function expandPpmCourseProducts() {
     const target = courseByClassPrefix.find(([prefix]) => run.name.startsWith(prefix))?.[1];
     return target ? [{ sql: "UPDATE class_runs SET course_id = ? WHERE id = ?", values: [target, run.id] }] : [];
   }));
+}
+
+async function applyPpmAndPbTeachingPlan() {
+  await ensureTeachingConfiguration();
+  await ensureTeachingCentres();
+  await expandPpmCourseProducts();
+  await executeBatchInChunks([
+    { sql: "INSERT OR REPLACE INTO teaching_centres (id, code, name, status) VALUES ('centre-ppm', 'PPM', 'Pusat Perkembangan Minda', 'active')", values: [] },
+    { sql: "INSERT OR REPLACE INTO teaching_centres (id, code, name, status) VALUES ('centre-pb', 'PB', 'Pusat Bahasa', 'active')", values: [] },
+    { sql: "UPDATE course_catalogs SET teaching_centre_id = 'centre-ppm' WHERE code LIKE 'PPM-%'", values: [] },
+    { sql: "UPDATE teaching_languages SET name = 'Mandarin + English', display_color = '#2563EB' WHERE id = 'lang-ce'", values: [] },
+    { sql: "UPDATE teaching_languages SET name = 'Bahasa + English', display_color = '#7C3AED' WHERE id = 'lang-me'", values: [] },
+    { sql: "UPDATE teaching_languages SET name = 'Chinese only', display_color = '#0F766E' WHERE id = 'lang-zh'", values: [] },
+    { sql: "UPDATE class_runs SET language_id = 'lang-me', teacher_id = 'teacher-aisyah' WHERE id = 'plan-run-12'", values: [] },
+    { sql: "UPDATE class_teacher_bookings SET teacher_id = 'teacher-aisyah' WHERE class_session_id LIKE 'plan-session-12-%'", values: [] },
+    { sql: "UPDATE class_runs SET language_id = 'lang-me', teacher_id = 'teacher-farah' WHERE id = 'plan-run-25'", values: [] },
+    { sql: "UPDATE class_teacher_bookings SET teacher_id = 'teacher-farah' WHERE class_session_id LIKE 'plan-session-25-%'", values: [] },
+    { sql: "UPDATE class_runs SET language_id = 'lang-me', teacher_id = 'teacher-nadia' WHERE id = 'plan-run-34'", values: [] },
+    { sql: "UPDATE class_teacher_bookings SET teacher_id = 'teacher-nadia' WHERE class_session_id LIKE 'plan-session-34-%'", values: [] },
+  ]);
+
+  const pbTeachers = [
+    ["teacher-pb-eng-p-ce", "TCH-PB-01", "Ms Elaine", "English", "lang-ce"], ["teacher-pb-eng-p-me", "TCH-PB-02", "Cikgu Sarah", "English", "lang-me"],
+    ["teacher-pb-eng-l-ce", "TCH-PB-03", "Mr Daniel", "English", "lang-ce"], ["teacher-pb-eng-l-me", "TCH-PB-04", "Cikgu Mira", "English", "lang-me"],
+    ["teacher-pb-eng-h-ce", "TCH-PB-05", "Ms Rachel", "English", "lang-ce"], ["teacher-pb-eng-h-me", "TCH-PB-06", "Cikgu Nabila", "English", "lang-me"],
+    ["teacher-pb-bm-p", "TCH-PB-07", "Cikgu Salmah", "Bahasa", "lang-me"], ["teacher-pb-bm-l", "TCH-PB-08", "Cikgu Haziq", "Bahasa", "lang-me"], ["teacher-pb-bm-h", "TCH-PB-09", "Cikgu Mariam", "Bahasa", "lang-me"],
+    ["teacher-pb-zh-p", "TCH-PB-10", "Teacher Huang", "Chinese", "lang-zh"], ["teacher-pb-zh-l", "TCH-PB-11", "Teacher Xu", "Chinese", "lang-zh"], ["teacher-pb-zh-h", "TCH-PB-12", "Teacher Luo", "Chinese", "lang-zh"],
+  ] as const;
+  const pbCourses = [
+    ["course-pb-english-primary", "PB-ENG-P", "English · Primary", "English", "Primary · G4–G6"], ["course-pb-english-lower", "PB-ENG-L", "English · Lower Secondary", "English", "Lower Secondary · F1–F3 / L1–L3"], ["course-pb-english-higher", "PB-ENG-H", "English · Higher Secondary", "English", "Higher Secondary · F4–F5 / H1–H3"],
+    ["course-pb-bahasa-primary", "PB-BM-P", "Bahasa · Primary", "Bahasa", "Primary · G4–G6"], ["course-pb-bahasa-lower", "PB-BM-L", "Bahasa · Lower Secondary", "Bahasa", "Lower Secondary · F1–F3 / L1–L3"], ["course-pb-bahasa-higher", "PB-BM-H", "Bahasa · Higher Secondary", "Bahasa", "Higher Secondary · F4–F5 / H1–H3"],
+    ["course-pb-chinese-primary", "PB-CHN-P", "Chinese · Primary", "Chinese", "Primary · G4–G6"], ["course-pb-chinese-lower", "PB-CHN-L", "Chinese · Lower Secondary", "Chinese", "Lower Secondary · F1–F3 / L1–L3"], ["course-pb-chinese-higher", "PB-CHN-H", "Chinese · Higher Secondary", "Chinese", "Higher Secondary · F4–F5 / H1–H3"],
+  ] as const;
+  await executeBatchInChunks([
+    ...pbTeachers.flatMap(([teacherId, code, name, subject, languageId]) => [
+      { sql: "INSERT OR IGNORE INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, '', 'available')", values: [teacherId, code, name, subject] },
+      { sql: "INSERT OR IGNORE INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)", values: [teacherId, languageId] },
+    ]),
+    ...pbCourses.map(([courseId, code, title, subject, level]) => ({ sql: "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status, teaching_centre_id) VALUES (?, ?, ?, ?, ?, 12, 90, 380, ?, 'active', 'centre-pb') ON CONFLICT(id) DO UPDATE SET code = excluded.code, title = excluded.title, subject = excluded.subject, level = excluded.level, teaching_centre_id = 'centre-pb'", values: [courseId, code, title, subject, level, subject === "English" ? "#2563EB" : subject === "Bahasa" ? "#7C3AED" : "#0F766E"] })),
+  ]);
+  const pbTopics: Record<string, string[]> = { English: ["Listening and response", "Vocabulary in context", "Reading for meaning", "Sentence craft", "Writing with purpose", "Speaking clearly", "Grammar in use", "Discussion skills", "Presentation practice", "Project communication", "Revision", "Language showcase"], Bahasa: ["Kemahiran mendengar", "Kosa kata", "Kefahaman", "Tatabahasa", "Penulisan", "Lisan", "Perbincangan", "Pembentangan", "Karangan", "Penyuntingan", "Ulang kaji", "Persembahan bahasa"], Chinese: ["聆听与表达", "词汇应用", "阅读理解", "句式与语法", "写作训练", "口语表达", "文本分析", "讨论与交流", "演讲练习", "创作练习", "复习", "华文展示"] };
+  await executeBatchInChunks(pbCourses.flatMap(([courseId, , , subject]) => pbTopics[subject].map((topic, index) => ({ sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, 90)", values: [`pb-template-${courseId}-${index + 1}`, courseId, index + 1, topic] }))));
+
+  type PbRun = { courseId: string; name: string; languageId: string; teacherId: string; weekday: number; time: string; roomId: string };
+  const pbRuns: PbRun[] = [];
+  const addPb = (courseId: string, name: string, languageId: string, teacherId: string, weekday: number, time: string, roomId: string) => pbRuns.push({ courseId, name, languageId, teacherId, weekday, time, roomId });
+  [["G4", 1], ["G5", 2], ["G6", 3]].forEach(([grade, day], index) => { addPb("course-pb-english-primary", `${grade} English · Mandarin + English`, "lang-ce", "teacher-pb-eng-p-ce", Number(day), index ? "16:00" : "14:30", "pb-room-1"); addPb("course-pb-english-primary", `${grade} English · Bahasa + English`, "lang-me", "teacher-pb-eng-p-me", Number(day), "16:00", "pb-room-2"); });
+  [["F1", 1], ["L1", 1], ["F2", 2], ["L2", 2], ["F3", 3], ["L3", 3]].forEach(([grade, day], index) => addPb("course-pb-english-lower", `${grade} English · Mandarin + English`, "lang-ce", "teacher-pb-eng-l-ce", Number(day), index % 2 ? "20:00" : "18:30", "pb-room-3"));
+  [["F1", 4], ["F2", 5], ["F3", 6]].forEach(([grade, day]) => addPb("course-pb-english-lower", `${grade} English · Bahasa + English`, "lang-me", "teacher-pb-eng-l-me", Number(day), "18:30", "pb-room-4"));
+  [["F4", 6, "13:00"], ["H1", 6, "14:30"], ["F5", 6, "16:00"], ["H2", 6, "17:30"], ["H3", 0, "13:00"]].forEach(([grade, day, time]) => addPb("course-pb-english-higher", `${grade} English · Mandarin + English`, "lang-ce", "teacher-pb-eng-h-ce", Number(day), String(time), "pb-room-3"));
+  [["F4", 0, "14:30"], ["F5", 0, "16:00"]].forEach(([grade, day, time]) => addPb("course-pb-english-higher", `${grade} English · Bahasa + English`, "lang-me", "teacher-pb-eng-h-me", Number(day), String(time), "pb-room-4"));
+  [["G4", 4], ["G5", 5], ["G6", 6]].forEach(([grade, day]) => addPb("course-pb-bahasa-primary", `${grade} Bahasa`, "lang-me", "teacher-pb-bm-p", Number(day), "14:30", "pb-room-1"));
+  [["F1", 4], ["F2", 5], ["F3", 6]].forEach(([grade, day]) => addPb("course-pb-bahasa-lower", `${grade} Bahasa`, "lang-me", "teacher-pb-bm-l", Number(day), "20:00", "pb-room-3"));
+  [["F4", 0], ["F5", 0], ["H3", 0]].forEach(([grade, day], index) => addPb("course-pb-bahasa-higher", `${grade} Bahasa`, "lang-me", "teacher-pb-bm-h", Number(day), ["13:00", "14:30", "16:00"][index], "pb-room-2"));
+  addPb("course-pb-chinese-primary", "Primary Chinese", "lang-zh", "teacher-pb-zh-p", 6, "10:30", "pb-room-1");
+  addPb("course-pb-chinese-lower", "Lower Secondary Chinese", "lang-zh", "teacher-pb-zh-l", 0, "10:30", "pb-room-1");
+  addPb("course-pb-chinese-higher", "Higher Secondary Chinese", "lang-zh", "teacher-pb-zh-h", 0, "17:30", "pb-room-1");
+  if (pbRuns.length !== 34) throw new Error("PB plan must contain exactly 34 classes.");
+  await execute("INSERT OR IGNORE INTO campuses (id, code, name, address, map_label, status) VALUES ('campus-pb', 'PB-KLUANG', 'Pusat Bahasa · Kluang', '', 'Level 1', 'active')");
+  await executeBatchInChunks([1, 2, 3, 4].map((room) => ({ sql: "INSERT OR IGNORE INTO classrooms (id, code, name, location, campus_id, capacity, room_type, resources, status) VALUES (?, ?, ?, 'Pusat Bahasa', 'campus-pb', 26, 'classroom', 'Whiteboard, projector', 'active')", values: [`pb-room-${room}`, `PB-${room}`, `PB-${room}`,] })));
+  const sessions: { sql: string; values: unknown[] }[] = [];
+  const students: { sql: string; values: unknown[] }[] = [];
+  const enrollments: { sql: string; values: unknown[] }[] = [];
+  pbRuns.forEach((run, index) => {
+    const runId = `pb-run-${String(index + 1).padStart(2, "0")}`;
+    const course = pbCourses.find(([courseId]) => courseId === run.courseId);
+    const count = 18 + (index * 5) % 9;
+    const weekdayOffset = (run.weekday - 1 + 7) % 7;
+    const firstDate = dateAfter("2026-08-24", weekdayOffset);
+    const subject = course?.[3] ?? "English";
+    for (let lesson = 0; lesson < 12; lesson += 1) {
+      const startsAt = `${dateAfter(firstDate, lesson * 7)} ${run.time}`;
+      const sessionId = `pb-session-${String(index + 1).padStart(2, "0")}-${String(lesson + 1).padStart(2, "0")}`;
+      sessions.push(
+        { sql: "INSERT OR IGNORE INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')", values: [sessionId, runId, lesson + 1, pbTopics[subject][lesson], startsAt, later(startsAt, 90)] },
+        { sql: "INSERT OR IGNORE INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')", values: [`pb-rb-${sessionId}`, sessionId, run.roomId, startsAt, later(startsAt, 90)] },
+        { sql: "INSERT OR IGNORE INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, 90, 'unpaid', 'confirmed')", values: [`pb-tb-${sessionId}`, sessionId, run.teacherId, startsAt, later(startsAt, 90)] },
+      );
+    }
+    for (let student = 0; student < count; student += 1) {
+      const studentId = `pb-student-${String(index + 1).padStart(2, "0")}-${String(student + 1).padStart(2, "0")}`;
+      students.push({ sql: "INSERT OR IGNORE INTO students (id, code, name, level, guardian_phone, status, email, avatar_url) VALUES (?, ?, ?, ?, '', 'active', ?, ?)", values: [studentId, `STU-PB-${String(index + 1).padStart(2, "0")}-${String(student + 1).padStart(2, "0")}`, `PB Learner ${String(index + 1).padStart(2, "0")}-${String(student + 1).padStart(2, "0")}`, run.name.split(" · ")[0], `pb.${index + 1}.${student + 1}@family.example`, `sprite:${(index + student + 3) % 8}`] });
+      enrollments.push({ sql: "INSERT OR IGNORE INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, enrolled_at) VALUES (?, ?, ?, 380, 'enrolled', '2026-08-17 09:00')", values: [`pb-enrollment-${String(index + 1).padStart(2, "0")}-${String(student + 1).padStart(2, "0")}`, runId, studentId] });
+    }
+  });
+  await executeBatchInChunks(pbRuns.map((run, index) => ({ sql: "INSERT OR IGNORE INTO class_runs (id, code, course_id, term_id, name, capacity, price, status, enrollment_open_at, enrollment_close_at, language_id, teacher_id) VALUES (?, ?, ?, 'term-ppm-2026', ?, 26, 380, 'open', '2026-08-17 09:00', '2026-09-30 18:00', ?, ?)", values: [`pb-run-${String(index + 1).padStart(2, "0")}`, `PB-2026-${String(index + 1).padStart(2, "0")}`, run.courseId, run.name, run.languageId, run.teacherId] })));
+  await executeBatchInChunks(sessions);
+  await executeBatchInChunks(students);
+  await executeBatchInChunks(enrollments);
 }
 
 async function ensureCourseLessonBlueprints() {
@@ -1447,7 +1543,9 @@ async function readPortal(includeAttendance = false) {
   await seedDatabase();
   const [terms, courses, courseLessons, runs, sessions, students, teachers, languages, teacherLanguages, campuses, classrooms, enrollments, invoices, payments, messages, notifications, attendance, resourceBookings, teacherBookings, businessHoursSetting, mailSettingsSetting] = await Promise.all([
     rows("SELECT * FROM academic_terms ORDER BY starts_on DESC"),
-    rows(`SELECT course_catalogs.*, COUNT(DISTINCT class_runs.id) AS run_count FROM course_catalogs LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id GROUP BY course_catalogs.id ORDER BY course_catalogs.code`),
+    rows(`SELECT course_catalogs.*, teaching_centres.code AS centre_code, teaching_centres.name AS centre_name, COUNT(DISTINCT class_runs.id) AS run_count
+          FROM course_catalogs LEFT JOIN teaching_centres ON teaching_centres.id = course_catalogs.teaching_centre_id LEFT JOIN class_runs ON class_runs.course_id = course_catalogs.id
+          GROUP BY course_catalogs.id ORDER BY teaching_centres.code, course_catalogs.code`),
     rows(`SELECT course_lesson_templates.*, teachers.name AS teacher_name, classrooms.name AS classroom_name
           FROM course_lesson_templates
           LEFT JOIN teachers ON teachers.id = course_lesson_templates.default_teacher_id
@@ -1567,6 +1665,10 @@ export async function POST(request: Request) {
     }
     if (payload.action === "expandPpmCourseProducts") {
       await expandPpmCourseProducts();
+      return await readPortal();
+    }
+    if (payload.action === "applyPpmAndPbTeachingPlan") {
+      await applyPpmAndPbTeachingPlan();
       return await readPortal();
     }
     if (payload.action === "setAttendance") {

@@ -489,6 +489,7 @@ async function resetToClientTeachingPlan() {
   await executeBatchInChunks(sessions);
   await executeBatchInChunks(students);
   await executeBatchInChunks(enrollments);
+  await expandPpmCourseProducts();
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["client_ppm_plan_v1", "34 class plan loaded"]);
 }
@@ -498,6 +499,48 @@ async function refreshClientPlanStudentNames() {
   const givenNames = ["Ahmad", "Aina", "Aisyah", "Amir", "Arjun", "Aryan", "Daniel", "Darren", "Divya", "Ethan", "Farah", "Hannah", "Iman", "Izzat", "Jia En", "Kavin", "Kavya", "Mei Xin", "Nadia", "Nisha", "Nur", "Priya", "Rayyan", "Siti", "Sofia", "Wei Jian", "Xin Yi", "Yash", "Zara", "Zoey", "Hakim"];
   const familyNames = ["Tan", "Lim", "Lee", "Wong", "Goh", "Chong", "Ng", "Ong", "Yap", "Lau", "Kumar", "Raj", "Nair", "Singh", "Kaur", "Subramaniam", "Aziz", "Hassan", "Rahman", "Ismail", "Hamid", "Yusof", "Zainal", "Ibrahim", "Abdullah", "Yap", "Chew", "Teo", "Low", "Chan", "Ho"];
   await executeBatchInChunks(students.map((student, index) => ({ sql: "UPDATE students SET name = ? WHERE id = ?", values: [`${givenNames[index % givenNames.length]} ${familyNames[Math.floor(index / givenNames.length) % familyNames.length]}`, student.id] })));
+}
+
+async function expandPpmCourseProducts() {
+  const mathProducts = [
+    ["course-math-primary", "PPM-MATH-G4", "Mathematics + Sudoku G4", "Primary SJK · G4", "primary"],
+    ["course-math-g5", "PPM-MATH-G5", "Mathematics + Sudoku G5", "Primary SJK · G5", "primary"],
+    ["course-math-g6", "PPM-MATH-G6", "Mathematics + Sudoku G6", "Primary SJK · G6", "primary"],
+    ["course-math-lower", "PPM-MATH-F1", "Mathematics + Sudoku F1", "Lower Secondary · F1", "lower"],
+    ["course-math-l1", "PPM-MATH-L1", "Mathematics + Sudoku L1", "DuZhong · L1", "lower"],
+    ["course-math-f2", "PPM-MATH-F2", "Mathematics + Sudoku F2", "Lower Secondary · F2", "lower"],
+    ["course-math-l2", "PPM-MATH-L2", "Mathematics + Sudoku L2", "DuZhong · L2", "lower"],
+    ["course-math-f3", "PPM-MATH-F3", "Mathematics + Sudoku F3", "Lower Secondary · F3", "lower"],
+    ["course-math-l3", "PPM-MATH-L3", "Mathematics + Sudoku L3", "DuZhong · L3", "lower"],
+    ["course-math-higher", "PPM-MATH-F4", "Mathematics + Sudoku F4", "Higher Secondary · F4", "higher"],
+    ["course-math-h1", "PPM-MATH-H1", "Mathematics + Sudoku H1", "DuZhong · H1", "higher"],
+    ["course-math-f5", "PPM-MATH-F5", "Mathematics + Sudoku F5", "Higher Secondary · F5", "higher"],
+    ["course-math-h2", "PPM-MATH-H2", "Mathematics + Sudoku H2", "DuZhong · H2", "higher"],
+    ["course-math-h3", "PPM-MATH-H3", "Mathematics + Sudoku H3", "DuZhong · H3", "higher"],
+  ] as const;
+  const stageTopics: Record<string, string[]> = {
+    primary: ["Whole numbers and operations", "Fractions, decimals and percentages", "Ratio and proportion", "Measurement", "Geometry", "Data handling", "Patterns and sequences", "Problem-solving strategies", "Sudoku logic foundations", "Sudoku deduction", "Mixed application", "Revision and challenge"],
+    lower: ["Integers and indices", "Algebraic expressions", "Linear equations", "Ratio, rate and proportion", "Coordinates and graphs", "Geometry and transformation", "Statistics and probability", "Financial mathematics", "Sudoku logic foundations", "Sudoku deduction", "KSSM problem solving", "Revision and challenge"],
+    higher: ["Functions and algebra", "Quadratic relationships", "Trigonometry", "Coordinate geometry", "Statistics and probability", "Financial mathematics", "Reasoning and proof", "Modelling and problem solving", "Sudoku strategy", "Advanced deduction", "Exam application", "Revision and challenge"],
+  };
+  await executeBatchInChunks(mathProducts.map(([courseId, code, title, level]) => ({
+    sql: "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, 'Mathematics', ?, 12, 90, 420, '#2563EB', 'active') ON CONFLICT(id) DO UPDATE SET code = excluded.code, title = excluded.title, subject = excluded.subject, level = excluded.level, default_sessions = 12, default_minutes = 90, list_price = 420, display_color = '#2563EB', status = 'active'",
+    values: [courseId, code, title, level],
+  })));
+  await executeBatchInChunks(mathProducts.flatMap(([courseId, , , , stage]) => stageTopics[stage].map((title, index) => ({
+    sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, 90)",
+    values: [`ppm-template-${courseId}-${index + 1}`, courseId, index + 1, title],
+  }))));
+  const courseByClassPrefix: [string, string][] = [
+    ["G4 ·", "course-math-primary"], ["G5 ·", "course-math-g5"], ["G6 ·", "course-math-g6"],
+    ["F1 ·", "course-math-lower"], ["L1 ·", "course-math-l1"], ["F2 ·", "course-math-f2"], ["L2 ·", "course-math-l2"], ["F3 ·", "course-math-f3"], ["L3 ·", "course-math-l3"],
+    ["F4 ·", "course-math-higher"], ["H1 ·", "course-math-h1"], ["F5 ·", "course-math-f5"], ["H2 ·", "course-math-h2"], ["H3 ·", "course-math-h3"],
+  ];
+  const runs = await rows<{ id: string; name: string }>("SELECT id, name FROM class_runs WHERE course_id LIKE 'course-math-%'");
+  await executeBatchInChunks(runs.flatMap((run) => {
+    const target = courseByClassPrefix.find(([prefix]) => run.name.startsWith(prefix))?.[1];
+    return target ? [{ sql: "UPDATE class_runs SET course_id = ? WHERE id = ?", values: [target, run.id] }] : [];
+  }));
 }
 
 async function ensureCourseLessonBlueprints() {
@@ -1520,6 +1563,10 @@ export async function POST(request: Request) {
     }
     if (payload.action === "refreshClientPlanStudentNames") {
       await refreshClientPlanStudentNames();
+      return await readPortal();
+    }
+    if (payload.action === "expandPpmCourseProducts") {
+      await expandPpmCourseProducts();
       return await readPortal();
     }
     if (payload.action === "setAttendance") {

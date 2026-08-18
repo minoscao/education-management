@@ -773,11 +773,29 @@ async function syncPptOperatingResources(force = false) {
       );
     }
   }
+  // The source schedule has one language-room collision on Sunday. H3 Bahasa
+  // moves to the free Saturday 17:30 window, directly after the H3 English
+  // session, so both the room and the advanced-language teacher stay free.
+  const pbRunAdjustments = [["pb-run-31", 6, "17:30"]] as const;
+  for (const [runId, weekday, time] of pbRunAdjustments) {
+    const sessions = await rows<{ id: string; session_no: number }>("SELECT id, session_no FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [runId]);
+    const firstDate = dateAfter("2026-08-24", (weekday - 1 + 7) % 7);
+    for (const session of sessions) {
+      const startsAt = `${dateAfter(firstDate, (number(session.session_no) - 1) * 7)} ${time}`;
+      const endsAt = later(startsAt, 90);
+      slotUpdates.push(
+        { sql: "UPDATE class_sessions SET starts_at = ?, ends_at = ? WHERE id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_resource_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+        { sql: "UPDATE class_teacher_bookings SET starts_at = ?, ends_at = ? WHERE class_session_id = ? AND status != 'cancelled'", values: [startsAt, endsAt, session.id] },
+      );
+    }
+  }
+
   // The original sample put two PPM cohorts into the same room at the same
   // time. Keep the class records, but place them in unused protected windows.
   const ppmAdjustments = [
     ["plan-run-24", 6, "20:00", "Lower Communication · Saturday PM"],
-    ["plan-run-31", 0, "18:30", "F4 · Sunday PM"],
+    ["plan-run-31", 0, "19:00", "F4 · Sunday PM"],
   ] as const;
   await executeBatchInChunks(ppmAdjustments.map(([runId, , , name]) => ({ sql: "UPDATE class_runs SET name = ? WHERE id = ?", values: [name, runId] })));
   for (const [runId, weekday, time] of ppmAdjustments) {

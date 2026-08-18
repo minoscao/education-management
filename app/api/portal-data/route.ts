@@ -205,7 +205,10 @@ async function seedDatabase() {
   const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]);
   if (ready) {
     const counts = await coreSeedCounts();
-    if (hasUsableSeedData(counts)) return;
+    if (hasUsableSeedData(counts)) {
+      await syncPptOperatingResources();
+      return;
+    }
     await resetSeedMarkers();
   }
 

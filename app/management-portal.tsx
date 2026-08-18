@@ -177,14 +177,15 @@ export function ManagementPortal() {
   const t = copy[language];
 
   async function load() {
-    setBusy(true); setLoading(true); setMessage("");
+    const isInitialLoad = data.courses.length === 0;
+    setBusy(true); if (isInitialLoad) setLoading(true); setMessage("");
     try {
       const response = await fetch("/api/portal-data", { cache: "no-store" });
       const payload = await response.json() as PortalData & { error?: string };
       if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load data");
       setData(payload); setAttendanceLoaded(false);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load data"); }
-    finally { setBusy(false); setLoading(false); }
+    finally { setBusy(false); if (isInitialLoad) setLoading(false); }
   }
 
   async function loadAttendance() {
@@ -276,7 +277,7 @@ export function ManagementPortal() {
     </section>
     {detailStack.map((stackDetail, index) => <DetailSheet key={`${stackDetail.kind}-${stackDetail.id}-${index}`} detail={stackDetail} data={data} t={t} busy={busy} run={run} close={closeDetail} closeAll={() => setDetailStack([])} openDetail={openNestedDetail} />)}
     {notificationsOpen ? <NotificationDrawer notifications={visibleNotifications} close={() => setNotificationsOpen(false)} /> : null}
-    {loading || attendanceLoading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
+    {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
   </main>;
 }
 

@@ -154,10 +154,12 @@ async function executeBatchInChunks(statements: { sql: string; values: unknown[]
 }
 
 const portalBootstrapKey = "portal_bootstrap_v6";
+const portalRuntimeReadyKey = "portal_runtime_ready_v1";
 const sampleSeedKeys = [
   "v2_seeded",
   "portal_bootstrap_v5",
   portalBootstrapKey,
+  portalRuntimeReadyKey,
   "operational_sample_v2",
   "malaysia_term_sample_v3",
   "rich_campus_sample_v4",
@@ -194,6 +196,12 @@ async function resetSeedMarkers() {
 }
 
 async function seedDatabase() {
+  const [ready, runtimeReady] = await Promise.all([
+    row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]),
+    row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalRuntimeReadyKey]),
+  ]);
+  if (ready && runtimeReady) return;
+
   await ensureCourseLessonBlueprints();
   await ensureClassRunEnrollmentRules();
   await ensureClassRunDeliveryModes();
@@ -202,12 +210,12 @@ async function seedDatabase() {
   await ensureTeachingCentres();
   // Initial sample data and schema compatibility work are expensive on D1.
   // Run them once, then leave ordinary reads to the portal queries below.
-  const ready = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [portalBootstrapKey]);
   if (ready) {
     const counts = await coreSeedCounts();
     if (hasUsableSeedData(counts)) {
       await syncPptOperatingResources();
       await ensureCourseGradeMediumModel();
+      await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalRuntimeReadyKey, "true"]);
       return;
     }
     await resetSeedMarkers();
@@ -228,6 +236,7 @@ async function seedDatabase() {
     await syncPptOperatingResources();
     await ensureCourseGradeMediumModel();
     await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
+    await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalRuntimeReadyKey, "true"]);
     return;
   }
 
@@ -325,6 +334,7 @@ async function seedDatabase() {
   await ensureCourseGradeMediumModel();
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalRuntimeReadyKey, "true"]);
 }
 
 async function ensureClassRunEnrollmentRules() {
@@ -1930,7 +1940,6 @@ async function findConflicts(source: Row[], idKey: string, nameKey: string, kind
 export async function GET(request: Request) {
   try {
     if (new URL(request.url).searchParams.get("scope") === "attendance") {
-      await seedDatabase();
       return Response.json({ attendance: await readAttendance() });
     }
     return await readPortal();

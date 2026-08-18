@@ -207,6 +207,7 @@ async function seedDatabase() {
     const counts = await coreSeedCounts();
     if (hasUsableSeedData(counts)) {
       await syncPptOperatingResources();
+      await ensureCourseGradeMediumModel();
       return;
     }
     await resetSeedMarkers();
@@ -225,6 +226,7 @@ async function seedDatabase() {
     await ensureCourseLessonBlueprints();
     await ensureCommunicationData();
     await syncPptOperatingResources();
+    await ensureCourseGradeMediumModel();
     await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
     return;
   }
@@ -320,6 +322,7 @@ async function seedDatabase() {
   await ensureCourseLessonBlueprints();
   await ensureCommunicationData();
   await syncPptOperatingResources();
+  await ensureCourseGradeMediumModel();
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["v2_seeded", "true"]);
   await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [portalBootstrapKey, "true"]);
 }
@@ -348,6 +351,68 @@ async function ensureTeachingConfiguration() {
   const names = new Set(columns.map((item) => item.name));
   if (!names.has("language_id")) await execute("ALTER TABLE class_runs ADD COLUMN language_id text");
   if (!names.has("teacher_id")) await execute("ALTER TABLE class_runs ADD COLUMN teacher_id text");
+}
+
+/**
+ * A sellable course is exactly one grade plus one subject. Language is a
+ * class-level teaching-medium choice, and named intakes sit below that. This
+ * migrates the earlier PPM/PB stage products without touching their people,
+ * bookings, lesson times or enrolments.
+ */
+async function ensureCourseGradeMediumModel() {
+  const courses = await rows<{ id: string; code: string; title: string; subject: string; level: string; default_sessions: number; default_minutes: number; list_price: number; display_color: string; teaching_centre_id: string | null }>(
+    "SELECT id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, teaching_centre_id FROM course_catalogs WHERE status != 'archived'",
+  );
+  const gradePattern = /\b(G[4-6]|F[1-5]|H[1-3]|L[1-3])\b/i;
+  const broadStage = /\b(primary|lower secondary|higher secondary|secondary)\b/i;
+
+  for (const course of courses) {
+    if (!broadStage.test(`${course.title} ${course.level}`)) continue;
+    const runs = await rows<{ id: string; code: string; name: string }>(
+      "SELECT id, code, name FROM class_runs WHERE course_id = ?",
+      [course.id],
+    );
+    const byGrade = new Map<string, typeof runs>();
+    for (const run of runs) {
+      const grade = `${run.name} ${run.code}`.match(gradePattern)?.[1]?.toUpperCase();
+      if (grade) byGrade.set(grade, [...(byGrade.get(grade) ?? []), run]);
+    }
+    if (!byGrade.size) continue;
+
+    const subject = String(course.subject || course.title || "General")
+      .replace(/\b(primary|lower secondary|higher secondary|secondary)\b/ig, "")
+      .replace(/[·|/]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim() || "General";
+    const templates = await rows<{ lesson_no: number; title: string; default_duration_minutes: number }>(
+      "SELECT lesson_no, title, default_duration_minutes FROM course_lesson_templates WHERE course_id = ? ORDER BY lesson_no",
+      [course.id],
+    );
+    for (const [grade, gradeRuns] of byGrade) {
+      const productId = `${course.id}-${grade.toLowerCase()}`;
+      const productCode = `${course.code}-${grade}`.replace(/[^A-Za-z0-9-]/g, "").slice(0, 56);
+      await execute(
+        "INSERT OR IGNORE INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status, teaching_centre_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)",
+        [productId, productCode, `${grade} ${subject}`, subject, grade, course.default_sessions, course.default_minutes, course.list_price, course.display_color, course.teaching_centre_id],
+      );
+      await executeBatchInChunks(templates.map((template) => ({
+        sql: "INSERT OR IGNORE INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)",
+        values: [`grade-template-${productId}-${template.lesson_no}`, productId, template.lesson_no, template.title, template.default_duration_minutes],
+      })));
+      await executeBatchInChunks(gradeRuns.map((run) => ({ sql: "UPDATE class_runs SET course_id = ? WHERE id = ?", values: [productId, run.id] })));
+    }
+    const unmatched = runs.length - [...byGrade.values()].reduce((total, gradeRuns) => total + gradeRuns.length, 0);
+    if (!unmatched) await execute("UPDATE course_catalogs SET status = 'archived' WHERE id = ?", [course.id]);
+  }
+}
+
+function requireSingleGradeCourse(title: string, level: string) {
+  const value = `${title} ${level}`;
+  const hasBroadStage = /\b(primary|lower secondary|higher secondary|secondary)\b/i.test(value);
+  const hasGrade = /\b(G[4-6]|F[1-5]|H[1-3]|L[1-3]|Year\s+[1-9]|Form\s+[1-5])\b/i.test(value);
+  if (hasBroadStage && !hasGrade) {
+    throw new Error("Create one grade and one subject per course, for example G4 Bahasa. Teaching language belongs to the class.");
+  }
 }
 
 async function ensureTeachingCentres() {
@@ -661,6 +726,7 @@ async function applyPpmAndPbTeachingPlan() {
   await executeBatchInChunks(students);
   await executeBatchInChunks(enrollments);
   await syncPptOperatingResources(true);
+  await ensureCourseGradeMediumModel();
 }
 
 const pptOperatingTeacherIds = [
@@ -1183,12 +1249,14 @@ async function conflictExists(kind: "classroom" | "teacher" | "student", entityI
 
 async function createCourse(payload: ActionPayload) {
   const title = payload.title?.trim() || "New course";
+  const level = payload.level?.trim() || "Mixed";
+  requireSingleGradeCourse(title, level);
   const count = Math.max(1, Math.floor(number(payload.sessions, 8)));
   const code = `CRS-${Date.now().toString().slice(-6)}`;
   const courseId = id("course");
   await execute(
     "INSERT INTO course_catalogs (id, code, title, subject, level, default_sessions, default_minutes, list_price, display_color, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [courseId, code, title, payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", count, Math.max(30, number(payload.minutes, 90)), number(payload.price), courseColour(payload.color), "active"],
+    [courseId, code, title, payload.subject?.trim() || "General", level, count, Math.max(30, number(payload.minutes, 90)), number(payload.price), courseColour(payload.color), "active"],
   );
   await executeBatch(Array.from({ length: count }, (_, index) => ({ sql: "INSERT INTO course_lesson_templates (id, course_id, lesson_no, title, default_duration_minutes) VALUES (?, ?, ?, ?, ?)", values: [id("lesson-template"), courseId, index + 1, `Lesson ${index + 1}`, Math.max(30, number(payload.minutes, 90))] })));
 }
@@ -1638,7 +1706,10 @@ async function sendMessage(payload: ActionPayload) {
 
 async function updateEntity(payload: ActionPayload) {
   if (payload.action === "updateCourse" && payload.courseId) {
-    await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ?, display_color = ? WHERE id = ?", [payload.title?.trim() || "Untitled course", payload.subject?.trim() || "General", payload.level?.trim() || "Mixed", Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), courseColour(payload.color), payload.courseId]);
+    const title = payload.title?.trim() || "Untitled course";
+    const level = payload.level?.trim() || "Mixed";
+    requireSingleGradeCourse(title, level);
+    await execute("UPDATE course_catalogs SET title = ?, subject = ?, level = ?, default_sessions = ?, default_minutes = ?, list_price = ?, display_color = ? WHERE id = ?", [title, payload.subject?.trim() || "General", level, Math.max(1, number(payload.sessions, 1)), Math.max(30, number(payload.minutes, 30)), number(payload.price), courseColour(payload.color), payload.courseId]);
   }
   if (payload.action === "updateRun" && payload.runId) {
     await execute("UPDATE class_runs SET name = ?, capacity = ?, price = ?, delivery_mode = COALESCE(?, delivery_mode) WHERE id = ?", [payload.name?.trim() || "Untitled class", Math.max(1, number(payload.capacity, 1)), number(payload.price), payload.deliveryMode ? deliveryMode(payload.deliveryMode) : null, payload.runId]);

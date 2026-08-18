@@ -1155,7 +1155,12 @@ function CourseRunNavCard({ runItem, teacher, active, onClick }: { runItem: Row;
   return <button type="button" className={active ? "course-run-nav-card active" : "course-run-nav-card"} style={eventStyle(runItem)} onClick={onClick}><div className="course-run-nav-title"><strong>{get(runItem, "name")}</strong><span className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}>{get(runItem, "language_name") || "待设置语言"}</span></div><div className="course-run-nav-teacher">{teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}<span>{get(runItem, "teacher_name") || "待安排老师"}</span>{active ? <ChevronRight className="course-run-nav-current" size={22} aria-label="正在查看" /> : null}</div><div className="course-run-nav-progress"><span>{count} / {capacity} 已报名</span><i><b style={{ width: `${Math.min(100, capacity ? count / capacity * 100 : 0)}%` }} /></i></div></button>;
 }
 
-function languageTagTone(language: string) { const value = language.toLowerCase(); return value.includes("english") ? "blue" : value.includes("bahasa") || value.includes("malay") ? "purple" : "teal"; }
+function languageTagTone(language: string) {
+  const value = language.toLowerCase();
+  if (value.includes("bahasa") || value.includes("malay")) return "orange";
+  if (value.includes("mandarin")) return "blue";
+  return "teal";
+}
 
 function deliveryModeLabel(runItem: Row) { return get(runItem, "delivery_mode") === "online" ? "网课" : "现场课"; }
 

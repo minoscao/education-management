@@ -154,7 +154,7 @@ async function executeBatchInChunks(statements: { sql: string; values: unknown[]
 }
 
 const portalBootstrapKey = "portal_bootstrap_v6";
-const portalRuntimeReadyKey = "portal_runtime_ready_v1";
+const portalRuntimeReadyKey = "portal_runtime_ready_v2";
 const sampleSeedKeys = [
   "v2_seeded",
   "portal_bootstrap_v5",
@@ -357,6 +357,11 @@ async function ensureClassSessionChangeLog() {
 async function ensureTeachingConfiguration() {
   await execute("CREATE TABLE IF NOT EXISTS teaching_languages (id text PRIMARY KEY NOT NULL, code text UNIQUE NOT NULL, name text NOT NULL, display_color text NOT NULL DEFAULT '#0F8AA8')");
   await execute("CREATE TABLE IF NOT EXISTS teacher_languages (teacher_id text NOT NULL, language_id text NOT NULL, PRIMARY KEY (teacher_id, language_id))");
+  await executeBatchInChunks([
+    { sql: "UPDATE teaching_languages SET display_color = '#2563EB' WHERE id = 'lang-ce'", values: [] },
+    { sql: "UPDATE teaching_languages SET display_color = '#D97706' WHERE id = 'lang-me'", values: [] },
+    { sql: "UPDATE teaching_languages SET display_color = '#0F766E' WHERE id = 'lang-zh'", values: [] },
+  ]);
   const columns = await rows<{ name: string }>("PRAGMA table_info('class_runs')");
   const names = new Set(columns.map((item) => item.name));
   if (!names.has("language_id")) await execute("ALTER TABLE class_runs ADD COLUMN language_id text");
@@ -473,7 +478,7 @@ async function resetToClientTeachingPlan() {
 
   const languages = [
     ["lang-ce", "CE", "华语 / English", "#2563EB"],
-    ["lang-me", "ME", "Bahasa Melayu / English", "#7C3AED"],
+    ["lang-me", "ME", "Bahasa Melayu / English", "#D97706"],
     ["lang-zh", "ZH", "华文（UEC）", "#0F766E"],
   ];
   const teachers = [
@@ -657,7 +662,7 @@ async function applyPpmAndPbTeachingPlan() {
     { sql: "INSERT OR REPLACE INTO teaching_centres (id, code, name, status) VALUES ('centre-pb', 'PB', 'Pusat Bahasa', 'active')", values: [] },
     { sql: "UPDATE course_catalogs SET teaching_centre_id = 'centre-ppm' WHERE code LIKE 'PPM-%'", values: [] },
     { sql: "UPDATE teaching_languages SET name = 'Mandarin + English', display_color = '#2563EB' WHERE id = 'lang-ce'", values: [] },
-    { sql: "UPDATE teaching_languages SET name = 'Bahasa + English', display_color = '#7C3AED' WHERE id = 'lang-me'", values: [] },
+    { sql: "UPDATE teaching_languages SET name = 'Bahasa + English', display_color = '#D97706' WHERE id = 'lang-me'", values: [] },
     { sql: "UPDATE teaching_languages SET name = 'Chinese only', display_color = '#0F766E' WHERE id = 'lang-zh'", values: [] },
     { sql: "UPDATE class_runs SET language_id = 'lang-me', teacher_id = 'teacher-aisyah' WHERE id = 'plan-run-12'", values: [] },
     { sql: "UPDATE class_teacher_bookings SET teacher_id = 'teacher-aisyah' WHERE class_session_id LIKE 'plan-session-12-%'", values: [] },

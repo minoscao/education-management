@@ -2,37 +2,352 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {
-  Banknote, BookOpen, Building2, CalendarDays, Calculator, Check, ChevronLeft, ChevronRight, Clock3, DoorOpen, GraduationCap, GripVertical,
-  ClipboardCheck, Home, LayoutGrid, List, Map as MapIcon, MapPin, Minus, Music2, PanelLeftClose, PanelLeftOpen, Plus, School, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, UserRound, ZoomIn,
-  UserRoundPlus, UsersRound, MoreHorizontal, Mail, Send, X, Download, ReceiptText, Bell, FlaskConical, Languages, PenTool,
+  Banknote,
+  BookOpen,
+  Building2,
+  CalendarDays,
+  Calculator,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  DoorOpen,
+  GraduationCap,
+  GripVertical,
+  ClipboardCheck,
+  Home,
+  LayoutGrid,
+  List,
+  Map as MapIcon,
+  MapPin,
+  Minus,
+  Music2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  School,
+  Search,
+  Settings2,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+  UserRound,
+  ZoomIn,
+  UserRoundPlus,
+  UsersRound,
+  MoreHorizontal,
+  Mail,
+  Send,
+  X,
+  Download,
+  ReceiptText,
+  Bell,
+  FlaskConical,
+  Languages,
+  PenTool,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Row = Record<string, unknown>;
 type Language = "en" | "zh";
 type Role = "admin" | "teacher" | "student";
 type StudentTheme = "sky" | "ocean" | "mint";
-type View = "dashboard" | "calendar" | "campus" | "students" | "teachers" | "courses" | "classrooms" | "classes" | "enrollment" | "payments" | "reports" | "settings" | "teacherHome" | "studentHome" | "studentCourses" | "studentCalendar";
-type Detail = { kind: "session" | "student" | "teacher" | "room" | "course" | "courseCatalog" | "studentCreate" | "studentClass"; id: string; selectedRunId?: string; studentId?: string; startsAt?: string; edit?: boolean } | null;
+type View =
+  | "dashboard"
+  | "calendar"
+  | "campus"
+  | "students"
+  | "teachers"
+  | "courses"
+  | "classrooms"
+  | "classes"
+  | "enrollment"
+  | "payments"
+  | "reports"
+  | "settings"
+  | "teacherHome"
+  | "studentHome"
+  | "studentCourses"
+  | "studentCalendar"
+  | "studentPasses";
+type Detail = {
+  kind:
+    | "session"
+    | "student"
+    | "teacher"
+    | "room"
+    | "course"
+    | "courseCatalog"
+    | "studentCreate"
+    | "studentClass";
+  id: string;
+  selectedRunId?: string;
+  studentId?: string;
+  startsAt?: string;
+  edit?: boolean;
+} | null;
 
 type PortalData = {
-  terms: Row[]; courses: Row[]; courseLessons: Row[]; runs: Row[]; sessions: Row[]; students: Row[]; teachers: Row[]; languages: Row[]; teacherLanguages: Row[]; campuses: Row[]; classrooms: Row[];
-  enrollments: Row[]; invoices: Row[]; payments: Row[]; attendance: Row[]; messages: Row[]; notifications: Row[]; sessionChanges: Row[]; resourceBookings: Row[]; teacherBookings: Row[]; conflicts: Row[];
-  settings: { businessHours: { start: string; end: string; days: number[]; source: "configured" | "bookings" }; mail: { sender: string; inboundProtocol: string; inboundHost: string; inboundPort: string; smtpHost: string; smtpPort: string } };
-  metrics: { openRuns: number; sessionsThisWeek: number; activeStudents: number; outstanding: number; conflicts: number };
+  terms: Row[];
+  courses: Row[];
+  courseLessons: Row[];
+  runs: Row[];
+  sessions: Row[];
+  students: Row[];
+  teachers: Row[];
+  languages: Row[];
+  teacherLanguages: Row[];
+  campuses: Row[];
+  classrooms: Row[];
+  enrollments: Row[];
+  invoices: Row[];
+  payments: Row[];
+  passProducts: Row[];
+  passes: Row[];
+  passOrders: Row[];
+  passPayments: Row[];
+  attendance: Row[];
+  messages: Row[];
+  notifications: Row[];
+  sessionChanges: Row[];
+  resourceBookings: Row[];
+  teacherBookings: Row[];
+  conflicts: Row[];
+  settings: {
+    businessHours: {
+      start: string;
+      end: string;
+      days: number[];
+      source: "configured" | "bookings";
+    };
+    mail: {
+      sender: string;
+      inboundProtocol: string;
+      inboundHost: string;
+      inboundPort: string;
+      smtpHost: string;
+      smtpPort: string;
+    };
+  };
+  metrics: {
+    openRuns: number;
+    sessionsThisWeek: number;
+    activeStudents: number;
+    outstanding: number;
+    conflicts: number;
+  };
 };
 
 const emptyData: PortalData = {
-  terms: [], courses: [], courseLessons: [], runs: [], sessions: [], students: [], teachers: [], languages: [], teacherLanguages: [], campuses: [], classrooms: [], enrollments: [], invoices: [], payments: [], attendance: [], messages: [], notifications: [], sessionChanges: [], resourceBookings: [], teacherBookings: [], conflicts: [], settings: { businessHours: { start: "08:00", end: "20:00", days: [1, 2, 3, 4, 5, 6, 0], source: "bookings" }, mail: { sender: "", inboundProtocol: "IMAP", inboundHost: "", inboundPort: "993", smtpHost: "", smtpPort: "587" } },
-  metrics: { openRuns: 0, sessionsThisWeek: 0, activeStudents: 0, outstanding: 0, conflicts: 0 },
+  terms: [],
+  courses: [],
+  courseLessons: [],
+  runs: [],
+  sessions: [],
+  students: [],
+  teachers: [],
+  languages: [],
+  teacherLanguages: [],
+  campuses: [],
+  classrooms: [],
+  enrollments: [],
+  invoices: [],
+  payments: [],
+  passProducts: [],
+  passes: [],
+  passOrders: [],
+  passPayments: [],
+  attendance: [],
+  messages: [],
+  notifications: [],
+  sessionChanges: [],
+  resourceBookings: [],
+  teacherBookings: [],
+  conflicts: [],
+  settings: {
+    businessHours: {
+      start: "08:00",
+      end: "20:00",
+      days: [1, 2, 3, 4, 5, 6, 0],
+      source: "bookings",
+    },
+    mail: {
+      sender: "",
+      inboundProtocol: "IMAP",
+      inboundHost: "",
+      inboundPort: "993",
+      smtpHost: "",
+      smtpPort: "587",
+    },
+  },
+  metrics: {
+    openRuns: 0,
+    sessionsThisWeek: 0,
+    activeStudents: 0,
+    outstanding: 0,
+    conflicts: 0,
+  },
 };
 
 const copy = {
   en: {
-    product: "Teaching Operations", operate: "OPERATE", manage: "MANAGE", calendar: "Calendar", campus: "Campus map", students: "Students", teachers: "Teachers", courses: "Courses", classrooms: "Classrooms", classes: "Classes & schedule", enrollment: "Enrollment & billing", reports: "Reports", refresh: "Refresh", search: "Search", noData: "No records yet", newCourse: "New course", newClass: "Open class", addLesson: "Add lesson", addStudent: "Add student", addTeacher: "Add teacher", addClassroom: "Add classroom", enroll: "Enroll student", markAttendance: "Attendance", roomLayout: "Edit room layout", save: "Save", cancel: "Cancel", currentLesson: "Current lesson", upcoming: "Upcoming", roster: "Students", due: "Outstanding", capacity: "Capacity", term: "Term", subject: "Subject", level: "Level", price: "Price", classRun: "Class", classroom: "Classroom", teacher: "Teacher", lesson: "Lesson", lessonContent: "Lesson content", status: "Status", resources: "Resources", location: "Location", type: "Type", calendarHint: "Choose a day, then open a lesson to manage its class.", mapHint: "A live floor map. Room colours show the next booked lesson.", studentHint: "Student-centred view of classes, fees and attendance.", teacherHint: "Teacher-centred view of teaching load and pay.", classroomHint: "Position rooms on the campus map and define their resources.", courseHint: "Course products define the learning offer and standard price.", classHint: "Open a class, then schedule each lesson with a teacher and room.", billingHint: "Enrollments create lesson bookings and invoices automatically.", reportHint: "A concise view of operational health.", language: "中文", english: "EN", chinese: "中文", present: "Present", late: "Late", leave: "Leave", absent: "Absent", checkIn: "Check in", openDetail: "Open details", noLessons: "No lessons on this day", allRooms: "All rooms", active: "Active", booked: "Booked", select: "Select", start: "Start", end: "End", pay: "Teacher pay", allClear: "No conflicts", conflict: "Conflicts",
+    product: "Teaching Operations",
+    operate: "OPERATE",
+    manage: "MANAGE",
+    calendar: "Calendar",
+    campus: "Campus map",
+    students: "Students",
+    teachers: "Teachers",
+    courses: "Courses",
+    classrooms: "Classrooms",
+    classes: "Classes & schedule",
+    enrollment: "Enrollment & billing",
+    reports: "Reports",
+    refresh: "Refresh",
+    search: "Search",
+    noData: "No records yet",
+    newCourse: "New course",
+    newClass: "Open class",
+    addLesson: "Add lesson",
+    addStudent: "Add student",
+    addTeacher: "Add teacher",
+    addClassroom: "Add classroom",
+    enroll: "Enroll student",
+    markAttendance: "Attendance",
+    roomLayout: "Edit room layout",
+    save: "Save",
+    cancel: "Cancel",
+    currentLesson: "Current lesson",
+    upcoming: "Upcoming",
+    roster: "Students",
+    due: "Outstanding",
+    capacity: "Capacity",
+    term: "Term",
+    subject: "Subject",
+    level: "Level",
+    price: "Price",
+    classRun: "Class",
+    classroom: "Classroom",
+    teacher: "Teacher",
+    lesson: "Lesson",
+    lessonContent: "Lesson content",
+    status: "Status",
+    resources: "Resources",
+    location: "Location",
+    type: "Type",
+    calendarHint: "Choose a day, then open a lesson to manage its class.",
+    mapHint: "A live floor map. Room colours show the next booked lesson.",
+    studentHint: "Student-centred view of classes, fees and attendance.",
+    teacherHint: "Teacher-centred view of teaching load and pay.",
+    classroomHint:
+      "Position rooms on the campus map and define their resources.",
+    courseHint: "Course products define the learning offer and standard price.",
+    classHint:
+      "Open a class, then schedule each lesson with a teacher and room.",
+    billingHint:
+      "Enrollments create lesson bookings and invoices automatically.",
+    reportHint: "A concise view of operational health.",
+    language: "中文",
+    english: "EN",
+    chinese: "中文",
+    present: "Present",
+    late: "Late",
+    leave: "Leave",
+    absent: "Absent",
+    checkIn: "Check in",
+    openDetail: "Open details",
+    noLessons: "No lessons on this day",
+    allRooms: "All rooms",
+    active: "Active",
+    booked: "Booked",
+    select: "Select",
+    start: "Start",
+    end: "End",
+    pay: "Teacher pay",
+    allClear: "No conflicts",
+    conflict: "Conflicts",
   },
   zh: {
-    product: "教学运营", operate: "运营", manage: "管理", calendar: "日历", campus: "校园地图", students: "学生", teachers: "老师", courses: "课程", classrooms: "教室", classes: "开班与排课", enrollment: "报名与收费", reports: "报表", refresh: "刷新", search: "搜索", noData: "暂无记录", newCourse: "新建课程", newClass: "开班", addLesson: "新增课节", addStudent: "新增学生", addTeacher: "新增老师", addClassroom: "新增教室", enroll: "学生报名", markAttendance: "签到", roomLayout: "编辑教室布局", save: "保存", cancel: "取消", currentLesson: "当前课节", upcoming: "即将开始", roster: "学生名单", due: "待收款", capacity: "容量", term: "学期", subject: "学科", level: "级别", price: "价格", classRun: "班次", classroom: "教室", teacher: "老师", lesson: "课节", lessonContent: "课节内容", status: "状态", resources: "资源", location: "位置", type: "类型", calendarHint: "选择日期，点击课节即可管理班级。", mapHint: "教室的实时平面图；颜色显示下一节已预订课程。", studentHint: "以学生为中心查看课程、费用和考勤。", teacherHint: "以老师为中心查看课表与课酬。", classroomHint: "在校园地图上摆放教室，并设定教室资源。", courseHint: "课程产品定义教学内容和标准价格。", classHint: "先开班，再安排每一节课的老师与教室。", billingHint: "报名会自动建立课节预订和账单。", reportHint: "关键运营数据一览。", language: "EN", english: "EN", chinese: "中文", present: "出席", late: "迟到", leave: "请假", absent: "缺勤", checkIn: "签到", openDetail: "打开详情", noLessons: "这一天没有课节", allRooms: "全部教室", active: "可用", booked: "已预订", select: "选择", start: "开始", end: "结束", pay: "老师报酬", allClear: "没有冲突", conflict: "冲突",
+    product: "教学运营",
+    operate: "运营",
+    manage: "管理",
+    calendar: "日历",
+    campus: "校园地图",
+    students: "学生",
+    teachers: "老师",
+    courses: "课程",
+    classrooms: "教室",
+    classes: "开班与排课",
+    enrollment: "报名与收费",
+    reports: "报表",
+    refresh: "刷新",
+    search: "搜索",
+    noData: "暂无记录",
+    newCourse: "新建课程",
+    newClass: "开班",
+    addLesson: "新增课节",
+    addStudent: "新增学生",
+    addTeacher: "新增老师",
+    addClassroom: "新增教室",
+    enroll: "学生报名",
+    markAttendance: "签到",
+    roomLayout: "编辑教室布局",
+    save: "保存",
+    cancel: "取消",
+    currentLesson: "当前课节",
+    upcoming: "即将开始",
+    roster: "学生名单",
+    due: "待收款",
+    capacity: "容量",
+    term: "学期",
+    subject: "学科",
+    level: "级别",
+    price: "价格",
+    classRun: "班次",
+    classroom: "教室",
+    teacher: "老师",
+    lesson: "课节",
+    lessonContent: "课节内容",
+    status: "状态",
+    resources: "资源",
+    location: "位置",
+    type: "类型",
+    calendarHint: "选择日期，点击课节即可管理班级。",
+    mapHint: "教室的实时平面图；颜色显示下一节已预订课程。",
+    studentHint: "以学生为中心查看课程、费用和考勤。",
+    teacherHint: "以老师为中心查看课表与课酬。",
+    classroomHint: "在校园地图上摆放教室，并设定教室资源。",
+    courseHint: "课程产品定义教学内容和标准价格。",
+    classHint: "先开班，再安排每一节课的老师与教室。",
+    billingHint: "报名会自动建立课节预订和账单。",
+    reportHint: "关键运营数据一览。",
+    language: "EN",
+    english: "EN",
+    chinese: "中文",
+    present: "出席",
+    late: "迟到",
+    leave: "请假",
+    absent: "缺勤",
+    checkIn: "签到",
+    openDetail: "打开详情",
+    noLessons: "这一天没有课节",
+    allRooms: "全部教室",
+    active: "可用",
+    booked: "已预订",
+    select: "选择",
+    start: "开始",
+    end: "结束",
+    pay: "老师报酬",
+    allClear: "没有冲突",
+    conflict: "冲突",
   },
 } as const;
 
@@ -43,13 +358,36 @@ const timePart = (value: unknown) => String(value ?? "").slice(11, 16);
 const malaysiaDate = (value: unknown) => {
   const raw = datePart(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  return new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${raw}T12:00:00`));
+  return new Intl.DateTimeFormat("en-MY", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${raw}T12:00:00`));
 };
-const shiftDateTime = (value: string, minutes: number) => { const date = new Date(value.replace(" ", "T")); date.setMinutes(date.getMinutes() + minutes); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`; };
-const minutesOfDay = (value: unknown) => { const [hour, minute] = timePart(value).split(":").map(Number); return hour * 60 + minute; };
-const minutesForTime = (value: string) => { const [hour, minute] = value.split(":").map(Number); return hour * 60 + minute; };
+const shiftDateTime = (value: string, minutes: number) => {
+  const date = new Date(value.replace(" ", "T"));
+  date.setMinutes(date.getMinutes() + minutes);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+};
+const minutesOfDay = (value: unknown) => {
+  const [hour, minute] = timePart(value).split(":").map(Number);
+  return hour * 60 + minute;
+};
+const minutesForTime = (value: string) => {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+};
 const portraitColours = ["#eaf7ff", "#fff4db", "#e9f7ee", "#f5ecff", "#ffede9"];
-const courseColourOptions = ["#0F8AA8", "#2563EB", "#4F46E5", "#7C3AED", "#0F766E", "#16A34A", "#A21CAF"];
+const courseColourOptions = [
+  "#0F8AA8",
+  "#2563EB",
+  "#4F46E5",
+  "#7C3AED",
+  "#0F766E",
+  "#16A34A",
+  "#A21CAF",
+];
 const defaultCourseColour = courseColourOptions[0];
 const campusMap = { width: 1000, height: 560 };
 
@@ -58,19 +396,31 @@ function courseCover(course: Row) {
   if (subject.includes("math")) return "/assets/courses/mathematics-year-7.png";
   if (subject.includes("english")) return "/assets/courses/english-year-7.png";
   if (subject.includes("chinese")) return "/assets/courses/chinese-year-7.png";
-  if (subject.includes("music") || subject.includes("violin")) return "/assets/courses/violin-beginner.png";
+  if (subject.includes("music") || subject.includes("violin"))
+    return "/assets/courses/violin-beginner.png";
   return "/assets/courses/english-year-7.png";
 }
 
 function avatarUrl(person: Row) {
-  const seed = encodeURIComponent(`${get(person, "id")}-${get(person, "name")}`);
+  const seed = encodeURIComponent(
+    `${get(person, "id")}-${get(person, "name")}`,
+  );
   return `https://api.dicebear.com/9.x/personas/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffdfbf,ffd5dc`;
 }
 
 const portraitSpriteByPerson: Record<string, number> = {
-  "student-allen": 0, "student-may": 1, "student-jerry": 2, "student-lina": 3,
-  "student-aisha": 4, "student-daniel": 5, "student-yuna": 6, "student-sara": 7,
-  "Allen Tan": 0, "May Lee": 1, "Jerry Baker": 2, "Lina Wong": 3,
+  "student-allen": 0,
+  "student-may": 1,
+  "student-jerry": 2,
+  "student-lina": 3,
+  "student-aisha": 4,
+  "student-daniel": 5,
+  "student-yuna": 6,
+  "student-sara": 7,
+  "Allen Tan": 0,
+  "May Lee": 1,
+  "Jerry Baker": 2,
+  "Lina Wong": 3,
 };
 
 const teacherPortraitSpriteById: Record<string, number> = {
@@ -87,70 +437,213 @@ const teacherPortraitSpriteById: Record<string, number> = {
 function portraitSprite(person: Row) {
   const stored = get(person, "avatar_url");
   if (stored.startsWith("sprite:")) return Number(stored.slice(7));
-  return portraitSpriteByPerson[get(person, "id")] ?? portraitSpriteByPerson[get(person, "name")];
+  return (
+    portraitSpriteByPerson[get(person, "id")] ??
+    portraitSpriteByPerson[get(person, "name")]
+  );
 }
 
-function Avatar({ person, className = "", alt = "" }: { person: Row; className?: string; alt?: string }) {
+function Avatar({
+  person,
+  className = "",
+  alt = "",
+}: {
+  person: Row;
+  className?: string;
+  alt?: string;
+}) {
   const stored = get(person, "avatar_url");
-  if (stored && !stored.startsWith("sprite:")) return <img className={className} src={stored} alt={alt} />;
+  if (stored && !stored.startsWith("sprite:"))
+    return <img className={className} src={stored} alt={alt} />;
   const sprite = portraitSprite(person);
-  if (Number.isFinite(sprite)) return <span role="img" aria-label={alt || get(person, "name")} className={`avatar-photo ${className}`} style={{ "--avatar-x": `${(sprite % 4) * 100 / 3}%`, "--avatar-y": `${Math.floor(sprite / 4) * 100}%` } as React.CSSProperties} />;
+  if (Number.isFinite(sprite))
+    return (
+      <span
+        role="img"
+        aria-label={alt || get(person, "name")}
+        className={`avatar-photo ${className}`}
+        style={
+          {
+            "--avatar-x": `${((sprite % 4) * 100) / 3}%`,
+            "--avatar-y": `${Math.floor(sprite / 4) * 100}%`,
+          } as React.CSSProperties
+        }
+      />
+    );
   const teacherSprite = teacherPortraitSpriteById[get(person, "id")];
-  if (Number.isFinite(teacherSprite)) return <span role="img" aria-label={alt || get(person, "name")} className={`avatar-photo teacher-photo ${className}`} style={{ "--avatar-x": `${(teacherSprite % 4) * 100 / 3}%`, "--avatar-y": `${Math.floor(teacherSprite / 4) * 100}%` } as React.CSSProperties} />;
+  if (Number.isFinite(teacherSprite))
+    return (
+      <span
+        role="img"
+        aria-label={alt || get(person, "name")}
+        className={`avatar-photo teacher-photo ${className}`}
+        style={
+          {
+            "--avatar-x": `${((teacherSprite % 4) * 100) / 3}%`,
+            "--avatar-y": `${Math.floor(teacherSprite / 4) * 100}%`,
+          } as React.CSSProperties
+        }
+      />
+    );
   return <img className={className} src={avatarUrl(person)} alt={alt} />;
 }
 
 async function fileAsDataUrl(file: File) {
-  if (file.size > 450_000) throw new Error("Choose a photo smaller than 450 KB.");
-  return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("The photo could not be read.")); reader.readAsDataURL(file); });
+  if (file.size > 450_000)
+    throw new Error("Choose a photo smaller than 450 KB.");
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("The photo could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 const calendarText = {
-  en: { year: "Year", month: "Month", week: "Week", day: "Day", time: "Time", resource: "Time × resource", classrooms: "Classrooms", teachers: "Teachers", students: "Students", today: "Today", previous: "Previous", next: "Next", allSchedule: "All schedule", lessons: "lessons", noEvents: "No lessons in this period" },
-  zh: { year: "年", month: "月", week: "周", day: "日", time: "纯时间", resource: "时间 × 资源", classrooms: "教室", teachers: "老师", students: "学生", today: "今天", previous: "上一段", next: "下一段", allSchedule: "全部课表", lessons: "课节", noEvents: "此时间范围没有课节" },
+  en: {
+    year: "Year",
+    month: "Month",
+    week: "Week",
+    day: "Day",
+    time: "Time",
+    resource: "Time × resource",
+    classrooms: "Classrooms",
+    teachers: "Teachers",
+    students: "Students",
+    today: "Today",
+    previous: "Previous",
+    next: "Next",
+    allSchedule: "All schedule",
+    lessons: "lessons",
+    noEvents: "No lessons in this period",
+  },
+  zh: {
+    year: "年",
+    month: "月",
+    week: "周",
+    day: "日",
+    time: "纯时间",
+    resource: "时间 × 资源",
+    classrooms: "教室",
+    teachers: "老师",
+    students: "学生",
+    today: "今天",
+    previous: "上一段",
+    next: "下一段",
+    allSchedule: "全部课表",
+    lessons: "课节",
+    noEvents: "此时间范围没有课节",
+  },
 } as const;
 
 type CalendarScope = "year" | "month" | "week" | "day";
 type CalendarMode = "time" | "resource" | "list";
 type ScheduleScope = Exclude<CalendarScope, "year">;
 type ResourceKind = "classroom" | "teacher" | "student";
-type CalendarResource = { id: string; name: string; icon: "classroom" | "teacher" | "student" };
-type ScheduleWindow = { start: number; end: number; businessStart: number; businessEnd: number; labels: string[]; height: number };
+type CalendarResource = {
+  id: string;
+  name: string;
+  icon: "classroom" | "teacher" | "student";
+};
+type ScheduleWindow = {
+  start: number;
+  end: number;
+  businessStart: number;
+  businessEnd: number;
+  labels: string[];
+  height: number;
+};
 
-function fromKey(value: string) { return new Date(`${value}T12:00:00`); }
-function toKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
-function addDays(date: Date, count: number) { const result = new Date(date); result.setDate(result.getDate() + count); return result; }
-function startOfWeek(date: Date) { const result = new Date(date); const day = result.getDay() || 7; result.setDate(result.getDate() - day + 1); return result; }
-function startOfMonth(date: Date) { return new Date(date.getFullYear(), date.getMonth(), 1, 12); }
-function eventSessionId(row: Row) { return get(row, "calendar_session_id") || get(row, "id"); }
-function eventColour(row: Row) { const color = (get(row, "course_color") || get(row, "display_color") || get(row, "run_course_color")).toUpperCase(); return courseColourOptions.includes(color) ? color : defaultCourseColour; }
-function eventStyle(row: Row) { return { "--course-colour": eventColour(row) } as React.CSSProperties; }
+function fromKey(value: string) {
+  return new Date(`${value}T12:00:00`);
+}
+function toKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function addDays(date: Date, count: number) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + count);
+  return result;
+}
+function startOfWeek(date: Date) {
+  const result = new Date(date);
+  const day = result.getDay() || 7;
+  result.setDate(result.getDate() - day + 1);
+  return result;
+}
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12);
+}
+function eventSessionId(row: Row) {
+  return get(row, "calendar_session_id") || get(row, "id");
+}
+function eventColour(row: Row) {
+  const color = (
+    get(row, "course_color") ||
+    get(row, "display_color") ||
+    get(row, "run_course_color")
+  ).toUpperCase();
+  return courseColourOptions.includes(color) ? color : defaultCourseColour;
+}
+function eventStyle(row: Row) {
+  return { "--course-colour": eventColour(row) } as React.CSSProperties;
+}
 function cohortPhase(run: Row, sessions: Row[]) {
-  const times = sessions.map((session) => asTime(session.starts_at)).filter(Number.isFinite).sort((left, right) => left - right);
-  const endTimes = sessions.map((session) => asTime(session.ends_at)).filter(Number.isFinite).sort((left, right) => left - right);
-  if (get(run, "status") === "finished" || (endTimes.length && endTimes[endTimes.length - 1] < Date.now())) return "finished";
+  const times = sessions
+    .map((session) => asTime(session.starts_at))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  const endTimes = sessions
+    .map((session) => asTime(session.ends_at))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  if (
+    get(run, "status") === "finished" ||
+    (endTimes.length && endTimes[endTimes.length - 1] < Date.now())
+  )
+    return "finished";
   if (times.length && times[0] > Date.now()) return "upcoming";
   return "in_progress";
 }
 function cohortTiming(run: Row, sessions: Row[]) {
-  const sorted = [...sessions].sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const first = sorted[0]; const last = sorted[sorted.length - 1];
+  const sorted = [...sessions].sort(
+    (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+  );
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
   if (!first || !last) return get(run, "term_name") || "Schedule not set";
-  const start = datePart(first.starts_at); const end = datePart(last.ends_at || last.starts_at);
-  return start === end ? `${start} · ${timeRange(first)}` : `${start} to ${end}`;
+  const start = datePart(first.starts_at);
+  const end = datePart(last.ends_at || last.starts_at);
+  return start === end
+    ? `${start} · ${timeRange(first)}`
+    : `${start} to ${end}`;
 }
 
-function scheduleWindow(hours: PortalData["settings"]["businessHours"]): ScheduleWindow {
-  const start = minutesForTime(hours.start); const end = minutesForTime(hours.end);
+function scheduleWindow(
+  hours: PortalData["settings"]["businessHours"],
+): ScheduleWindow {
+  const start = minutesForTime(hours.start);
+  const end = minutesForTime(hours.end);
   const businessStart = Number.isFinite(start) ? start : 8 * 60;
-  const businessEnd = Number.isFinite(end) && end > businessStart ? end : 20 * 60;
+  const businessEnd =
+    Number.isFinite(end) && end > businessStart ? end : 20 * 60;
   const firstHour = Math.max(0, Math.floor((businessStart - 60) / 60) * 60);
   const lastHour = Math.min(24 * 60, Math.ceil((businessEnd + 60) / 60) * 60);
-  const labels = Array.from({ length: Math.max(1, (lastHour - firstHour) / 60) }, (_, index) => {
-    const hour = Math.floor((firstHour + index * 60) / 60);
-    return `${String(hour).padStart(2, "0")}:00`;
-  });
-  return { start: firstHour, end: lastHour, businessStart, businessEnd, labels, height: Math.max(480, labels.length * 72) };
+  const labels = Array.from(
+    { length: Math.max(1, (lastHour - firstHour) / 60) },
+    (_, index) => {
+      const hour = Math.floor((firstHour + index * 60) / 60);
+      return `${String(hour).padStart(2, "0")}:00`;
+    },
+  );
+  return {
+    start: firstHour,
+    end: lastHour,
+    businessStart,
+    businessEnd,
+    labels,
+    height: Math.max(480, labels.length * 72),
+  };
 }
 
 export function ManagementPortal() {
@@ -166,7 +659,8 @@ export function ManagementPortal() {
   const [detailStack, setDetailStack] = useState<Exclude<Detail, null>[]>([]);
   const detail = detailStack.at(-1) ?? null;
   const setDetail = (next: Detail) => setDetailStack(next ? [next] : []);
-  const openNestedDetail = (next: Exclude<Detail, null>) => setDetailStack((stack) => [...stack, next]);
+  const openNestedDetail = (next: Exclude<Detail, null>) =>
+    setDetailStack((stack) => [...stack, next]);
   const closeDetail = () => setDetailStack((stack) => stack.slice(0, -1));
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -174,192 +668,2049 @@ export function ManagementPortal() {
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [studentTheme, setStudentTheme] = useState<StudentTheme>("sky");
+  const [passPurchaseOpen, setPassPurchaseOpen] = useState(false);
   const t = copy[language];
 
   async function load() {
     const isInitialLoad = data.courses.length === 0;
-    setBusy(true); if (isInitialLoad) setLoading(true); setMessage("");
+    setBusy(true);
+    if (isInitialLoad) setLoading(true);
+    setMessage("");
     try {
       const response = await fetch("/api/portal-data", { cache: "no-store" });
-      const payload = await response.json() as PortalData & { error?: string };
-      if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load data");
-      setData(payload); setAttendanceLoaded(false);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load data"); }
-    finally { setBusy(false); if (isInitialLoad) setLoading(false); }
+      const payload = (await response.json()) as PortalData & {
+        error?: string;
+      };
+      if (!response.ok || payload.error)
+        throw new Error(payload.error || "Unable to load data");
+      setData(payload);
+      setAttendanceLoaded(false);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Unable to load data",
+      );
+    } finally {
+      setBusy(false);
+      if (isInitialLoad) setLoading(false);
+    }
   }
 
   async function loadAttendance() {
     if (attendanceLoaded || attendanceLoading) return;
     setAttendanceLoading(true);
     try {
-      const response = await fetch("/api/portal-data?scope=attendance", { cache: "no-store" });
-      const payload = await response.json() as { attendance?: Row[]; error?: string };
-      if (!response.ok || payload.error) throw new Error(payload.error || "Unable to load attendance");
-      setData((current) => ({ ...current, attendance: payload.attendance ?? current.attendance }));
+      const response = await fetch("/api/portal-data?scope=attendance", {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as {
+        attendance?: Row[];
+        error?: string;
+      };
+      if (!response.ok || payload.error)
+        throw new Error(payload.error || "Unable to load attendance");
+      setData((current) => ({
+        ...current,
+        attendance: payload.attendance ?? current.attendance,
+      }));
       setAttendanceLoaded(true);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load attendance"); }
-    finally { setAttendanceLoading(false); }
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Unable to load attendance",
+      );
+    } finally {
+      setAttendanceLoading(false);
+    }
   }
 
   async function run(action: string, values: Row = {}) {
-    setBusy(true); setMessage("");
-    const previousAttendance = action === "setAttendance" ? data.attendance : null;
+    setBusy(true);
+    setMessage("");
+    const previousAttendance =
+      action === "setAttendance" ? data.attendance : null;
     if (action === "setAttendance" && values.studentBookingId) {
-      setData((current) => ({ ...current, attendance: current.attendance.map((record) => get(record, "student_booking_id") === String(values.studentBookingId) ? { ...record, status: String(values.attendanceStatus ?? "present"), note: String(values.note ?? "") } : record) }));
+      setData((current) => ({
+        ...current,
+        attendance: current.attendance.map((record) =>
+          get(record, "student_booking_id") === String(values.studentBookingId)
+            ? {
+                ...record,
+                status: String(values.attendanceStatus ?? "present"),
+                note: String(values.note ?? ""),
+              }
+            : record,
+        ),
+      }));
     }
     try {
-      const response = await fetch("/api/portal-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...values }) });
-      const payload = await response.json() as PortalData & { error?: string; attendanceUpdate?: { studentBookingId?: string; status?: string; note?: string } };
-      if (!response.ok || payload.error) throw new Error(payload.error || "Unable to save changes");
+      const response = await fetch("/api/portal-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...values }),
+      });
+      const payload = (await response.json()) as PortalData & {
+        error?: string;
+        attendanceUpdate?: {
+          studentBookingId?: string;
+          status?: string;
+          note?: string;
+        };
+      };
+      if (!response.ok || payload.error)
+        throw new Error(payload.error || "Unable to save changes");
       if (payload.attendanceUpdate?.studentBookingId) {
-        setData((current) => ({ ...current, attendance: current.attendance.map((record) => get(record, "student_booking_id") === payload.attendanceUpdate?.studentBookingId ? { ...record, status: payload.attendanceUpdate.status ?? get(record, "status"), note: payload.attendanceUpdate.note ?? get(record, "note") } : record) }));
+        setData((current) => ({
+          ...current,
+          attendance: current.attendance.map((record) =>
+            get(record, "student_booking_id") ===
+            payload.attendanceUpdate?.studentBookingId
+              ? {
+                  ...record,
+                  status:
+                    payload.attendanceUpdate.status ?? get(record, "status"),
+                  note: payload.attendanceUpdate.note ?? get(record, "note"),
+                }
+              : record,
+          ),
+        }));
         setMessage(language === "en" ? "Attendance updated" : "已更新考勤");
         return;
       }
-      setData((current) => ({ ...payload, attendance: payload.attendance.length ? payload.attendance : current.attendance }));
+      setData((current) => ({
+        ...payload,
+        attendance: payload.attendance.length
+          ? payload.attendance
+          : current.attendance,
+      }));
       if (payload.attendance.length) setAttendanceLoaded(true);
       setMessage(language === "en" ? "Saved" : "已保存");
-    } catch (error) { if (previousAttendance) setData((current) => ({ ...current, attendance: previousAttendance })); setMessage(error instanceof Error ? error.message : "Unable to save changes"); }
-    finally { setBusy(false); }
+    } catch (error) {
+      if (previousAttendance)
+        setData((current) => ({ ...current, attendance: previousAttendance }));
+      setMessage(
+        error instanceof Error ? error.message : "Unable to save changes",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, []);
-  useEffect(() => { const saved = window.localStorage.getItem("student-portal-theme"); if (saved === "sky" || saved === "ocean" || saved === "mint") setStudentTheme(saved); }, []);
-  useEffect(() => { window.localStorage.setItem("student-portal-theme", studentTheme); }, [studentTheme]);
-  useEffect(() => { if (!data.students.some((item) => get(item, "id") === selectedStudentId)) setSelectedStudentId(get(data.students[0], "id")); }, [data.students, selectedStudentId]);
-  useEffect(() => { if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId)) setSelectedTeacherId(get(data.teachers[0], "id")); }, [data.teachers, selectedTeacherId]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("student-portal-theme");
+    if (saved === "sky" || saved === "ocean" || saved === "mint")
+      setStudentTheme(saved);
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("student-portal-theme", studentTheme);
+  }, [studentTheme]);
+  useEffect(() => {
+    if (!data.students.some((item) => get(item, "id") === selectedStudentId))
+      setSelectedStudentId(get(data.students[0], "id"));
+  }, [data.students, selectedStudentId]);
+  useEffect(() => {
+    if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId))
+      setSelectedTeacherId(get(data.teachers[0], "id"));
+  }, [data.teachers, selectedTeacherId]);
 
-  const attendanceNeeded = role !== "admin" || ["calendar", "campus", "reports"].includes(view) || detail !== null;
-  useEffect(() => { if (attendanceNeeded) void loadAttendance(); }, [attendanceNeeded, attendanceLoaded]);
+  const attendanceNeeded =
+    role !== "admin" ||
+    ["calendar", "campus", "reports"].includes(view) ||
+    detail !== null;
+  useEffect(() => {
+    if (attendanceNeeded) void loadAttendance();
+  }, [attendanceNeeded, attendanceLoaded]);
 
-  const filteredStudents = useMemo(() => data.students.filter((item) => `${get(item, "name")} ${get(item, "code")}`.toLowerCase().includes(search.toLowerCase())), [data.students, search]);
-  const filteredTeachers = useMemo(() => data.teachers.filter((item) => `${get(item, "name")} ${get(item, "subject")}`.toLowerCase().includes(search.toLowerCase())), [data.teachers, search]);
-  const visibleNotifications = data.notifications.filter((item) => role === "admin" || (role === "student" ? get(item, "recipient_type") === "student" && get(item, "recipient_id") === selectedStudentId : get(item, "recipient_type") === "teacher" && get(item, "recipient_id") === selectedTeacherId));
-  function changeRole(next: Role) { setRole(next); setDetail(null); setView(next === "admin" ? "dashboard" : next === "teacher" ? "teacherHome" : "studentHome"); }
+  const filteredStudents = useMemo(
+    () =>
+      data.students.filter((item) =>
+        `${get(item, "name")} ${get(item, "code")}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
+    [data.students, search],
+  );
+  const filteredTeachers = useMemo(
+    () =>
+      data.teachers.filter((item) =>
+        `${get(item, "name")} ${get(item, "subject")}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
+    [data.teachers, search],
+  );
+  const visibleNotifications = data.notifications.filter(
+    (item) =>
+      role === "admin" ||
+      (role === "student"
+        ? get(item, "recipient_type") === "student" &&
+          get(item, "recipient_id") === selectedStudentId
+        : get(item, "recipient_type") === "teacher" &&
+          get(item, "recipient_id") === selectedTeacherId),
+  );
+  function changeRole(next: Role) {
+    setRole(next);
+    setDetail(null);
+    setView(
+      next === "admin"
+        ? "dashboard"
+        : next === "teacher"
+          ? "teacherHome"
+          : "studentHome",
+    );
+  }
 
-  return <main className={`operation-app role-${role} student-theme-${studentTheme}${view === "calendar" ? " calendar-screen" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
-    <aside className="operation-sidebar">
-      <div className="operation-brand"><GraduationCap size={22} strokeWidth={2.5} /><span>{role === "admin" ? "Teaching Operations" : role === "teacher" ? "Teacher Portal" : "Learning Space"}</span><button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
-      {role === "admin" ? <><NavGroup label="SELL" current={view} setView={setView} items={[["enrollment", UserRoundPlus, "Enrolments"], ["payments", Banknote, "Payments"]]} /><NavGroup label="MANAGE" current={view} setView={setView} items={[["dashboard", Home, "Dashboard"], ["calendar", CalendarDays, "Schedule"], ["classes", BookOpen, "Courses"], ["campus", MapIcon, "Campus live"], ["students", Users, "Students"], ["teachers", UserRound, "Teachers"], ["reports", Settings2, "Reports"]]} /><NavGroup label="SETUP" current={view} setView={setView} items={[["courses", LayoutGrid, "Course catalogue"], ["classrooms", DoorOpen, "Campus setup"], ["settings", SlidersHorizontal, "Business rules"]]} /></> : null}
-      {role === "teacher" ? <NavGroup label="TEACH" current={view} setView={setView} items={[["teacherHome", Home, "Today"], ["calendar", CalendarDays, "My schedule"], ["classes", BookOpen, "My courses"], ["students", Users, "Students"]]} /> : null}
-      {role === "student" ? <NavGroup label="LEARN" current={view} setView={setView} items={[["studentHome", Home, "Home"], ["studentCourses", BookOpen, "My courses"], ["studentCalendar", CalendarDays, "My timetable"]]} /> : null}
-      <div className="sidebar-bottom"><RoleSwitcher role={role} onChange={changeRole} /><div className="sidebar-footer"><School size={17} /><span>{get(data.campuses[0], "name") || "Campus"}</span></div></div>
-    </aside>
-    <section className="operation-workspace">
-      <header className="operation-header">
-        <div className="page-title"><p>{role === "student" ? "LEARN" : role === "teacher" ? "TEACH" : ["enrollment", "payments"].includes(view) ? "SELL" : ["dashboard", "calendar", "classes", "campus", "students", "teachers", "reports"].includes(view) ? "MANAGE" : "SETUP"}</p><h1>{pageTitle(view, t)}</h1></div>
-        <div className="header-tools">
-          {role === "student" ? <StudentThemePicker value={studentTheme} onChange={setStudentTheme} /> : null}
-          {role !== "admin" ? <PersonaPicker role={role} rows={role === "student" ? data.students : data.teachers} value={role === "student" ? selectedStudentId : selectedTeacherId} onChange={role === "student" ? setSelectedStudentId : setSelectedTeacherId} /> : null}
-          <label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} aria-label={t.search} /></label>
-          <button className="header-icon notification-button" onClick={() => setNotificationsOpen(true)} type="button" title="Notifications" aria-label="Notifications"><Bell size={17} />{visibleNotifications.filter((item) => get(item, "status") === "unread").length ? <b>{visibleNotifications.filter((item) => get(item, "status") === "unread").length}</b> : null}</button>
-          {message ? <span className={message === "Saved" || message === "已保存" ? "save-message ok" : "save-message error"}>{message}</span> : null}
-          <button className="language-toggle" onClick={() => setLanguage(language === "en" ? "zh" : "en")} type="button">{t.language}</button>
-          <button className="header-icon" onClick={() => void load()} type="button" title={t.refresh} disabled={busy}><ChevronRight size={18} /></button>
+  return (
+    <main
+      className={`operation-app role-${role} student-theme-${studentTheme}${view === "calendar" ? " calendar-screen" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+    >
+      <aside className="operation-sidebar">
+        <div className="operation-brand">
+          <GraduationCap size={22} strokeWidth={2.5} />
+          <span>
+            {role === "admin"
+              ? "Teaching Operations"
+              : role === "teacher"
+                ? "Teacher Portal"
+                : "Learning Space"}
+          </span>
+          <button
+            className="sidebar-toggle"
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={
+              sidebarCollapsed ? "Expand navigation" : "Collapse navigation"
+            }
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={17} />
+            ) : (
+              <PanelLeftClose size={17} />
+            )}
+          </button>
         </div>
-      </header>
-      {view === "dashboard" ? <AdminDashboard data={data} onOpen={(id) => setDetail({ kind: "session", id })} onNavigate={setView} /> : null}
-      {view === "calendar" ? <CalendarView data={data} sessions={role === "teacher" ? data.sessions.filter((item) => get(item, "teacher_name") === get(data.teachers.find((teacher) => get(teacher, "id") === selectedTeacherId) ?? {}, "name")) : undefined} t={t} language={language} onOpen={(id) => setDetail({ kind: "session", id })} onReschedule={(id, startsAt) => setDetail({ kind: "session", id, startsAt, edit: true })} /> : null}
-        {view === "campus" ? <CampusView data={data} t={t} loading={loading} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
-        {view === "students" ? <DirectoryViewV2 type="student" rows={filteredStudents} data={data} t={t} busy={busy} run={run} onOpen={(id) => setDetail({ kind: "student", id })} onCreate={() => setDetail({ kind: "studentCreate", id: "new" })} /> : null}
-      {view === "teachers" ? <DirectoryViewV2 type="teacher" rows={filteredTeachers} data={data} t={t} busy={busy} run={run} onOpen={(id) => setDetail({ kind: "teacher", id })} /> : null}
-      {view === "courses" ? <CourseCatalogue data={data} run={run} busy={busy} t={t} onOpen={(id) => setDetail({ kind: "courseCatalog", id })} /> : null}
-      {view === "classrooms" ? <ClassroomManager data={data} run={run} busy={busy} t={t} onOpenRoom={(id) => setDetail({ kind: "room", id })} /> : null}
-      {view === "classes" ? <ClassManager data={data} run={run} busy={busy} t={t} onOpenCourse={(id) => setDetail({ kind: "courseCatalog", id })} /> : null}
-      {view === "enrollment" ? <EnrollmentManager data={data} run={run} busy={busy} t={t} /> : null}
-      {view === "payments" ? <PaymentWorkspace data={data} run={run} busy={busy} /> : null}
-      {view === "reports" ? <ReportView data={data} t={t} /> : null}
-      {view === "settings" ? <><SettingsView data={data} run={run} busy={busy} /><EmailSettings data={data} run={run} busy={busy} /></> : null}
-      {view === "teacherHome" ? <TeacherHome data={data} teacherId={selectedTeacherId} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
-      {view === "studentHome" ? <StudentHome data={data} studentId={selectedStudentId} onOpen={(id) => setDetail({ kind: "session", id })} onOpenClass={(id) => setDetail({ kind: "studentClass", id, studentId: selectedStudentId })} /> : null}
-      {view === "studentCourses" ? <StudentCourses data={data} studentId={selectedStudentId} onOpenClass={(id) => setDetail({ kind: "studentClass", id, studentId: selectedStudentId })} /> : null}
-      {view === "studentCalendar" ? <StudentTimetableV2 data={data} studentId={selectedStudentId} run={run} onOpen={(id) => setDetail({ kind: "session", id })} /> : null}
-    </section>
-    {detailStack.map((stackDetail, index) => <DetailSheet key={`${stackDetail.kind}-${stackDetail.id}-${index}`} detail={stackDetail} data={data} t={t} busy={busy} run={run} close={closeDetail} closeAll={() => setDetailStack([])} openDetail={openNestedDetail} />)}
-    {notificationsOpen ? <NotificationDrawer notifications={visibleNotifications} close={() => setNotificationsOpen(false)} /> : null}
-    {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
-  </main>;
+        {role === "admin" ? (
+          <>
+            <NavGroup
+              label="SELL"
+              current={view}
+              setView={setView}
+              items={[
+                ["enrollment", UserRoundPlus, "Enrolments"],
+                ["payments", Banknote, "Payments"],
+              ]}
+            />
+            <NavGroup
+              label="MANAGE"
+              current={view}
+              setView={setView}
+              items={[
+                ["dashboard", Home, "Dashboard"],
+                ["calendar", CalendarDays, "Schedule"],
+                ["classes", BookOpen, "Courses"],
+                ["campus", MapIcon, "Campus live"],
+                ["students", Users, "Students"],
+                ["teachers", UserRound, "Teachers"],
+                ["reports", Settings2, "Reports"],
+              ]}
+            />
+            <NavGroup
+              label="SETUP"
+              current={view}
+              setView={setView}
+              items={[
+                ["courses", LayoutGrid, "Course catalogue"],
+                ["classrooms", DoorOpen, "Campus setup"],
+                ["settings", SlidersHorizontal, "Business rules"],
+              ]}
+            />
+          </>
+        ) : null}
+        {role === "teacher" ? (
+          <NavGroup
+            label="TEACH"
+            current={view}
+            setView={setView}
+            items={[
+              ["teacherHome", Home, "Today"],
+              ["calendar", CalendarDays, "My schedule"],
+              ["classes", BookOpen, "My courses"],
+              ["students", Users, "Students"],
+            ]}
+          />
+        ) : null}
+        {role === "student" ? (
+          <NavGroup
+            label="LEARN"
+            current={view}
+            setView={setView}
+            items={[
+              ["studentHome", Home, "Home"],
+              ["studentPasses", Banknote, "My pass"],
+              ["studentCourses", BookOpen, "My courses"],
+              ["studentCalendar", CalendarDays, "My timetable"],
+            ]}
+          />
+        ) : null}
+        <div className="sidebar-bottom">
+          <RoleSwitcher role={role} onChange={changeRole} />
+          <div className="sidebar-footer">
+            <School size={17} />
+            <span>{get(data.campuses[0], "name") || "Campus"}</span>
+          </div>
+        </div>
+      </aside>
+      <section className="operation-workspace">
+        <header className="operation-header">
+          <div className="page-title">
+            <p>
+              {role === "student"
+                ? "LEARN"
+                : role === "teacher"
+                  ? "TEACH"
+                  : ["enrollment", "payments"].includes(view)
+                    ? "SELL"
+                    : [
+                          "dashboard",
+                          "calendar",
+                          "classes",
+                          "campus",
+                          "students",
+                          "teachers",
+                          "reports",
+                        ].includes(view)
+                      ? "MANAGE"
+                      : "SETUP"}
+            </p>
+            <h1>{pageTitle(view, t)}</h1>
+          </div>
+          <div className="header-tools">
+            {role === "student" ? (
+              <StudentThemePicker
+                value={studentTheme}
+                onChange={setStudentTheme}
+              />
+            ) : null}
+            {role !== "admin" ? (
+              <PersonaPicker
+                role={role}
+                rows={role === "student" ? data.students : data.teachers}
+                value={
+                  role === "student" ? selectedStudentId : selectedTeacherId
+                }
+                onChange={
+                  role === "student"
+                    ? setSelectedStudentId
+                    : setSelectedTeacherId
+                }
+              />
+            ) : null}
+            <label className="search-box">
+              <Search size={16} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t.search}
+                aria-label={t.search}
+              />
+            </label>
+            <button
+              className="header-icon notification-button"
+              onClick={() => setNotificationsOpen(true)}
+              type="button"
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <Bell size={17} />
+              {visibleNotifications.filter(
+                (item) => get(item, "status") === "unread",
+              ).length ? (
+                <b>
+                  {
+                    visibleNotifications.filter(
+                      (item) => get(item, "status") === "unread",
+                    ).length
+                  }
+                </b>
+              ) : null}
+            </button>
+            {message ? (
+              <span
+                className={
+                  message === "Saved" || message === "已保存"
+                    ? "save-message ok"
+                    : "save-message error"
+                }
+              >
+                {message}
+              </span>
+            ) : null}
+            <button
+              className="language-toggle"
+              onClick={() => setLanguage(language === "en" ? "zh" : "en")}
+              type="button"
+            >
+              {t.language}
+            </button>
+            <button
+              className="header-icon"
+              onClick={() => void load()}
+              type="button"
+              title={t.refresh}
+              disabled={busy}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </header>
+        {view === "dashboard" ? (
+          <AdminDashboard
+            data={data}
+            onOpen={(id) => setDetail({ kind: "session", id })}
+            onNavigate={setView}
+          />
+        ) : null}
+        {view === "calendar" ? (
+          <CalendarView
+            data={data}
+            sessions={
+              role === "teacher"
+                ? data.sessions.filter(
+                    (item) =>
+                      get(item, "teacher_name") ===
+                      get(
+                        data.teachers.find(
+                          (teacher) => get(teacher, "id") === selectedTeacherId,
+                        ) ?? {},
+                        "name",
+                      ),
+                  )
+                : undefined
+            }
+            t={t}
+            language={language}
+            onOpen={(id) => setDetail({ kind: "session", id })}
+            onReschedule={(id, startsAt) =>
+              setDetail({ kind: "session", id, startsAt, edit: true })
+            }
+          />
+        ) : null}
+        {view === "campus" ? (
+          <CampusView
+            data={data}
+            t={t}
+            loading={loading}
+            onOpenRoom={(id) => setDetail({ kind: "room", id })}
+          />
+        ) : null}
+        {view === "students" ? (
+          <DirectoryViewV2
+            type="student"
+            rows={filteredStudents}
+            data={data}
+            t={t}
+            busy={busy}
+            run={run}
+            onOpen={(id) => setDetail({ kind: "student", id })}
+            onCreate={() => setDetail({ kind: "studentCreate", id: "new" })}
+          />
+        ) : null}
+        {view === "teachers" ? (
+          <DirectoryViewV2
+            type="teacher"
+            rows={filteredTeachers}
+            data={data}
+            t={t}
+            busy={busy}
+            run={run}
+            onOpen={(id) => setDetail({ kind: "teacher", id })}
+          />
+        ) : null}
+        {view === "courses" ? (
+          <CourseCatalogue
+            data={data}
+            run={run}
+            busy={busy}
+            t={t}
+            onOpen={(id) => setDetail({ kind: "courseCatalog", id })}
+          />
+        ) : null}
+        {view === "classrooms" ? (
+          <ClassroomManager
+            data={data}
+            run={run}
+            busy={busy}
+            t={t}
+            onOpenRoom={(id) => setDetail({ kind: "room", id })}
+          />
+        ) : null}
+        {view === "classes" ? (
+          <ClassManager
+            data={data}
+            run={run}
+            busy={busy}
+            t={t}
+            onOpenCourse={(id) => setDetail({ kind: "courseCatalog", id })}
+          />
+        ) : null}
+        {view === "enrollment" ? (
+          <EnrollmentManager data={data} run={run} busy={busy} t={t} />
+        ) : null}
+        {view === "payments" ? (
+          <PaymentWorkspace data={data} run={run} busy={busy} />
+        ) : null}
+        {view === "reports" ? <ReportView data={data} t={t} /> : null}
+        {view === "settings" ? (
+          <>
+            <SettingsView data={data} run={run} busy={busy} />
+            <EmailSettings data={data} run={run} busy={busy} />
+          </>
+        ) : null}
+        {view === "teacherHome" ? (
+          <TeacherHome
+            data={data}
+            teacherId={selectedTeacherId}
+            onOpen={(id) => setDetail({ kind: "session", id })}
+          />
+        ) : null}
+        {view === "studentHome" ? (
+          <StudentHome
+            data={data}
+            studentId={selectedStudentId}
+            onOpen={(id) => setDetail({ kind: "session", id })}
+            onOpenClass={(id) =>
+              setDetail({
+                kind: "studentClass",
+                id,
+                studentId: selectedStudentId,
+              })
+            }
+            onBuyPass={() => setPassPurchaseOpen(true)}
+          />
+        ) : null}
+        {view === "studentPasses" ? (
+          <StudentPasses
+            data={data}
+            studentId={selectedStudentId}
+            onBuy={() => setPassPurchaseOpen(true)}
+          />
+        ) : null}
+        {view === "studentCourses" ? (
+          <StudentCourses
+            data={data}
+            studentId={selectedStudentId}
+            onOpenClass={(id) =>
+              setDetail({
+                kind: "studentClass",
+                id,
+                studentId: selectedStudentId,
+              })
+            }
+          />
+        ) : null}
+        {view === "studentCalendar" ? (
+          <StudentTimetableV2
+            data={data}
+            studentId={selectedStudentId}
+            run={run}
+            onOpen={(id) => setDetail({ kind: "session", id })}
+          />
+        ) : null}
+      </section>
+      {detailStack.map((stackDetail, index) => (
+        <DetailSheet
+          key={`${stackDetail.kind}-${stackDetail.id}-${index}`}
+          detail={stackDetail}
+          data={data}
+          t={t}
+          busy={busy}
+          run={run}
+          close={closeDetail}
+          closeAll={() => setDetailStack([])}
+          openDetail={openNestedDetail}
+        />
+      ))}
+      {notificationsOpen ? (
+        <NotificationDrawer
+          notifications={visibleNotifications}
+          close={() => setNotificationsOpen(false)}
+        />
+      ) : null}
+      {passPurchaseOpen ? (
+        <PassPurchaseDialog
+          data={data}
+          studentId={selectedStudentId}
+          busy={busy}
+          run={run}
+          onClose={() => setPassPurchaseOpen(false)}
+        />
+      ) : null}
+      {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
+    </main>
+  );
 }
 
 function PortalLoading({ refreshing }: { refreshing: boolean }) {
-  return <div className={`portal-loading ${refreshing ? "is-refreshing" : ""}`} role="status" aria-live="polite">
-    <div className="portal-loading-card">
-      <div className="portal-loading-mark"><BookOpen size={27} /><i /><i /><i /></div>
-      <div><strong>{refreshing ? "Updating your teaching day" : "Preparing your teaching day"}</strong><span>{refreshing ? "Refreshing live classes, payments and attendance." : "Loading courses, rooms and learners."}</span></div>
+  return (
+    <div
+      className={`portal-loading ${refreshing ? "is-refreshing" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="portal-loading-card">
+        <div className="portal-loading-mark">
+          <BookOpen size={27} />
+          <i />
+          <i />
+          <i />
+        </div>
+        <div>
+          <strong>
+            {refreshing
+              ? "Updating your teaching day"
+              : "Preparing your teaching day"}
+          </strong>
+          <span>
+            {refreshing
+              ? "Refreshing live classes, payments and attendance."
+              : "Loading courses, rooms and learners."}
+          </span>
+        </div>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function pageTitle(view: View, t: typeof copy.en) {
-  const titles: Record<View, string> = { dashboard: "Dashboard", calendar: "Schedule", campus: "Campus live", students: t.students, teachers: "Teachers", courses: "Course catalogue", classrooms: "Campus setup", classes: "Courses", enrollment: "Enrolments", payments: "Payments", reports: t.reports, settings: "Business rules", teacherHome: "Today", studentHome: "My learning", studentCourses: "My courses", studentCalendar: "My timetable" };
+  const titles: Record<View, string> = {
+    dashboard: "Dashboard",
+    calendar: "Schedule",
+    campus: "Campus live",
+    students: t.students,
+    teachers: "Teachers",
+    courses: "Course catalogue",
+    classrooms: "Campus setup",
+    classes: "Courses",
+    enrollment: "Enrolments",
+    payments: "Payments",
+    reports: t.reports,
+    settings: "Business rules",
+    teacherHome: "Today",
+    studentHome: "My learning",
+    studentPasses: "My pass",
+    studentCourses: "My courses",
+    studentCalendar: "My timetable",
+  };
   return titles[view];
 }
 
-function NavGroup({ label, current, setView, items }: { label: string; current: View; setView: (value: View) => void; items: [View, typeof CalendarDays, string][] }) {
-  return <div className="nav-group"><span className="nav-label">{label}</span>{items.map(([key, Icon, title]) => <button key={key} type="button" className={current === key ? "active" : ""} onClick={() => setView(key)}><Icon size={18} /><span>{title}</span></button>)}</div>;
+function NavGroup({
+  label,
+  current,
+  setView,
+  items,
+}: {
+  label: string;
+  current: View;
+  setView: (value: View) => void;
+  items: [View, typeof CalendarDays, string][];
+}) {
+  return (
+    <div className="nav-group">
+      <span className="nav-label">{label}</span>
+      {items.map(([key, Icon, title]) => (
+        <button
+          key={key}
+          type="button"
+          className={current === key ? "active" : ""}
+          onClick={() => setView(key)}
+        >
+          <Icon size={18} />
+          <span>{title}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
-function RoleSwitcher({ role, onChange }: { role: Role; onChange: (role: Role) => void }) { return <div className="role-switcher"><button type="button" className={role === "admin" ? "active" : ""} onClick={() => onChange("admin")}><ShieldCheck size={15} /><span>Admin</span></button><button type="button" className={role === "teacher" ? "active" : ""} onClick={() => onChange("teacher")}><UserRound size={15} /><span>Teacher</span></button><button type="button" className={role === "student" ? "active" : ""} onClick={() => onChange("student")}><GraduationCap size={15} /><span>Student</span></button></div>; }
+function RoleSwitcher({
+  role,
+  onChange,
+}: {
+  role: Role;
+  onChange: (role: Role) => void;
+}) {
+  return (
+    <div className="role-switcher">
+      <button
+        type="button"
+        className={role === "admin" ? "active" : ""}
+        onClick={() => onChange("admin")}
+      >
+        <ShieldCheck size={15} />
+        <span>Admin</span>
+      </button>
+      <button
+        type="button"
+        className={role === "teacher" ? "active" : ""}
+        onClick={() => onChange("teacher")}
+      >
+        <UserRound size={15} />
+        <span>Teacher</span>
+      </button>
+      <button
+        type="button"
+        className={role === "student" ? "active" : ""}
+        onClick={() => onChange("student")}
+      >
+        <GraduationCap size={15} />
+        <span>Student</span>
+      </button>
+    </div>
+  );
+}
 
-function StudentThemePicker({ value, onChange }: { value: StudentTheme; onChange: (value: StudentTheme) => void }) { const themes: { id: StudentTheme; label: string }[] = [{ id: "sky", label: "Sky blue" }, { id: "ocean", label: "Ocean blue" }, { id: "mint", label: "Mint blue" }]; return <div className="student-theme-picker" aria-label="Student colour theme"><span>Theme</span>{themes.map((theme) => <button key={theme.id} className={value === theme.id ? "active" : ""} type="button" title={theme.label} aria-label={theme.label} onClick={() => onChange(theme.id)}><i className={theme.id} /></button>)}</div>; }
+function StudentThemePicker({
+  value,
+  onChange,
+}: {
+  value: StudentTheme;
+  onChange: (value: StudentTheme) => void;
+}) {
+  const themes: { id: StudentTheme; label: string }[] = [
+    { id: "sky", label: "Sky blue" },
+    { id: "ocean", label: "Ocean blue" },
+    { id: "mint", label: "Mint blue" },
+  ];
+  return (
+    <div className="student-theme-picker" aria-label="Student colour theme">
+      <span>Theme</span>
+      {themes.map((theme) => (
+        <button
+          key={theme.id}
+          className={value === theme.id ? "active" : ""}
+          type="button"
+          title={theme.label}
+          aria-label={theme.label}
+          onClick={() => onChange(theme.id)}
+        >
+          <i className={theme.id} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
-function PersonaPicker({ role, rows, value, onChange }: { role: Exclude<Role, "admin">; rows: Row[]; value: string; onChange: (value: string) => void }) {
+function PersonaPicker({
+  role,
+  rows,
+  value,
+  onChange,
+}: {
+  role: Exclude<Role, "admin">;
+  rows: Row[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const person = rows.find((item) => get(item, "id") === value) ?? rows[0];
   if (!person) return null;
   const isStudent = role === "student";
-  return <label className="persona-picker"><Avatar person={person} /><span><small>{isStudent ? "VIEWING LEARNER" : "VIEWING TEACHER"}</small><select value={get(person, "id")} onChange={(event) => onChange(event.target.value)} aria-label={isStudent ? "Choose student" : "Choose teacher"}>{rows.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")} · {isStudent ? get(item, "level") : get(item, "subject")}</option>)}</select></span></label>;
+  return (
+    <label className="persona-picker">
+      <Avatar person={person} />
+      <span>
+        <small>{isStudent ? "VIEWING LEARNER" : "VIEWING TEACHER"}</small>
+        <select
+          value={get(person, "id")}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={isStudent ? "Choose student" : "Choose teacher"}
+        >
+          {rows.map((item) => (
+            <option key={get(item, "id")} value={get(item, "id")}>
+              {get(item, "name")} ·{" "}
+              {isStudent ? get(item, "level") : get(item, "subject")}
+            </option>
+          ))}
+        </select>
+      </span>
+    </label>
+  );
 }
 
 function studentLearning(data: PortalData, studentId = "") {
-  const student = data.students.find((item) => get(item, "id") === studentId) ?? data.students[0];
-  const enrollments = student ? data.enrollments.filter((item) => get(item, "student_id") === get(student, "id") && get(item, "status") === "enrolled") : [];
+  const student =
+    data.students.find((item) => get(item, "id") === studentId) ??
+    data.students[0];
+  const enrollments = student
+    ? data.enrollments.filter(
+        (item) =>
+          get(item, "student_id") === get(student, "id") &&
+          get(item, "status") === "enrolled",
+      )
+    : [];
   const runIds = new Set(enrollments.map((item) => get(item, "class_run_id")));
-  const sessions = data.sessions.filter((item) => runIds.has(get(item, "class_run_id"))).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+  const sessions = data.sessions
+    .filter((item) => runIds.has(get(item, "class_run_id")))
+    .sort((left, right) =>
+      get(left, "starts_at").localeCompare(get(right, "starts_at")),
+    );
   return { student, enrollments, sessions };
 }
 
-function AdminDashboard({ data, onOpen, onNavigate }: { data: PortalData; onOpen: (id: string) => void; onNavigate: (view: View) => void }) {
-  const upcoming = data.sessions.filter((item) => asTime(item.starts_at) >= Date.now()).slice(0, 5);
-  const activeCourses = data.courses.map((course) => {
-    const intakes = data.runs.filter((run) => get(run, "course_id") === get(course, "id") && get(run, "status") !== "finished").filter((run) => !asTime(run.ends_at) || asTime(run.ends_at) >= Date.now()).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-    return { course, intakes, current: intakes[0] };
-  }).filter((group) => group.current).slice(0, 3);
-  return <section className="admin-dashboard"><section className="admin-welcome"><div><span>TEACHING OPERATIONS</span><h2>Good morning, keep the campus moving.</h2><p>{data.metrics.openRuns} active classes, {data.metrics.activeStudents} learners and {upcoming.length} lessons coming up.</p><div className="admin-welcome-actions"><button type="button" onClick={() => onNavigate("calendar")}><CalendarDays size={16} />View calendar</button><button type="button" onClick={() => onNavigate("classes")}>Manage classes <ChevronRight size={16} /></button></div></div><div className="admin-welcome-illustration"><BookOpen size={38} /><CalendarDays size={28} /><Sparkles size={22} /></div></section><div className="admin-metric-grid"><DashboardMetric icon={<Users size={19} />} label="Active learners" value={String(data.metrics.activeStudents)} note="Across open classes" tone="teal" /><DashboardMetric icon={<CalendarDays size={19} />} label="Upcoming lessons" value={String(upcoming.length)} note="Next scheduled sessions" tone="blue" /><DashboardMetric icon={<Banknote size={19} />} label="Outstanding" value={amount(data.metrics.outstanding)} note="Open invoices" tone="amber" /><DashboardMetric icon={<ShieldCheck size={19} />} label="Conflicts" value={String(data.metrics.conflicts)} note={data.metrics.conflicts ? "Needs review" : "All clear"} tone="rose" /></div><div className="admin-dashboard-grid"><section className="dashboard-panel agenda-panel"><header><div><span>TODAY & NEXT</span><h3>Teaching schedule</h3></div><button type="button" onClick={() => onNavigate("calendar")}>Open calendar <ChevronRight size={15} /></button></header>{upcoming.map((item) => <button key={get(item, "id")} type="button" className="dashboard-lesson" style={eventStyle(item)} onClick={() => onOpen(get(item, "id"))}><time><b>{timePart(item.starts_at)}</b><span>{datePart(item.starts_at)}</span></time><i /><div><strong>{get(item, "course_title")}</strong><p>{get(item, "run_name")} · {get(item, "topic")} · {get(item, "classroom_name")}</p></div><Status value={get(item, "status")} /></button>)}{!upcoming.length ? <Empty text="No upcoming lessons." /> : null}</section><section className="dashboard-panel course-overview"><header><div><span>ACTIVE COURSES</span><h3>At a glance</h3></div><button type="button" onClick={() => onNavigate("classes")}>All classes <ChevronRight size={15} /></button></header>{activeCourses.map(({ course, intakes, current }) => { const seats = Math.max(1, Number(current.capacity) || 1); const enrolled = Number(current.student_count) || 0; return <article key={get(course, "id")}><CourseVisual course={course} /><div><strong>{get(course, "title")}<span className="class-name-chip compact" style={eventStyle(current)}>{get(current, "name")}</span></strong><p>{intakes.length} active {intakes.length === 1 ? "class" : "classes"} · {get(current, "term_name")}</p><div className="dashboard-progress"><i style={{ width: `${Math.min(100, Math.round(enrolled / seats * 100))}%` }} /></div><small>{enrolled}/{seats} learners · {get(current, "session_count")} lessons</small></div></article>; })}{!activeCourses.length ? <Empty text="No active classes yet." /> : null}</section></div></section>;
+function AdminDashboard({
+  data,
+  onOpen,
+  onNavigate,
+}: {
+  data: PortalData;
+  onOpen: (id: string) => void;
+  onNavigate: (view: View) => void;
+}) {
+  const upcoming = data.sessions
+    .filter((item) => asTime(item.starts_at) >= Date.now())
+    .slice(0, 5);
+  const activeCourses = data.courses
+    .map((course) => {
+      const intakes = data.runs
+        .filter(
+          (run) =>
+            get(run, "course_id") === get(course, "id") &&
+            get(run, "status") !== "finished",
+        )
+        .filter(
+          (run) => !asTime(run.ends_at) || asTime(run.ends_at) >= Date.now(),
+        )
+        .sort(
+          (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+        );
+      return { course, intakes, current: intakes[0] };
+    })
+    .filter((group) => group.current)
+    .slice(0, 3);
+  return (
+    <section className="admin-dashboard">
+      <section className="admin-welcome">
+        <div>
+          <span>TEACHING OPERATIONS</span>
+          <h2>Good morning, keep the campus moving.</h2>
+          <p>
+            {data.metrics.openRuns} active classes,{" "}
+            {data.metrics.activeStudents} learners and {upcoming.length} lessons
+            coming up.
+          </p>
+          <div className="admin-welcome-actions">
+            <button type="button" onClick={() => onNavigate("calendar")}>
+              <CalendarDays size={16} />
+              View calendar
+            </button>
+            <button type="button" onClick={() => onNavigate("classes")}>
+              Manage classes <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="admin-welcome-illustration">
+          <BookOpen size={38} />
+          <CalendarDays size={28} />
+          <Sparkles size={22} />
+        </div>
+      </section>
+      <div className="admin-metric-grid">
+        <DashboardMetric
+          icon={<Users size={19} />}
+          label="Active learners"
+          value={String(data.metrics.activeStudents)}
+          note="Across open classes"
+          tone="teal"
+        />
+        <DashboardMetric
+          icon={<CalendarDays size={19} />}
+          label="Upcoming lessons"
+          value={String(upcoming.length)}
+          note="Next scheduled sessions"
+          tone="blue"
+        />
+        <DashboardMetric
+          icon={<Banknote size={19} />}
+          label="Outstanding"
+          value={amount(data.metrics.outstanding)}
+          note="Open invoices"
+          tone="amber"
+        />
+        <DashboardMetric
+          icon={<ShieldCheck size={19} />}
+          label="Conflicts"
+          value={String(data.metrics.conflicts)}
+          note={data.metrics.conflicts ? "Needs review" : "All clear"}
+          tone="rose"
+        />
+      </div>
+      <div className="admin-dashboard-grid">
+        <section className="dashboard-panel agenda-panel">
+          <header>
+            <div>
+              <span>TODAY & NEXT</span>
+              <h3>Teaching schedule</h3>
+            </div>
+            <button type="button" onClick={() => onNavigate("calendar")}>
+              Open calendar <ChevronRight size={15} />
+            </button>
+          </header>
+          {upcoming.map((item) => (
+            <button
+              key={get(item, "id")}
+              type="button"
+              className="dashboard-lesson"
+              style={eventStyle(item)}
+              onClick={() => onOpen(get(item, "id"))}
+            >
+              <time>
+                <b>{timePart(item.starts_at)}</b>
+                <span>{datePart(item.starts_at)}</span>
+              </time>
+              <i />
+              <div>
+                <strong>{get(item, "course_title")}</strong>
+                <p>
+                  {get(item, "run_name")} · {get(item, "topic")} ·{" "}
+                  {get(item, "classroom_name")}
+                </p>
+              </div>
+              <Status value={get(item, "status")} />
+            </button>
+          ))}
+          {!upcoming.length ? <Empty text="No upcoming lessons." /> : null}
+        </section>
+        <section className="dashboard-panel course-overview">
+          <header>
+            <div>
+              <span>ACTIVE COURSES</span>
+              <h3>At a glance</h3>
+            </div>
+            <button type="button" onClick={() => onNavigate("classes")}>
+              All classes <ChevronRight size={15} />
+            </button>
+          </header>
+          {activeCourses.map(({ course, intakes, current }) => {
+            const seats = Math.max(1, Number(current.capacity) || 1);
+            const enrolled = Number(current.student_count) || 0;
+            return (
+              <article key={get(course, "id")}>
+                <CourseVisual course={course} />
+                <div>
+                  <strong>
+                    {get(course, "title")}
+                    <span
+                      className="class-name-chip compact"
+                      style={eventStyle(current)}
+                    >
+                      {get(current, "name")}
+                    </span>
+                  </strong>
+                  <p>
+                    {intakes.length} active{" "}
+                    {intakes.length === 1 ? "class" : "classes"} ·{" "}
+                    {get(current, "term_name")}
+                  </p>
+                  <div className="dashboard-progress">
+                    <i
+                      style={{
+                        width: `${Math.min(100, Math.round((enrolled / seats) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <small>
+                    {enrolled}/{seats} learners ·{" "}
+                    {get(current, "session_count")} lessons
+                  </small>
+                </div>
+              </article>
+            );
+          })}
+          {!activeCourses.length ? (
+            <Empty text="No active classes yet." />
+          ) : null}
+        </section>
+      </div>
+    </section>
+  );
 }
-function DashboardMetric({ icon, label, value, note, tone }: { icon: ReactNode; label: string; value: string; note: string; tone: string }) { return <article className={`dashboard-metric ${tone}`}><span>{icon}</span><p>{label}</p><strong>{value}</strong><small>{note}</small></article>; }
-
-function StudentHome({ data, studentId, onOpen, onOpenClass }: { data: PortalData; studentId: string; onOpen: (id: string) => void; onOpenClass: (id: string) => void }) {
-  const { student, enrollments, sessions } = studentLearning(data, studentId); const next = sessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()) ?? sessions[0];
-  const attended = data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && ["present", "late"].includes(get(item, "status"))).length;
-  return <section className="student-portal"><section className="student-hero"><img src="/assets/student/learning-hero.png" alt="" /><div className="student-hero-copy"><div className="student-profile"><Avatar person={student} /><span>{get(student, "level")} learner</span></div><p>Good to see you</p><h2>{get(student, "name").split(" ")[0]}!</h2><strong>Small steps make big progress.</strong></div><div className="student-stars"><Sparkles size={20} /><b>{attended}</b><span>learning wins</span></div></section><div className="student-focus-grid student-focus-grid-compact"><article className="student-next"><span>UP NEXT</span><h3>{get(next, "course_title") || "Your next lesson"}</h3><p>{get(next, "topic") || "A new learning adventure"}</p><div><Clock3 size={16} /><strong>{next ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}` : "No lesson booked"}</strong></div>{next ? <button type="button" onClick={() => onOpen(get(next, "id"))}>View lesson <ChevronRight size={16} /></button> : null}</article><article className="student-reminder"><ClipboardCheck size={22} /><div><span>THIS WEEK</span><strong>{sessions.slice(0, 2).length} lessons ahead</strong><p>Pack your notebook and arrive ready.</p></div></article></div><section className="student-learning-section"><div className="student-section-title"><div><span>MY LEARNING</span><h3>Keep going, you are doing great</h3></div><b>{enrollments.length} courses</b></div><div className="course-card-gallery">{enrollments.map((enrollment) => { const runSessions = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")); const progress = runSessions.length ? Math.min(100, Math.round((data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && runSessions.some((session) => get(session, "id") === get(item, "class_session_id")) && ["present", "late"].includes(get(item, "status"))).length / runSessions.length) * 100)) : 0; return <button type="button" className="student-course-card" key={get(enrollment, "id")} style={eventStyle({ course_color: get(enrollment, "course_color") })} onClick={() => onOpenClass(get(enrollment, "class_run_id"))}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{get(enrollment, "run_name")}</p><div className="mini-progress"><i style={{ width: `${progress}%` }} /></div><small>{progress}% complete</small></div><strong className="course-progress-number">{progress}%</strong></button>; })}</div></section></section>;
+function DashboardMetric({
+  icon,
+  label,
+  value,
+  note,
+  tone,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  note: string;
+  tone: string;
+}) {
+  return (
+    <article className={`dashboard-metric ${tone}`}>
+      <span>{icon}</span>
+      <p>{label}</p>
+      <strong>{value}</strong>
+      <small>{note}</small>
+    </article>
+  );
 }
 
-function StudentCourses({ data, studentId, onOpenClass }: { data: PortalData; studentId: string; onOpenClass: (id: string) => void }) { const { student, enrollments, sessions } = studentLearning(data, studentId); return <section className="student-portal"><section className="student-simple-heading"><Sparkles size={22} /><div><span>MY COURSES</span><h2>Everything you are learning</h2></div></section><div className="course-card-gallery">{enrollments.map((enrollment) => { const runSessions = sessions.filter((item) => get(item, "class_run_id") === get(enrollment, "class_run_id")); const attended = data.attendance.filter((item) => get(item, "student_id") === get(student, "id") && runSessions.some((session) => get(session, "id") === get(item, "class_session_id")) && ["present", "late"].includes(get(item, "status"))).length; const progress = runSessions.length ? Math.round(attended / runSessions.length * 100) : 0; return <button type="button" className="student-course-card" key={get(enrollment, "id")} style={eventStyle({ course_color: get(enrollment, "course_color") })} onClick={() => onOpenClass(get(enrollment, "class_run_id"))}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), display_color: get(enrollment, "course_color") }} /><div><h4>{get(enrollment, "course_title")}</h4><p>{get(enrollment, "run_name")}</p><span>{attended}/{runSessions.length} attended</span></div><strong className="course-progress-number">{progress}%</strong></button>; })}</div></section>; }
+function StudentHome({
+  data,
+  studentId,
+  onOpen,
+  onOpenClass,
+  onBuyPass,
+}: {
+  data: PortalData;
+  studentId: string;
+  onOpen: (id: string) => void;
+  onOpenClass: (id: string) => void;
+  onBuyPass: () => void;
+}) {
+  const { student, enrollments, sessions } = studentLearning(data, studentId);
+  const next =
+    sessions.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
+        Date.now(),
+    ) ?? sessions[0];
+  const attended = data.attendance.filter(
+    (item) =>
+      get(item, "student_id") === get(student, "id") &&
+      ["present", "late"].includes(get(item, "status")),
+  ).length;
+  return (
+    <section className="student-portal">
+      <section className="student-hero">
+        <img src="/assets/student/learning-hero.png" alt="" />
+        <div className="student-hero-copy">
+          <div className="student-profile">
+            <Avatar person={student} />
+            <span>{get(student, "level")} learner</span>
+          </div>
+          <p>Good to see you</p>
+          <h2>{get(student, "name").split(" ")[0]}!</h2>
+          <strong>Small steps make big progress.</strong>
+        </div>
+        <div className="student-stars">
+          <Sparkles size={20} />
+          <b>{attended}</b>
+          <span>learning wins</span>
+        </div>
+      </section>
+      <StudentPassSummary
+        data={data}
+        studentId={get(student, "id")}
+        onBuy={onBuyPass}
+      />
+      <div className="student-focus-grid student-focus-grid-compact">
+        <article className="student-next">
+          <span>UP NEXT</span>
+          <h3>{get(next, "course_title") || "Your next lesson"}</h3>
+          <p>{get(next, "topic") || "A new learning adventure"}</p>
+          <div>
+            <Clock3 size={16} />
+            <strong>
+              {next
+                ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}`
+                : "No lesson booked"}
+            </strong>
+          </div>
+          {next ? (
+            <button type="button" onClick={() => onOpen(get(next, "id"))}>
+              View lesson <ChevronRight size={16} />
+            </button>
+          ) : null}
+        </article>
+        <article className="student-reminder">
+          <ClipboardCheck size={22} />
+          <div>
+            <span>THIS WEEK</span>
+            <strong>{sessions.slice(0, 2).length} lessons ahead</strong>
+            <p>Pack your notebook and arrive ready.</p>
+          </div>
+        </article>
+      </div>
+      <section className="student-learning-section">
+        <div className="student-section-title">
+          <div>
+            <span>MY LEARNING</span>
+            <h3>Keep going, you are doing great</h3>
+          </div>
+          <b>{enrollments.length} courses</b>
+        </div>
+        <div className="course-card-gallery">
+          {enrollments.map((enrollment) => {
+            const runSessions = sessions.filter(
+              (item) =>
+                get(item, "class_run_id") === get(enrollment, "class_run_id"),
+            );
+            const progress = runSessions.length
+              ? Math.min(
+                  100,
+                  Math.round(
+                    (data.attendance.filter(
+                      (item) =>
+                        get(item, "student_id") === get(student, "id") &&
+                        runSessions.some(
+                          (session) =>
+                            get(session, "id") ===
+                            get(item, "class_session_id"),
+                        ) &&
+                        ["present", "late"].includes(get(item, "status")),
+                    ).length /
+                      runSessions.length) *
+                      100,
+                  ),
+                )
+              : 0;
+            return (
+              <button
+                type="button"
+                className="student-course-card"
+                key={get(enrollment, "id")}
+                style={eventStyle({
+                  course_color: get(enrollment, "course_color"),
+                })}
+                onClick={() => onOpenClass(get(enrollment, "class_run_id"))}
+              >
+                <CourseVisual
+                  course={{
+                    title: get(enrollment, "course_title"),
+                    subject: get(enrollment, "course_title"),
+                    display_color: get(enrollment, "course_color"),
+                  }}
+                />
+                <div>
+                  <h4>{get(enrollment, "course_title")}</h4>
+                  <p>{get(enrollment, "run_name")}</p>
+                  <div className="mini-progress">
+                    <i style={{ width: `${progress}%` }} />
+                  </div>
+                  <small>{progress}% complete</small>
+                </div>
+                <strong className="course-progress-number">{progress}%</strong>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </section>
+  );
+}
 
-function StudentTimetable({ data, onOpen }: { data: PortalData; onOpen: (id: string) => void }) { const { sessions } = studentLearning(data); return <section className="student-portal"><section className="student-simple-heading"><CalendarDays size={22} /><div><span>MY TIMETABLE</span><h2>Here is what is coming up</h2></div></section><div className="student-timetable">{sessions.map((item) => <button type="button" key={get(item, "id")} style={eventStyle(item)} onClick={() => onOpen(get(item, "id"))}><span>{datePart(item.starts_at)}</span><strong>{timePart(item.starts_at)} · {get(item, "course_title")}</strong><p>{get(item, "topic")} · {get(item, "classroom_name")}</p><ChevronRight size={18} /></button>)}{!sessions.length ? <Empty text="No lessons booked yet." /> : null}</div></section>; }
+function activePasses(data: PortalData, studentId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  return data.passes.filter(
+    (pass) =>
+      get(pass, "student_id") === studentId &&
+      get(pass, "status") === "active" &&
+      get(pass, "valid_until") >= today,
+  );
+}
 
-function StudentTimetableV2({ data, studentId, run, onOpen }: { data: PortalData; studentId: string; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void }) {
+function StudentPassSummary({
+  data,
+  studentId,
+  onBuy,
+}: {
+  data: PortalData;
+  studentId: string;
+  onBuy: () => void;
+}) {
+  const passes = activePasses(data, studentId);
+  const totals = passes.reduce(
+    (value, pass) => ({
+      onsite: value.onsite + Number(pass.onsite_remaining || 0),
+      online: value.online + Number(pass.online_remaining || 0),
+      study: value.study + Number(pass.study_remaining || 0),
+    }),
+    { onsite: 0, online: 0, study: 0 },
+  );
+  const latest = passes[0];
+  return (
+    <section className="student-pass-summary">
+      <div className="student-pass-summary-copy">
+        <span>MY LEARNING PASS</span>
+        <h3>{latest ? latest.name : "Get ready to learn"}</h3>
+        <p>
+          {latest
+            ? `Valid until ${malaysiaDate(latest.valid_until)}`
+            : "Choose a monthly pass or add only the credits you need."}
+        </p>
+      </div>
+      <div className="student-credit-row">
+        <span>
+          <Building2 size={15} />
+          <b>{totals.onsite}</b>Onsite
+        </span>
+        <span>
+          <BookOpen size={15} />
+          <b>{totals.online}</b>Online
+        </span>
+        <span>
+          <School size={15} />
+          <b>{totals.study}</b>Study
+        </span>
+      </div>
+      <button type="button" className="primary-button" onClick={onBuy}>
+        <Plus size={16} />
+        Buy pass
+      </button>
+    </section>
+  );
+}
+
+function StudentPasses({
+  data,
+  studentId,
+  onBuy,
+}: {
+  data: PortalData;
+  studentId: string;
+  onBuy: () => void;
+}) {
+  const passes = activePasses(data, studentId);
+  return (
+    <section className="student-portal student-pass-page">
+      <section className="student-simple-heading">
+        <Banknote size={22} />
+        <div>
+          <span>MY PASS</span>
+          <h2>Learning credits for your month</h2>
+        </div>
+        <button type="button" className="primary-button" onClick={onBuy}>
+          <Plus size={16} />
+          Buy pass
+        </button>
+      </section>
+      <StudentPassSummary data={data} studentId={studentId} onBuy={onBuy} />
+      <section className="student-learning-section">
+        <div className="student-section-title">
+          <div>
+            <span>ACTIVE PASSES</span>
+            <h3>Your available credits</h3>
+          </div>
+          <b>{passes.length} active</b>
+        </div>
+        <div className="pass-card-gallery">
+          {passes.map((pass) => (
+            <article key={get(pass, "id")} className="student-pass-card">
+              <div>
+                <span>{get(pass, "product_code")}</span>
+                <h4>{get(pass, "name")}</h4>
+                <p>Valid until {malaysiaDate(pass.valid_until)}</p>
+              </div>
+              <div className="pass-credit-grid">
+                <span>
+                  <Building2 size={15} />
+                  <b>{get(pass, "onsite_remaining")}</b>Onsite
+                </span>
+                <span>
+                  <BookOpen size={15} />
+                  <b>{get(pass, "online_remaining")}</b>Online
+                </span>
+                <span>
+                  <School size={15} />
+                  <b>{get(pass, "study_remaining")}</b>Study
+                </span>
+              </div>
+            </article>
+          ))}
+          {!passes.length ? (
+            <Empty text="You do not have an active pass yet." />
+          ) : null}
+        </div>
+      </section>
+      <section className="student-learning-section">
+        <div className="student-section-title">
+          <div>
+            <span>MORE OPTIONS</span>
+            <h3>Add only what you need</h3>
+          </div>
+        </div>
+        <div className="pass-product-gallery">
+          {data.passProducts
+            .filter((product) => get(product, "id") !== "pass-monthly")
+            .map((product) => (
+              <article key={get(product, "id")}>
+                <Banknote size={20} />
+                <div>
+                  <strong>{get(product, "name")}</strong>
+                  <p>{get(product, "description")}</p>
+                </div>
+                <b>{amount(product.price)}</b>
+              </article>
+            ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function PassPurchaseDialog({
+  data,
+  studentId,
+  busy,
+  run,
+  onClose,
+}: {
+  data: PortalData;
+  studentId: string;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState(1);
+  const [productId, setProductId] = useState("");
+  const [runId, setRunId] = useState("");
+  const [mode, setMode] = useState<"onsite" | "online">("onsite");
+  const [method, setMethod] = useState("duitnow_qr");
+  const [proofReference, setProofReference] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (!productId && data.passProducts[0])
+      setProductId(get(data.passProducts[0], "id"));
+  }, [data.passProducts, productId]);
+  const product = data.passProducts.find(
+    (item) => get(item, "id") === productId,
+  );
+  const openRuns = data.runs
+    .filter((item) => !["finished", "cancelled"].includes(get(item, "status")))
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const canUseMode = (value: "onsite" | "online") =>
+    Number(
+      product?.[value === "onsite" ? "onsite_credits" : "online_credits"] ?? 0,
+    ) > 0;
+  function submit(payNow: boolean) {
+    if (!product) return;
+    void run("purchasePass", {
+      studentId,
+      passProductId: productId,
+      runId: runId || undefined,
+      deliveryMode: mode,
+      payNow,
+      method,
+      proofReference,
+      note,
+    }).then(onClose);
+  }
+  return (
+    <div
+      className="payment-dialog-backdrop pass-purchase-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <section
+        className="pass-purchase-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Buy learning pass"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>LEARNING PASS</span>
+            <h3>
+              {step === 1
+                ? "Choose your learning credits"
+                : step === 2
+                  ? "Choose a class"
+                  : step === 3
+                    ? "Choose how you learn"
+                    : "Review and pay"}
+            </h3>
+            <p>Step {step} of 4</p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="pass-stepper">
+          {[1, 2, 3, 4].map((value) => (
+            <i
+              key={value}
+              className={value === step ? "active" : value < step ? "done" : ""}
+            >
+              {value}
+            </i>
+          ))}
+        </div>
+        <main>
+          {step === 1 ? (
+            <div className="pass-choice-grid">
+              {data.passProducts.map((item) => (
+                <button
+                  type="button"
+                  key={get(item, "id")}
+                  className={productId === get(item, "id") ? "selected" : ""}
+                  onClick={() => {
+                    setProductId(get(item, "id"));
+                    const selectedCredit =
+                      mode === "onsite"
+                        ? Number(item.onsite_credits)
+                        : Number(item.online_credits);
+                    if (!selectedCredit)
+                      setMode(
+                        Number(item.online_credits) ? "online" : "onsite",
+                      );
+                  }}
+                >
+                  <Banknote size={21} />
+                  <strong>{get(item, "name")}</strong>
+                  <p>{get(item, "description")}</p>
+                  <div>
+                    <span>{get(item, "onsite_credits")} onsite</span>
+                    <span>{get(item, "online_credits")} online</span>
+                    <span>{get(item, "study_credits")} study</span>
+                  </div>
+                  <b>{amount(item.price)}</b>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {step === 2 ? (
+            <div className="pass-class-step">
+              <p className="step-intro">
+                Pick a class to enrol with this pass now. You can also decide
+                later.
+              </p>
+              <div className="pass-run-list">
+                {openRuns.map((item) => (
+                  <button
+                    type="button"
+                    key={get(item, "id")}
+                    className={runId === get(item, "id") ? "selected" : ""}
+                    style={eventStyle(item)}
+                    onClick={() => setRunId(get(item, "id"))}
+                  >
+                    <CourseVisual
+                      course={{
+                        title: get(item, "course_title"),
+                        subject: get(item, "subject"),
+                        display_color: get(item, "run_course_color"),
+                      }}
+                    />
+                    <div>
+                      <strong>{get(item, "course_title")}</strong>
+                      <p>{get(item, "name")}</p>
+                      <small>
+                        {get(item, "student_count")}/{get(item, "capacity")}{" "}
+                        places filled 路 {get(item, "session_count")} lessons
+                      </small>
+                    </div>
+                    <ChevronRight size={17} />
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={`skip-course-button ${!runId ? "selected" : ""}`}
+                onClick={() => setRunId("")}
+              >
+                I will choose a class later <ChevronRight size={16} />
+              </button>
+            </div>
+          ) : null}
+          {step === 3 ? (
+            <div className="pass-mode-step">
+              <p className="step-intro">
+                Every class can be joined onsite or online. Your attendance will
+                use the matching credit.
+              </p>
+              <div className="pass-mode-grid">
+                <button
+                  type="button"
+                  className={mode === "onsite" ? "selected" : ""}
+                  disabled={!canUseMode("onsite")}
+                  onClick={() => setMode("onsite")}
+                >
+                  <Building2 size={24} />
+                  <strong>Onsite class</strong>
+                  <span>
+                    {get(product, "onsite_credits")} credits in this pass
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={mode === "online" ? "selected" : ""}
+                  disabled={!canUseMode("online")}
+                  onClick={() => setMode("online")}
+                >
+                  <BookOpen size={24} />
+                  <strong>Online class</strong>
+                  <span>
+                    {get(product, "online_credits")} credits in this pass
+                  </span>
+                </button>
+              </div>
+              {!runId ? (
+                <p className="step-note">
+                  No class selected yet. Your credits will be ready when you
+                  choose one.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {step === 4 ? (
+            <div className="pass-checkout-step">
+              <section className="pass-checkout-summary">
+                <div>
+                  <span>PASS</span>
+                  <strong>{get(product, "name")}</strong>
+                </div>
+                <b>{amount(product?.price)}</b>
+                <p>
+                  {runId
+                    ? `Class selected: ${get(
+                        openRuns.find((item) => get(item, "id") === runId),
+                        "course_title",
+                      )} 路 ${mode === "online" ? "Online" : "Onsite"}`
+                    : "Class selection saved for later"}
+                </p>
+              </section>
+              <label className="form-field">
+                <span>Payment method</span>
+                <select
+                  value={method}
+                  onChange={(event) => setMethod(event.target.value)}
+                >
+                  <option value="duitnow_qr">DuitNow QR</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="fpx">FPX / online banking</option>
+                  <option value="tng_ewallet">TNG eWallet</option>
+                  <option value="grabpay">GrabPay</option>
+                  <option value="cash">Cash</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Payment reference</span>
+                <input
+                  value={proofReference}
+                  onChange={(event) => setProofReference(event.target.value)}
+                  placeholder="Optional reference"
+                />
+              </label>
+              <label className="form-field">
+                <span>Note</span>
+                <input
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="Optional note"
+                />
+              </label>
+            </div>
+          ) : null}
+        </main>
+        <footer>
+          {step > 1 ? (
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() => setStep((value) => value - 1)}
+            >
+              Back
+            </button>
+          ) : (
+            <span />
+          )}
+          {step < 4 ? (
+            <button
+              className="primary-button"
+              type="button"
+              disabled={!product || (step === 3 && !canUseMode(mode))}
+              onClick={() => setStep((value) => value + 1)}
+            >
+              Continue <ChevronRight size={16} />
+            </button>
+          ) : (
+            <div className="pass-checkout-actions">
+              <button
+                className="quiet-button"
+                type="button"
+                disabled={busy}
+                onClick={() => submit(false)}
+              >
+                Save for later
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={busy}
+                onClick={() => submit(true)}
+              >
+                <Check size={16} />
+                Pay {amount(product?.price)}
+              </button>
+            </div>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function StudentCourses({
+  data,
+  studentId,
+  onOpenClass,
+}: {
+  data: PortalData;
+  studentId: string;
+  onOpenClass: (id: string) => void;
+}) {
+  const { student, enrollments, sessions } = studentLearning(data, studentId);
+  return (
+    <section className="student-portal">
+      <section className="student-simple-heading">
+        <Sparkles size={22} />
+        <div>
+          <span>MY COURSES</span>
+          <h2>Everything you are learning</h2>
+        </div>
+      </section>
+      <div className="course-card-gallery">
+        {enrollments.map((enrollment) => {
+          const runSessions = sessions.filter(
+            (item) =>
+              get(item, "class_run_id") === get(enrollment, "class_run_id"),
+          );
+          const attended = data.attendance.filter(
+            (item) =>
+              get(item, "student_id") === get(student, "id") &&
+              runSessions.some(
+                (session) =>
+                  get(session, "id") === get(item, "class_session_id"),
+              ) &&
+              ["present", "late"].includes(get(item, "status")),
+          ).length;
+          const progress = runSessions.length
+            ? Math.round((attended / runSessions.length) * 100)
+            : 0;
+          return (
+            <button
+              type="button"
+              className="student-course-card"
+              key={get(enrollment, "id")}
+              style={eventStyle({
+                course_color: get(enrollment, "course_color"),
+              })}
+              onClick={() => onOpenClass(get(enrollment, "class_run_id"))}
+            >
+              <CourseVisual
+                course={{
+                  title: get(enrollment, "course_title"),
+                  subject: get(enrollment, "course_title"),
+                  display_color: get(enrollment, "course_color"),
+                }}
+              />
+              <div>
+                <h4>{get(enrollment, "course_title")}</h4>
+                <p>{get(enrollment, "run_name")}</p>
+                <span>
+                  {attended}/{runSessions.length} attended
+                </span>
+              </div>
+              <strong className="course-progress-number">{progress}%</strong>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function StudentTimetable({
+  data,
+  onOpen,
+}: {
+  data: PortalData;
+  onOpen: (id: string) => void;
+}) {
+  const { sessions } = studentLearning(data);
+  return (
+    <section className="student-portal">
+      <section className="student-simple-heading">
+        <CalendarDays size={22} />
+        <div>
+          <span>MY TIMETABLE</span>
+          <h2>Here is what is coming up</h2>
+        </div>
+      </section>
+      <div className="student-timetable">
+        {sessions.map((item) => (
+          <button
+            type="button"
+            key={get(item, "id")}
+            style={eventStyle(item)}
+            onClick={() => onOpen(get(item, "id"))}
+          >
+            <span>{datePart(item.starts_at)}</span>
+            <strong>
+              {timePart(item.starts_at)} · {get(item, "course_title")}
+            </strong>
+            <p>
+              {get(item, "topic")} · {get(item, "classroom_name")}
+            </p>
+            <ChevronRight size={18} />
+          </button>
+        ))}
+        {!sessions.length ? <Empty text="No lessons booked yet." /> : null}
+      </div>
+    </section>
+  );
+}
+
+function StudentTimetableV2({
+  data,
+  studentId,
+  run,
+  onOpen,
+}: {
+  data: PortalData;
+  studentId: string;
+  run: (action: string, values?: Row) => Promise<void>;
+  onOpen: (id: string) => void;
+}) {
   const { student, sessions } = studentLearning(data, studentId);
-  const attendance = data.attendance.filter((row) => get(row, "student_id") === get(student, "id"));
+  const attendance = data.attendance.filter(
+    (row) => get(row, "student_id") === get(student, "id"),
+  );
   const [mode, setMode] = useState<"list" | "calendar">("list");
-  const [anchor, setAnchor] = useState(() => sessions[0] ? fromKey(datePart(sessions[0].starts_at)) : new Date());
-  return <section className="student-portal"><section className="student-simple-heading"><CalendarDays size={22} /><div><span>MY TIMETABLE</span><h2>Here is what is coming up</h2></div><div className="student-timetable-switch"><button className={mode === "list" ? "active" : ""} type="button" onClick={() => setMode("list")}><List size={16} /><span>List</span></button><button className={mode === "calendar" ? "active" : ""} type="button" onClick={() => setMode("calendar")}><CalendarDays size={16} /><span>Calendar</span></button></div></section>{mode === "list" ? <StudentTimetableList sessions={sessions} attendance={attendance} studentId={get(student, "id")} run={run} onOpen={onOpen} /> : <section className="student-calendar-view"><header><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1, 12))}><ChevronLeft size={17} /></button><strong>{anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" })}</strong><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1, 12))}><ChevronRight size={17} /></button></header><MonthCalendar anchor={anchor} events={sessions} c={calendarText.en} language="en" onOpen={onOpen} onSelectDate={() => undefined} /></section>}</section>;
+  const [anchor, setAnchor] = useState(() =>
+    sessions[0] ? fromKey(datePart(sessions[0].starts_at)) : new Date(),
+  );
+  return (
+    <section className="student-portal">
+      <section className="student-simple-heading">
+        <CalendarDays size={22} />
+        <div>
+          <span>MY TIMETABLE</span>
+          <h2>Here is what is coming up</h2>
+        </div>
+        <div className="student-timetable-switch">
+          <button
+            className={mode === "list" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("list")}
+          >
+            <List size={16} />
+            <span>List</span>
+          </button>
+          <button
+            className={mode === "calendar" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("calendar")}
+          >
+            <CalendarDays size={16} />
+            <span>Calendar</span>
+          </button>
+        </div>
+      </section>
+      {mode === "list" ? (
+        <StudentTimetableList
+          sessions={sessions}
+          attendance={attendance}
+          studentId={get(student, "id")}
+          run={run}
+          onOpen={onOpen}
+        />
+      ) : (
+        <section className="student-calendar-view">
+          <header>
+            <button
+              type="button"
+              className="header-icon"
+              onClick={() =>
+                setAnchor(
+                  new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <strong>
+              {anchor.toLocaleDateString("en-MY", {
+                month: "long",
+                year: "numeric",
+              })}
+            </strong>
+            <button
+              type="button"
+              className="header-icon"
+              onClick={() =>
+                setAnchor(
+                  new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight size={17} />
+            </button>
+          </header>
+          <MonthCalendar
+            anchor={anchor}
+            events={sessions}
+            c={calendarText.en}
+            language="en"
+            onOpen={onOpen}
+            onSelectDate={() => undefined}
+          />
+        </section>
+      )}
+    </section>
+  );
 }
 
-function StudentTimetableList({ sessions, attendance, studentId, run, onOpen }: { sessions: Row[]; attendance: Row[]; studentId: string; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void }) { const [menuId, setMenuId] = useState(""); return <div className="table-scroll student-timetable-grid"><table className="data-table"><thead><tr><th>Date</th><th>Time</th><th>Course</th><th>Lesson</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead><tbody>{sessions.map((item) => { const sessionId = get(item, "id"); const record = attendance.find((row) => get(row, "class_session_id") === sessionId); const status = get(record, "status"); const menuOpen = menuId === sessionId; return <tr key={sessionId}><td>{datePart(item.starts_at)}</td><td>{timeRange(item)}</td><td><span className="student-course-cell" style={eventStyle(item)}><i /><strong>{get(item, "course_title")}</strong></span></td><td>{get(item, "topic")}</td><td>{get(item, "classroom_name")}</td><td><Status value={status || "pending"} /></td><td><div className="student-row-actions"><button className="table-button" type="button" onClick={() => onOpen(sessionId)}>Submit homework</button><div className="student-more-action"><button className="icon-button" type="button" title="More actions" aria-label="More actions" onClick={() => setMenuId(menuOpen ? "" : sessionId)}><MoreHorizontal size={17} /></button>{menuOpen ? <div className="student-more-menu"><button disabled={status === "leave"} type="button" onClick={() => { void run("requestLeave", { sessionId, studentId }); setMenuId(""); }}>{status === "leave" ? "Leave requested" : "Request leave"}</button></div> : null}</div></div></td></tr>; })}{!sessions.length ? <tr><td colSpan={7} className="empty-cell">No lessons booked yet.</td></tr> : null}</tbody></table></div>; }
+function StudentTimetableList({
+  sessions,
+  attendance,
+  studentId,
+  run,
+  onOpen,
+}: {
+  sessions: Row[];
+  attendance: Row[];
+  studentId: string;
+  run: (action: string, values?: Row) => Promise<void>;
+  onOpen: (id: string) => void;
+}) {
+  const [menuId, setMenuId] = useState("");
+  return (
+    <div className="table-scroll student-timetable-grid">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Course</th>
+            <th>Lesson</th>
+            <th>Room</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sessions.map((item) => {
+            const sessionId = get(item, "id");
+            const record = attendance.find(
+              (row) => get(row, "class_session_id") === sessionId,
+            );
+            const status = get(record, "status");
+            const menuOpen = menuId === sessionId;
+            return (
+              <tr key={sessionId}>
+                <td>{datePart(item.starts_at)}</td>
+                <td>{timeRange(item)}</td>
+                <td>
+                  <span
+                    className="student-course-cell"
+                    style={eventStyle(item)}
+                  >
+                    <i />
+                    <strong>{get(item, "course_title")}</strong>
+                  </span>
+                </td>
+                <td>{get(item, "topic")}</td>
+                <td>{get(item, "classroom_name")}</td>
+                <td>
+                  <Status value={status || "pending"} />
+                </td>
+                <td>
+                  <div className="student-row-actions">
+                    <button
+                      className="table-button"
+                      type="button"
+                      onClick={() => onOpen(sessionId)}
+                    >
+                      Submit homework
+                    </button>
+                    <div className="student-more-action">
+                      <button
+                        className="icon-button"
+                        type="button"
+                        title="More actions"
+                        aria-label="More actions"
+                        onClick={() => setMenuId(menuOpen ? "" : sessionId)}
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
+                      {menuOpen ? (
+                        <div className="student-more-menu">
+                          <button
+                            disabled={status === "leave"}
+                            type="button"
+                            onClick={() => {
+                              void run("requestLeave", {
+                                sessionId,
+                                studentId,
+                              });
+                              setMenuId("");
+                            }}
+                          >
+                            {status === "leave"
+                              ? "Leave requested"
+                              : "Request leave"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+          {!sessions.length ? (
+            <tr>
+              <td colSpan={7} className="empty-cell">
+                No lessons booked yet.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function TeacherHome({ data, teacherId, onOpen }: { data: PortalData; teacherId: string; onOpen: (id: string) => void }) {
-  const teacher = data.teachers.find((item) => get(item, "id") === teacherId) ?? data.teachers[0];
-  const lessons = data.sessions.filter((item) => get(item, "teacher_name") === get(teacher, "name")).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+function TeacherHome({
+  data,
+  teacherId,
+  onOpen,
+}: {
+  data: PortalData;
+  teacherId: string;
+  onOpen: (id: string) => void;
+}) {
+  const teacher =
+    data.teachers.find((item) => get(item, "id") === teacherId) ??
+    data.teachers[0];
+  const lessons = data.sessions
+    .filter((item) => get(item, "teacher_name") === get(teacher, "name"))
+    .sort((left, right) =>
+      get(left, "starts_at").localeCompare(get(right, "starts_at")),
+    );
   const lessonIds = new Set(lessons.map((item) => get(item, "id")));
-  const relatedAttendance = data.attendance.filter((item) => lessonIds.has(get(item, "class_session_id")));
-  const upcoming = lessons.filter((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now()).slice(0, 4);
-  return <section className="teacher-home"><header className="teacher-welcome"><div className="person-avatar teacher-avatar"><Avatar person={teacher} /></div><div><span>TEACHER HOME</span><h2>Good morning, {get(teacher, "name").replace("Ms ", "")}</h2><p>{get(teacher, "subject")} · Your teaching day at a glance</p></div><div className="teacher-welcome-stats"><b>{upcoming.length}</b><span>upcoming lessons</span></div></header><div className="teacher-stat-grid"><article><CalendarDays size={20} /><b>{lessons.length}</b><span>Scheduled lessons</span></article><article><UsersRound size={20} /><b>{new Set(relatedAttendance.map((item) => get(item, "student_id"))).size}</b><span>Students to support</span></article><article><ClipboardCheck size={20} /><b>{relatedAttendance.filter((item) => get(item, "status") === "pending").length}</b><span>Attendance to take</span></article></div><section className="teacher-agenda"><div className="student-section-title"><div><span>MY AGENDA</span><h3>Upcoming lessons</h3></div></div>{upcoming.map((lesson) => <button type="button" key={get(lesson, "id")} className="teacher-lesson" style={eventStyle(lesson)} onClick={() => onOpen(get(lesson, "id"))}><span>{datePart(lesson.starts_at)}<b>{timePart(lesson.starts_at)}</b></span><div><strong>{get(lesson, "course_title")}</strong><p>{get(lesson, "topic")} · {get(lesson, "classroom_name")}</p></div><span className="teacher-lesson-action">Take attendance <ChevronRight size={16} /></span></button>)}{!upcoming.length ? <Empty text="No upcoming lessons." /> : null}</section></section>;
+  const relatedAttendance = data.attendance.filter((item) =>
+    lessonIds.has(get(item, "class_session_id")),
+  );
+  const upcoming = lessons
+    .filter(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
+        Date.now(),
+    )
+    .slice(0, 4);
+  return (
+    <section className="teacher-home">
+      <header className="teacher-welcome">
+        <div className="person-avatar teacher-avatar">
+          <Avatar person={teacher} />
+        </div>
+        <div>
+          <span>TEACHER HOME</span>
+          <h2>Good morning, {get(teacher, "name").replace("Ms ", "")}</h2>
+          <p>{get(teacher, "subject")} · Your teaching day at a glance</p>
+        </div>
+        <div className="teacher-welcome-stats">
+          <b>{upcoming.length}</b>
+          <span>upcoming lessons</span>
+        </div>
+      </header>
+      <div className="teacher-stat-grid">
+        <article>
+          <CalendarDays size={20} />
+          <b>{lessons.length}</b>
+          <span>Scheduled lessons</span>
+        </article>
+        <article>
+          <UsersRound size={20} />
+          <b>
+            {
+              new Set(relatedAttendance.map((item) => get(item, "student_id")))
+                .size
+            }
+          </b>
+          <span>Students to support</span>
+        </article>
+        <article>
+          <ClipboardCheck size={20} />
+          <b>
+            {
+              relatedAttendance.filter(
+                (item) => get(item, "status") === "pending",
+              ).length
+            }
+          </b>
+          <span>Attendance to take</span>
+        </article>
+      </div>
+      <section className="teacher-agenda">
+        <div className="student-section-title">
+          <div>
+            <span>MY AGENDA</span>
+            <h3>Upcoming lessons</h3>
+          </div>
+        </div>
+        {upcoming.map((lesson) => (
+          <button
+            type="button"
+            key={get(lesson, "id")}
+            className="teacher-lesson"
+            style={eventStyle(lesson)}
+            onClick={() => onOpen(get(lesson, "id"))}
+          >
+            <span>
+              {datePart(lesson.starts_at)}
+              <b>{timePart(lesson.starts_at)}</b>
+            </span>
+            <div>
+              <strong>{get(lesson, "course_title")}</strong>
+              <p>
+                {get(lesson, "topic")} · {get(lesson, "classroom_name")}
+              </p>
+            </div>
+            <span className="teacher-lesson-action">
+              Take attendance <ChevronRight size={16} />
+            </span>
+          </button>
+        ))}
+        {!upcoming.length ? <Empty text="No upcoming lessons." /> : null}
+      </section>
+    </section>
+  );
 }
 
-function CalendarView({ data, sessions: visibleSessions, t, language, onOpen, onReschedule }: { data: PortalData; sessions?: Row[]; t: typeof copy.en; language: Language; onOpen: (id: string) => void; onReschedule: (id: string, startsAt: string) => void }) {
+function CalendarView({
+  data,
+  sessions: visibleSessions,
+  t,
+  language,
+  onOpen,
+  onReschedule,
+}: {
+  data: PortalData;
+  sessions?: Row[];
+  t: typeof copy.en;
+  language: Language;
+  onOpen: (id: string) => void;
+  onReschedule: (id: string, startsAt: string) => void;
+}) {
   const c = calendarText[language];
-  const firstSession = visibleSessions?.[0] ? fromKey(datePart(visibleSessions[0].starts_at)) : data.sessions[0] ? fromKey(datePart(data.sessions[0].starts_at)) : new Date();
+  const firstSession = visibleSessions?.[0]
+    ? fromKey(datePart(visibleSessions[0].starts_at))
+    : data.sessions[0]
+      ? fromKey(datePart(data.sessions[0].starts_at))
+      : new Date();
   const [scope, setScope] = useState<CalendarScope>("week");
   const [mode, setMode] = useState<CalendarMode>("time");
   const [resourceKind, setResourceKind] = useState<ResourceKind>("classroom");
@@ -372,192 +2723,1451 @@ function CalendarView({ data, sessions: visibleSessions, t, language, onOpen, on
     setAnchor((current) => {
       if (scope === "day") return addDays(current, direction);
       if (scope === "week") return addDays(current, direction * 7);
-      if (scope === "month") return new Date(current.getFullYear(), current.getMonth() + direction, 1, 12);
-      return new Date(current.getFullYear() + direction, current.getMonth(), 1, 12);
+      if (scope === "month")
+        return new Date(
+          current.getFullYear(),
+          current.getMonth() + direction,
+          1,
+          12,
+        );
+      return new Date(
+        current.getFullYear() + direction,
+        current.getMonth(),
+        1,
+        12,
+      );
     });
   }
-  return <section className="operation-stack calendar-operation">
-    <div className="view-intro"><div><h2>{t.calendar}</h2><p>{t.calendarHint}</p></div><MetricPills data={data} t={t} /></div>
-    <div className="calendar-toolbar-stack">
-      <section className={`calendar-controls ${scope === "year" ? "year-controls" : ""}`} aria-label="Calendar view controls">
-        <div className="segmented-control">{(["year", "month", "week", "day"] as CalendarScope[]).map((item) => <button key={item} className={scope === item ? "active" : ""} type="button" onClick={() => { setScope(item); if (item === "year") setMode("time"); }}>{c[item]}</button>)}</div>
-        <div className="calendar-navigation"><button type="button" title={c.previous} onClick={() => shift(-1)}><ChevronLeft size={17} /></button><strong>{displayTitle}</strong><button type="button" title={c.next} onClick={() => shift(1)}><ChevronRight size={17} /></button><button className="today-button" type="button" onClick={() => setAnchor(firstSession)}>{c.today}</button></div>
-        {scope !== "year" ? <div className="segmented-control mode-control"><button type="button" className={mode === "time" ? "active" : ""} onClick={() => setMode("time")}><Clock3 size={14} />{c.time}</button><button type="button" className={mode === "resource" ? "active" : ""} onClick={() => setMode("resource")}><Building2 size={14} />{c.resource}</button><button type="button" className={mode === "list" ? "active" : ""} onClick={() => setMode("list")}><List size={14} />{language === "zh" ? "列表" : "List"}</button></div> : null}
-      </section>
-      {scope !== "year" && mode === "resource" ? <div className="resource-kind-tabs">{(["classroom", "teacher", "student"] as ResourceKind[]).map((item) => <button type="button" className={resourceKind === item ? "active" : ""} key={item} onClick={() => setResourceKind(item)}>{item === "classroom" ? <DoorOpen size={14} /> : item === "teacher" ? <UserRound size={14} /> : <GraduationCap size={14} />}{c[`${item}s` as "classrooms" | "teachers" | "students"]}</button>)}</div> : null}
-    </div>
-    <div className="calendar-stage">{scope === "year" ? <YearCalendar anchor={anchor} events={events} c={c} language={language} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "time" ? <TimeCalendar scope={scope} anchor={anchor} events={events} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} onReschedule={onReschedule} onSelectDate={(date) => { setAnchor(date); setScope("day"); }} /> : mode === "resource" ? <ResourceCalendar scope={scope} anchor={anchor} data={data} resources={resources} kind={resourceKind} window={scheduleWindow(businessHours)} c={c} language={language} onOpen={onOpen} /> : <ScheduleListView events={eventsForScope(events, scope, anchor)} onOpen={onOpen} />}</div>
-  </section>;
+  return (
+    <section className="operation-stack calendar-operation">
+      <div className="view-intro">
+        <div>
+          <h2>{t.calendar}</h2>
+          <p>{t.calendarHint}</p>
+        </div>
+        <MetricPills data={data} t={t} />
+      </div>
+      <div className="calendar-toolbar-stack">
+        <section
+          className={`calendar-controls ${scope === "year" ? "year-controls" : ""}`}
+          aria-label="Calendar view controls"
+        >
+          <div className="segmented-control">
+            {(["year", "month", "week", "day"] as CalendarScope[]).map(
+              (item) => (
+                <button
+                  key={item}
+                  className={scope === item ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    setScope(item);
+                    if (item === "year") setMode("time");
+                  }}
+                >
+                  {c[item]}
+                </button>
+              ),
+            )}
+          </div>
+          <div className="calendar-navigation">
+            <button type="button" title={c.previous} onClick={() => shift(-1)}>
+              <ChevronLeft size={17} />
+            </button>
+            <strong>{displayTitle}</strong>
+            <button type="button" title={c.next} onClick={() => shift(1)}>
+              <ChevronRight size={17} />
+            </button>
+            <button
+              className="today-button"
+              type="button"
+              onClick={() => setAnchor(firstSession)}
+            >
+              {c.today}
+            </button>
+          </div>
+          {scope !== "year" ? (
+            <div className="segmented-control mode-control">
+              <button
+                type="button"
+                className={mode === "time" ? "active" : ""}
+                onClick={() => setMode("time")}
+              >
+                <Clock3 size={14} />
+                {c.time}
+              </button>
+              <button
+                type="button"
+                className={mode === "resource" ? "active" : ""}
+                onClick={() => setMode("resource")}
+              >
+                <Building2 size={14} />
+                {c.resource}
+              </button>
+              <button
+                type="button"
+                className={mode === "list" ? "active" : ""}
+                onClick={() => setMode("list")}
+              >
+                <List size={14} />
+                {language === "zh" ? "列表" : "List"}
+              </button>
+            </div>
+          ) : null}
+        </section>
+        {scope !== "year" && mode === "resource" ? (
+          <div className="resource-kind-tabs">
+            {(["classroom", "teacher", "student"] as ResourceKind[]).map(
+              (item) => (
+                <button
+                  type="button"
+                  className={resourceKind === item ? "active" : ""}
+                  key={item}
+                  onClick={() => setResourceKind(item)}
+                >
+                  {item === "classroom" ? (
+                    <DoorOpen size={14} />
+                  ) : item === "teacher" ? (
+                    <UserRound size={14} />
+                  ) : (
+                    <GraduationCap size={14} />
+                  )}
+                  {c[`${item}s` as "classrooms" | "teachers" | "students"]}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+      <div className="calendar-stage">
+        {scope === "year" ? (
+          <YearCalendar
+            anchor={anchor}
+            events={events}
+            c={c}
+            language={language}
+            onSelectDate={(date) => {
+              setAnchor(date);
+              setScope("day");
+            }}
+          />
+        ) : mode === "time" ? (
+          <TimeCalendar
+            scope={scope}
+            anchor={anchor}
+            events={events}
+            window={scheduleWindow(businessHours)}
+            c={c}
+            language={language}
+            onOpen={onOpen}
+            onReschedule={onReschedule}
+            onSelectDate={(date) => {
+              setAnchor(date);
+              setScope("day");
+            }}
+          />
+        ) : mode === "resource" ? (
+          <ResourceCalendar
+            scope={scope}
+            anchor={anchor}
+            data={data}
+            resources={resources}
+            kind={resourceKind}
+            window={scheduleWindow(businessHours)}
+            c={c}
+            language={language}
+            onOpen={onOpen}
+          />
+        ) : (
+          <ScheduleListView
+            events={eventsForScope(events, scope, anchor)}
+            onOpen={onOpen}
+          />
+        )}
+      </div>
+    </section>
+  );
 }
 
-function calendarResources(data: PortalData, kind: ResourceKind): CalendarResource[] {
-  const items = kind === "classroom" ? data.classrooms : kind === "teacher" ? data.teachers : data.students;
-  return items.map((item) => ({ id: get(item, "id"), name: get(item, "name"), icon: kind === "classroom" ? "classroom" : kind === "teacher" ? "teacher" : "student" }));
+function calendarResources(
+  data: PortalData,
+  kind: ResourceKind,
+): CalendarResource[] {
+  const items =
+    kind === "classroom"
+      ? data.classrooms
+      : kind === "teacher"
+        ? data.teachers
+        : data.students;
+  return items.map((item) => ({
+    id: get(item, "id"),
+    name: get(item, "name"),
+    icon:
+      kind === "classroom"
+        ? "classroom"
+        : kind === "teacher"
+          ? "teacher"
+          : "student",
+  }));
 }
 
 function calendarTitle(anchor: Date, scope: CalendarScope, language: Language) {
   const locale = language === "zh" ? "zh-CN" : "en-US";
-  if (scope === "year") return anchor.toLocaleDateString(locale, { year: "numeric" });
-  if (scope === "month") return anchor.toLocaleDateString(locale, { year: "numeric", month: "long" });
-  if (scope === "day") return anchor.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric", weekday: "long" });
-  const start = startOfWeek(anchor); const end = addDays(start, 6);
+  if (scope === "year")
+    return anchor.toLocaleDateString(locale, { year: "numeric" });
+  if (scope === "month")
+    return anchor.toLocaleDateString(locale, {
+      year: "numeric",
+      month: "long",
+    });
+  if (scope === "day")
+    return anchor.toLocaleDateString(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      weekday: "long",
+    });
+  const start = startOfWeek(anchor);
+  const end = addDays(start, 6);
   return `${start.toLocaleDateString(locale, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
 function eventsForScope(events: Row[], scope: ScheduleScope, anchor: Date) {
   const anchorKey = toKey(anchor);
-  if (scope === "day") return events.filter((event) => datePart(event.starts_at) === anchorKey);
+  if (scope === "day")
+    return events.filter((event) => datePart(event.starts_at) === anchorKey);
   if (scope === "week") {
     const start = toKey(startOfWeek(anchor));
     const end = toKey(addDays(startOfWeek(anchor), 6));
-    return events.filter((event) => datePart(event.starts_at) >= start && datePart(event.starts_at) <= end);
+    return events.filter(
+      (event) =>
+        datePart(event.starts_at) >= start && datePart(event.starts_at) <= end,
+    );
   }
   const prefix = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}`;
   return events.filter((event) => datePart(event.starts_at).startsWith(prefix));
 }
 
-function ScheduleListView({ events, onOpen }: { events: Row[]; onOpen?: (id: string) => void }) {
-  const ordered = [...events].sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
+function ScheduleListView({
+  events,
+  onOpen,
+}: {
+  events: Row[];
+  onOpen?: (id: string) => void;
+}) {
+  const ordered = [...events].sort((left, right) =>
+    get(left, "starts_at").localeCompare(get(right, "starts_at")),
+  );
   if (!ordered.length) return <Empty text="No lessons in this period." />;
-  return <section className="schedule-list-view">{ordered.map((event) => <button type="button" key={get(event, "id")} className="schedule-list-card" style={eventStyle(event)} onClick={() => onOpen?.(eventSessionId(event))}>
-    <header><span className="schedule-list-icon"><BookOpen size={17} /></span><div><small>{get(event, "course_title")}</small><strong>{get(event, "run_name")} · {get(event, "topic") || "Lesson"}</strong></div><Status value={get(event, "status") || "scheduled"} /></header>
-    <div className="schedule-list-meta"><span><CalendarDays size={14} />{datePart(event.starts_at)}</span><span><Clock3 size={14} />{timePart(event.starts_at)} - {timePart(event.ends_at)}</span><span><UserRound size={14} />{get(event, "teacher_name") || "Teacher to confirm"}</span><span><DoorOpen size={14} />{get(event, "classroom_name") || "Room to confirm"}</span></div>
-  </button>)}</section>;
+  return (
+    <section className="schedule-list-view">
+      {ordered.map((event) => (
+        <button
+          type="button"
+          key={get(event, "id")}
+          className="schedule-list-card"
+          style={eventStyle(event)}
+          onClick={() => onOpen?.(eventSessionId(event))}
+        >
+          <header>
+            <span className="schedule-list-icon">
+              <BookOpen size={17} />
+            </span>
+            <div>
+              <small>{get(event, "course_title")}</small>
+              <strong>
+                {get(event, "run_name")} · {get(event, "topic") || "Lesson"}
+              </strong>
+            </div>
+            <Status value={get(event, "status") || "scheduled"} />
+          </header>
+          <div className="schedule-list-meta">
+            <span>
+              <CalendarDays size={14} />
+              {datePart(event.starts_at)}
+            </span>
+            <span>
+              <Clock3 size={14} />
+              {timePart(event.starts_at)} - {timePart(event.ends_at)}
+            </span>
+            <span>
+              <UserRound size={14} />
+              {get(event, "teacher_name") || "Teacher to confirm"}
+            </span>
+            <span>
+              <DoorOpen size={14} />
+              {get(event, "classroom_name") || "Room to confirm"}
+            </span>
+          </div>
+        </button>
+      ))}
+    </section>
+  );
 }
 
-function TimeCalendar({ scope, anchor, events, window, c, language, onOpen, onReschedule, onSelectDate }: { scope: ScheduleScope; anchor: Date; events: Row[]; window: ScheduleWindow; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; onReschedule: (id: string, startsAt: string) => void; onSelectDate: (date: Date) => void }) {
-  if (scope === "month") return <MonthCalendar anchor={anchor} events={events} c={c} language={language} onOpen={onOpen} onSelectDate={onSelectDate} />;
-  if (scope === "week") return <WeekCalendar anchor={anchor} events={events} window={window} language={language} onOpen={onOpen} onReschedule={onReschedule} />;
-  return <DayTimeline anchor={anchor} columns={[{ id: "all", name: c.allSchedule, icon: "classroom" }]} eventsForColumn={() => events.filter((event) => datePart(event.starts_at) === toKey(anchor))} window={window} c={c} onOpen={onOpen} />;
+function TimeCalendar({
+  scope,
+  anchor,
+  events,
+  window,
+  c,
+  language,
+  onOpen,
+  onReschedule,
+  onSelectDate,
+}: {
+  scope: ScheduleScope;
+  anchor: Date;
+  events: Row[];
+  window: ScheduleWindow;
+  c: typeof calendarText.en;
+  language: Language;
+  onOpen: (id: string) => void;
+  onReschedule: (id: string, startsAt: string) => void;
+  onSelectDate: (date: Date) => void;
+}) {
+  if (scope === "month")
+    return (
+      <MonthCalendar
+        anchor={anchor}
+        events={events}
+        c={c}
+        language={language}
+        onOpen={onOpen}
+        onSelectDate={onSelectDate}
+      />
+    );
+  if (scope === "week")
+    return (
+      <WeekCalendar
+        anchor={anchor}
+        events={events}
+        window={window}
+        language={language}
+        onOpen={onOpen}
+        onReschedule={onReschedule}
+      />
+    );
+  return (
+    <DayTimeline
+      anchor={anchor}
+      columns={[{ id: "all", name: c.allSchedule, icon: "classroom" }]}
+      eventsForColumn={() =>
+        events.filter((event) => datePart(event.starts_at) === toKey(anchor))
+      }
+      window={window}
+      c={c}
+      onOpen={onOpen}
+    />
+  );
 }
 
-function YearCalendar({ anchor, events, c, language, onSelectDate }: { anchor: Date; events: Row[]; c: typeof calendarText.en; language: Language; onSelectDate: (date: Date) => void }) {
+function YearCalendar({
+  anchor,
+  events,
+  c,
+  language,
+  onSelectDate,
+}: {
+  anchor: Date;
+  events: Row[];
+  c: typeof calendarText.en;
+  language: Language;
+  onSelectDate: (date: Date) => void;
+}) {
   const locale = language === "zh" ? "zh-CN" : "en-US";
-  const weekdays = Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(new Date(2026, 6, 20, 12)), index).toLocaleDateString(locale, { weekday: "narrow" }));
-  return <section className="year-calendar">{Array.from({ length: 12 }, (_, month) => { const monthDate = new Date(anchor.getFullYear(), month, 1, 12); const first = startOfMonth(monthDate); const gridStart = addDays(first, -((first.getDay() + 6) % 7)); const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index)); const monthEvents = events.filter((event) => datePart(event.starts_at).startsWith(`${anchor.getFullYear()}-${String(month + 1).padStart(2, "0")}`)); return <article className="year-month-card" key={month}><header><strong>{monthDate.toLocaleDateString(locale, { month: "long" })}</strong><span>{monthEvents.length} {c.lessons}</span></header><div className="year-weekdays">{weekdays.map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div><div className="year-month-days">{days.map((day) => { const key = toKey(day); const count = events.filter((event) => datePart(event.starts_at) === key).length; const outside = day.getMonth() !== month; const level = count === 0 ? 0 : Math.min(4, count); return outside ? <span className="year-day outside" key={key} /> : <button key={key} type="button" className={`year-day heat-${level}`} title={count ? `${count} ${c.lessons}` : c.noEvents} onClick={() => onSelectDate(day)}><span>{day.getDate()}</span>{count ? <small>{count}</small> : null}</button>; })}</div></article>; })}</section>;
+  const weekdays = Array.from({ length: 7 }, (_, index) =>
+    addDays(startOfWeek(new Date(2026, 6, 20, 12)), index).toLocaleDateString(
+      locale,
+      { weekday: "narrow" },
+    ),
+  );
+  return (
+    <section className="year-calendar">
+      {Array.from({ length: 12 }, (_, month) => {
+        const monthDate = new Date(anchor.getFullYear(), month, 1, 12);
+        const first = startOfMonth(monthDate);
+        const gridStart = addDays(first, -((first.getDay() + 6) % 7));
+        const days = Array.from({ length: 42 }, (_, index) =>
+          addDays(gridStart, index),
+        );
+        const monthEvents = events.filter((event) =>
+          datePart(event.starts_at).startsWith(
+            `${anchor.getFullYear()}-${String(month + 1).padStart(2, "0")}`,
+          ),
+        );
+        return (
+          <article className="year-month-card" key={month}>
+            <header>
+              <strong>
+                {monthDate.toLocaleDateString(locale, { month: "long" })}
+              </strong>
+              <span>
+                {monthEvents.length} {c.lessons}
+              </span>
+            </header>
+            <div className="year-weekdays">
+              {weekdays.map((day, index) => (
+                <span key={`${day}-${index}`}>{day}</span>
+              ))}
+            </div>
+            <div className="year-month-days">
+              {days.map((day) => {
+                const key = toKey(day);
+                const count = events.filter(
+                  (event) => datePart(event.starts_at) === key,
+                ).length;
+                const outside = day.getMonth() !== month;
+                const level = count === 0 ? 0 : Math.min(4, count);
+                return outside ? (
+                  <span className="year-day outside" key={key} />
+                ) : (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`year-day heat-${level}`}
+                    title={count ? `${count} ${c.lessons}` : c.noEvents}
+                    onClick={() => onSelectDate(day)}
+                  >
+                    <span>{day.getDate()}</span>
+                    {count ? <small>{count}</small> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </article>
+        );
+      })}
+    </section>
+  );
 }
 
-function MonthCalendar({ anchor, events, c, language, onOpen, onSelectDate }: { anchor: Date; events: Row[]; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; onSelectDate: (date: Date) => void }) {
-  const first = startOfMonth(anchor); const gridStart = addDays(first, -((first.getDay() + 6) % 7));
+function MonthCalendar({
+  anchor,
+  events,
+  c,
+  language,
+  onOpen,
+  onSelectDate,
+}: {
+  anchor: Date;
+  events: Row[];
+  c: typeof calendarText.en;
+  language: Language;
+  onOpen: (id: string) => void;
+  onSelectDate: (date: Date) => void;
+}) {
+  const first = startOfMonth(anchor);
+  const gridStart = addDays(first, -((first.getDay() + 6) % 7));
   const locale = language === "zh" ? "zh-CN" : "en-US";
-  const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
-  return <section className="month-calendar"><div className="month-weekdays">{Array.from({ length: 7 }, (_, index) => <span key={index}>{addDays(startOfWeek(new Date(2026, 6, 20, 12)), index).toLocaleDateString(locale, { weekday: "short" })}</span>)}</div><div className="month-days">{days.map((day) => { const key = toKey(day); const dayEvents = events.filter((event) => datePart(event.starts_at) === key); const outside = day.getMonth() !== anchor.getMonth(); return <div key={key} className={outside ? "month-day outside" : "month-day"}><button type="button" className="month-day-number" onClick={() => onSelectDate(day)}>{day.getDate()}</button>{dayEvents.slice(0, 3).map((event) => <button type="button" className="month-event" style={eventStyle(event)} key={get(event, "id")} onClick={() => onOpen(eventSessionId(event))}><b>{timePart(event.starts_at)}</b>{get(event, "run_name") || get(event, "course_title")}</button>)}{dayEvents.length > 3 ? <span className="more-events">+{dayEvents.length - 3} {c.lessons}</span> : null}</div>; })}</div></section>;
+  const days = Array.from({ length: 42 }, (_, index) =>
+    addDays(gridStart, index),
+  );
+  return (
+    <section className="month-calendar">
+      <div className="month-weekdays">
+        {Array.from({ length: 7 }, (_, index) => (
+          <span key={index}>
+            {addDays(
+              startOfWeek(new Date(2026, 6, 20, 12)),
+              index,
+            ).toLocaleDateString(locale, { weekday: "short" })}
+          </span>
+        ))}
+      </div>
+      <div className="month-days">
+        {days.map((day) => {
+          const key = toKey(day);
+          const dayEvents = events.filter(
+            (event) => datePart(event.starts_at) === key,
+          );
+          const outside = day.getMonth() !== anchor.getMonth();
+          return (
+            <div
+              key={key}
+              className={outside ? "month-day outside" : "month-day"}
+            >
+              <button
+                type="button"
+                className="month-day-number"
+                onClick={() => onSelectDate(day)}
+              >
+                {day.getDate()}
+              </button>
+              {dayEvents.slice(0, 3).map((event) => (
+                <button
+                  type="button"
+                  className="month-event"
+                  style={eventStyle(event)}
+                  key={get(event, "id")}
+                  onClick={() => onOpen(eventSessionId(event))}
+                >
+                  <b>{timePart(event.starts_at)}</b>
+                  {get(event, "run_name") || get(event, "course_title")}
+                </button>
+              ))}
+              {dayEvents.length > 3 ? (
+                <span className="more-events">
+                  +{dayEvents.length - 3} {c.lessons}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
-function WeekCalendar({ anchor, events, window, language, onOpen, onReschedule }: { anchor: Date; events: Row[]; window: ScheduleWindow; language: Language; onOpen: (id: string) => void; onReschedule: (id: string, startsAt: string) => void }) {
-  const start = startOfWeek(anchor); const days = Array.from({ length: 7 }, (_, index) => addDays(start, index)); const locale = language === "zh" ? "zh-CN" : "en-US";
+function WeekCalendar({
+  anchor,
+  events,
+  window,
+  language,
+  onOpen,
+  onReschedule,
+}: {
+  anchor: Date;
+  events: Row[];
+  window: ScheduleWindow;
+  language: Language;
+  onOpen: (id: string) => void;
+  onReschedule: (id: string, startsAt: string) => void;
+}) {
+  const start = startOfWeek(anchor);
+  const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  const locale = language === "zh" ? "zh-CN" : "en-US";
   const [openGroup, setOpenGroup] = useState<Row[] | null>(null);
-  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length, "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`, "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%` } as React.CSSProperties;
-  function dropOnDay(event: React.DragEvent<HTMLDivElement>, day: Date) { event.preventDefault(); const sessionId = event.dataTransfer.getData("application/x-lesson"); const source = events.find((item) => get(item, "id") === sessionId); if (source) onReschedule(sessionId, `${toKey(day)}T${timePart(source.starts_at)}`); }
-  return <><section className="week-timeline"><div className="week-timeline-head"><div className="week-time-corner">Time</div>{days.map((day) => <div className="week-timeline-day-head" key={toKey(day)}><span>{day.toLocaleDateString(locale, { weekday: "short" })}</span><strong>{day.getDate()}</strong></div>)}</div><div className="week-timeline-body" style={bodyStyle}><div className="week-time-labels">{window.labels.map((label) => <span key={label}>{label}</span>)}</div>{days.map((day) => { const dayEvents = events.filter((event) => datePart(event.starts_at) === toKey(day)); const groups = Object.values(dayEvents.reduce<Record<string, Row[]>>((result, event) => { const key = `${timePart(event.starts_at)}-${timePart(event.ends_at)}`; (result[key] ||= []).push(event); return result; }, {})); return <div className="week-timeline-column" key={toKey(day)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropOnDay(event, day)}>{groups.map((group) => <TimelineSlotGroup key={group.map(eventSessionId).join("-")} events={group} window={window} language={language} onOpen={onOpen} onOpenGroup={setOpenGroup} />)}</div>; })}</div></section>{openGroup ? <TimelineSlotGroupDialog events={openGroup} language={language} onClose={() => setOpenGroup(null)} onOpen={(id) => { setOpenGroup(null); onOpen(id); }} /> : null}</>;
+  const bodyStyle = {
+    height: `${window.height}px`,
+    "--time-slots": window.labels.length,
+    "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`,
+    "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%`,
+  } as React.CSSProperties;
+  function dropOnDay(event: React.DragEvent<HTMLDivElement>, day: Date) {
+    event.preventDefault();
+    const sessionId = event.dataTransfer.getData("application/x-lesson");
+    const source = events.find((item) => get(item, "id") === sessionId);
+    if (source)
+      onReschedule(sessionId, `${toKey(day)}T${timePart(source.starts_at)}`);
+  }
+  return (
+    <>
+      <section className="week-timeline">
+        <div className="week-timeline-head">
+          <div className="week-time-corner">Time</div>
+          {days.map((day) => (
+            <div className="week-timeline-day-head" key={toKey(day)}>
+              <span>
+                {day.toLocaleDateString(locale, { weekday: "short" })}
+              </span>
+              <strong>{day.getDate()}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="week-timeline-body" style={bodyStyle}>
+          <div className="week-time-labels">
+            {window.labels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          {days.map((day) => {
+            const dayEvents = events.filter(
+              (event) => datePart(event.starts_at) === toKey(day),
+            );
+            const groups = Object.values(
+              dayEvents.reduce<Record<string, Row[]>>((result, event) => {
+                const key = `${timePart(event.starts_at)}-${timePart(event.ends_at)}`;
+                (result[key] ||= []).push(event);
+                return result;
+              }, {}),
+            );
+            return (
+              <div
+                className="week-timeline-column"
+                key={toKey(day)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => dropOnDay(event, day)}
+              >
+                {groups.map((group) => (
+                  <TimelineSlotGroup
+                    key={group.map(eventSessionId).join("-")}
+                    events={group}
+                    window={window}
+                    language={language}
+                    onOpen={onOpen}
+                    onOpenGroup={setOpenGroup}
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      {openGroup ? (
+        <TimelineSlotGroupDialog
+          events={openGroup}
+          language={language}
+          onClose={() => setOpenGroup(null)}
+          onOpen={(id) => {
+            setOpenGroup(null);
+            onOpen(id);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function TimelineSlotGroup({ events, window, language, onOpen, onOpenGroup }: { events: Row[]; window: ScheduleWindow; language: Language; onOpen: (id: string) => void; onOpenGroup: (events: Row[]) => void }) {
-  if (events.length === 1) return <TimelineEvent event={events[0]} window={window} onOpen={onOpen} draggable />;
-  const first = events[0]; const duration = Math.max(1, window.end - window.start); const top = Math.max(0, ((minutesOfDay(first.starts_at) - window.start) / duration) * 100); const height = Math.max(8, ((minutesOfDay(first.ends_at) - minutesOfDay(first.starts_at)) / duration) * 100); const visible = events.slice(0, 2); const extra = events.length - visible.length;
-  const groupLabel = language === "zh" ? `${events.length} 个班次` : `${events.length} classes`;
-  return <div className="timeline-slot-group" role="button" tabIndex={0} style={{ top: `${top}%`, height: `${height}%` }} onClick={() => onOpenGroup(events)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenGroup(events); } }} aria-label={`${timePart(first.starts_at)} · ${groupLabel}`}><div className="timeline-slot-group-head"><span>{timePart(first.starts_at)}</span><b>{groupLabel}</b></div>{visible.map((event) => <button type="button" key={eventSessionId(event)} className="timeline-slot-record" style={eventStyle(event)} onClick={(click) => { click.stopPropagation(); onOpen(eventSessionId(event)); }}><strong>{get(event, "course_title")}</strong><small>{get(event, "run_name") || get(event, "topic")}</small></button>)}{extra > 0 ? <button type="button" className="timeline-slot-more" onClick={(click) => { click.stopPropagation(); onOpenGroup(events); }}>+{extra}</button> : null}</div>;
-}
-
-function TimelineSlotGroupDialog({ events, language, onClose, onOpen }: { events: Row[]; language: Language; onClose: () => void; onOpen: (id: string) => void }) {
-  const first = events[0]; const title = language === "zh" ? "同一时段的班次" : "Classes in this time slot";
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="timeline-slot-dialog" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}><header><div><span>{timePart(first?.starts_at)} · {datePart(first?.starts_at)}</span><h3>{title}</h3><p>{language === "zh" ? `共 ${events.length} 个班次，选择一个班次查看或管理。` : `${events.length} classes share this time. Choose one to view or manage it.`}</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="timeline-slot-dialog-list">{events.map((event) => <button type="button" key={eventSessionId(event)} style={eventStyle(event)} onClick={() => onOpen(eventSessionId(event))}><span><b>{timePart(event.starts_at)}</b><strong>{get(event, "course_title")}</strong><small>{get(event, "run_name") || get(event, "topic")}</small></span><em>{get(event, "classroom_name") || get(event, "teacher_name")}</em><ChevronRight size={18} /></button>)}</div></section></div>;
-}
-
-function ResourceCalendar({ scope, anchor, data, resources, kind, window, c, language, onOpen }: { scope: ScheduleScope; anchor: Date; data: PortalData; resources: CalendarResource[]; kind: ResourceKind; window: ScheduleWindow; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void }) {
-  const eventsFor = (resource: CalendarResource) => resourceEvents(data, kind, resource.id);
-  if (scope === "day") return <DayTimeline anchor={anchor} columns={resources} eventsForColumn={eventsFor} window={window} c={c} onOpen={onOpen} />;
-  if (scope === "week") { const start = startOfWeek(anchor); return <ResourceMatrix resources={resources} columns={Array.from({ length: 7 }, (_, index) => addDays(start, index))} eventsFor={eventsFor} c={c} language={language} onOpen={onOpen} />; }
-  const days = Array.from({ length: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate() }, (_, index) => new Date(anchor.getFullYear(), anchor.getMonth(), index + 1, 12));
-  return <ResourceMatrix resources={resources} columns={days} eventsFor={eventsFor} c={c} language={language} onOpen={onOpen} compact />;
-}
-
-function resourceEvents(data: PortalData, kind: ResourceKind, id: string): Row[] {
-  if (kind === "classroom") { const room = data.classrooms.find((item) => get(item, "id") === id); return data.sessions.filter((event) => get(event, "classroom_name") === get(room, "name")); }
-  if (kind === "teacher") { const teacher = data.teachers.find((item) => get(item, "id") === id); return data.sessions.filter((event) => get(event, "teacher_name") === get(teacher, "name")); }
-  return data.attendance.filter((item) => get(item, "student_id") === id).map((item) => ({ ...data.sessions.find((session) => get(session, "id") === get(item, "class_session_id")), ...item, id: `student-event-${get(item, "id")}`, calendar_session_id: get(item, "class_session_id") }));
-}
-
-function DayTimeline({ anchor, columns, eventsForColumn, window, c, onOpen }: { anchor: Date; columns: CalendarResource[]; eventsForColumn: (column: CalendarResource) => Row[]; window: ScheduleWindow; c: typeof calendarText.en; onOpen: (id: string) => void }) {
-  const visible = columns.length ? columns : [{ id: "none", name: c.allSchedule, icon: "classroom" }];
-  const bodyStyle = { height: `${window.height}px`, "--time-slots": window.labels.length, "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`, "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%` } as React.CSSProperties;
-  return <section className="day-timeline"><div className="timeline-head"><div>{toKey(anchor)}</div>{visible.map((column) => <div key={column.id}>{column.icon === "teacher" ? <UserRound size={15} /> : column.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}<span>{column.name}</span></div>)}</div><div className="timeline-body" style={bodyStyle}><div className="timeline-hours">{window.labels.map((label) => <span key={label}>{label}</span>)}</div><div className="timeline-columns">{visible.map((column) => <div className="timeline-column" key={column.id}>{eventsForColumn(column).filter((event) => datePart(event.starts_at) === toKey(anchor)).map((event) => <TimelineEvent key={get(event, "id")} event={event} window={window} onOpen={onOpen} />)}</div>)}</div></div></section>;
-}
-
-function TimelineEvent({ event, window, onOpen, draggable = false }: { event: Row; window: ScheduleWindow; onOpen: (id: string) => void; draggable?: boolean }) {
+function TimelineSlotGroup({
+  events,
+  window,
+  language,
+  onOpen,
+  onOpenGroup,
+}: {
+  events: Row[];
+  window: ScheduleWindow;
+  language: Language;
+  onOpen: (id: string) => void;
+  onOpenGroup: (events: Row[]) => void;
+}) {
+  if (events.length === 1)
+    return (
+      <TimelineEvent
+        event={events[0]}
+        window={window}
+        onOpen={onOpen}
+        draggable
+      />
+    );
+  const first = events[0];
   const duration = Math.max(1, window.end - window.start);
-  const top = Math.max(0, ((minutesOfDay(event.starts_at) - window.start) / duration) * 100);
-  const height = Math.max(8, ((minutesOfDay(event.ends_at) - minutesOfDay(event.starts_at)) / duration) * 100);
-  return <button type="button" draggable={draggable} className={`timeline-event${draggable ? " draggable-lesson" : ""}`} style={{ ...eventStyle(event), top: `${top}%`, height: `${height}%` }} onDragStart={(dragEvent) => dragEvent.dataTransfer.setData("application/x-lesson", get(event, "id"))} onClick={() => onOpen(eventSessionId(event))}><span>{timePart(event.starts_at)}</span><strong>{get(event, "course_title")}</strong><em>{get(event, "run_name") || get(event, "topic") || get(event, "classroom_name") || get(event, "student_name")}</em></button>;
+  const top = Math.max(
+    0,
+    ((minutesOfDay(first.starts_at) - window.start) / duration) * 100,
+  );
+  const height = Math.max(
+    8,
+    ((minutesOfDay(first.ends_at) - minutesOfDay(first.starts_at)) / duration) *
+      100,
+  );
+  const visible = events.slice(0, 2);
+  const extra = events.length - visible.length;
+  const groupLabel =
+    language === "zh" ? `${events.length} 个班次` : `${events.length} classes`;
+  return (
+    <div
+      className="timeline-slot-group"
+      role="button"
+      tabIndex={0}
+      style={{ top: `${top}%`, height: `${height}%` }}
+      onClick={() => onOpenGroup(events)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenGroup(events);
+        }
+      }}
+      aria-label={`${timePart(first.starts_at)} · ${groupLabel}`}
+    >
+      <div className="timeline-slot-group-head">
+        <span>{timePart(first.starts_at)}</span>
+        <b>{groupLabel}</b>
+      </div>
+      {visible.map((event) => (
+        <button
+          type="button"
+          key={eventSessionId(event)}
+          className="timeline-slot-record"
+          style={eventStyle(event)}
+          onClick={(click) => {
+            click.stopPropagation();
+            onOpen(eventSessionId(event));
+          }}
+        >
+          <strong>{get(event, "course_title")}</strong>
+          <small>{get(event, "run_name") || get(event, "topic")}</small>
+        </button>
+      ))}
+      {extra > 0 ? (
+        <button
+          type="button"
+          className="timeline-slot-more"
+          onClick={(click) => {
+            click.stopPropagation();
+            onOpenGroup(events);
+          }}
+        >
+          +{extra}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
-function ResourceMatrix({ resources, columns, eventsFor, c, language, onOpen, compact = false }: { resources: CalendarResource[]; columns: Date[]; eventsFor: (resource: CalendarResource) => Row[]; c: typeof calendarText.en; language: Language; onOpen: (id: string) => void; compact?: boolean }) {
+function TimelineSlotGroupDialog({
+  events,
+  language,
+  onClose,
+  onOpen,
+}: {
+  events: Row[];
+  language: Language;
+  onClose: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const first = events[0];
+  const title =
+    language === "zh" ? "同一时段的班次" : "Classes in this time slot";
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="timeline-slot-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>
+              {timePart(first?.starts_at)} · {datePart(first?.starts_at)}
+            </span>
+            <h3>{title}</h3>
+            <p>
+              {language === "zh"
+                ? `共 ${events.length} 个班次，选择一个班次查看或管理。`
+                : `${events.length} classes share this time. Choose one to view or manage it.`}
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="timeline-slot-dialog-list">
+          {events.map((event) => (
+            <button
+              type="button"
+              key={eventSessionId(event)}
+              style={eventStyle(event)}
+              onClick={() => onOpen(eventSessionId(event))}
+            >
+              <span>
+                <b>{timePart(event.starts_at)}</b>
+                <strong>{get(event, "course_title")}</strong>
+                <small>{get(event, "run_name") || get(event, "topic")}</small>
+              </span>
+              <em>
+                {get(event, "classroom_name") || get(event, "teacher_name")}
+              </em>
+              <ChevronRight size={18} />
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ResourceCalendar({
+  scope,
+  anchor,
+  data,
+  resources,
+  kind,
+  window,
+  c,
+  language,
+  onOpen,
+}: {
+  scope: ScheduleScope;
+  anchor: Date;
+  data: PortalData;
+  resources: CalendarResource[];
+  kind: ResourceKind;
+  window: ScheduleWindow;
+  c: typeof calendarText.en;
+  language: Language;
+  onOpen: (id: string) => void;
+}) {
+  const eventsFor = (resource: CalendarResource) =>
+    resourceEvents(data, kind, resource.id);
+  if (scope === "day")
+    return (
+      <DayTimeline
+        anchor={anchor}
+        columns={resources}
+        eventsForColumn={eventsFor}
+        window={window}
+        c={c}
+        onOpen={onOpen}
+      />
+    );
+  if (scope === "week") {
+    const start = startOfWeek(anchor);
+    return (
+      <ResourceMatrix
+        resources={resources}
+        columns={Array.from({ length: 7 }, (_, index) => addDays(start, index))}
+        eventsFor={eventsFor}
+        c={c}
+        language={language}
+        onOpen={onOpen}
+      />
+    );
+  }
+  const days = Array.from(
+    {
+      length: new Date(
+        anchor.getFullYear(),
+        anchor.getMonth() + 1,
+        0,
+      ).getDate(),
+    },
+    (_, index) =>
+      new Date(anchor.getFullYear(), anchor.getMonth(), index + 1, 12),
+  );
+  return (
+    <ResourceMatrix
+      resources={resources}
+      columns={days}
+      eventsFor={eventsFor}
+      c={c}
+      language={language}
+      onOpen={onOpen}
+      compact
+    />
+  );
+}
+
+function resourceEvents(
+  data: PortalData,
+  kind: ResourceKind,
+  id: string,
+): Row[] {
+  if (kind === "classroom") {
+    const room = data.classrooms.find((item) => get(item, "id") === id);
+    return data.sessions.filter(
+      (event) => get(event, "classroom_name") === get(room, "name"),
+    );
+  }
+  if (kind === "teacher") {
+    const teacher = data.teachers.find((item) => get(item, "id") === id);
+    return data.sessions.filter(
+      (event) => get(event, "teacher_name") === get(teacher, "name"),
+    );
+  }
+  return data.attendance
+    .filter((item) => get(item, "student_id") === id)
+    .map((item) => ({
+      ...data.sessions.find(
+        (session) => get(session, "id") === get(item, "class_session_id"),
+      ),
+      ...item,
+      id: `student-event-${get(item, "id")}`,
+      calendar_session_id: get(item, "class_session_id"),
+    }));
+}
+
+function DayTimeline({
+  anchor,
+  columns,
+  eventsForColumn,
+  window,
+  c,
+  onOpen,
+}: {
+  anchor: Date;
+  columns: CalendarResource[];
+  eventsForColumn: (column: CalendarResource) => Row[];
+  window: ScheduleWindow;
+  c: typeof calendarText.en;
+  onOpen: (id: string) => void;
+}) {
+  const visible = columns.length
+    ? columns
+    : [{ id: "none", name: c.allSchedule, icon: "classroom" }];
+  const bodyStyle = {
+    height: `${window.height}px`,
+    "--time-slots": window.labels.length,
+    "--business-start": `${((window.businessStart - window.start) / Math.max(1, window.end - window.start)) * 100}%`,
+    "--business-end": `${((window.businessEnd - window.start) / Math.max(1, window.end - window.start)) * 100}%`,
+  } as React.CSSProperties;
+  return (
+    <section className="day-timeline">
+      <div className="timeline-head">
+        <div>{toKey(anchor)}</div>
+        {visible.map((column) => (
+          <div key={column.id}>
+            {column.icon === "teacher" ? (
+              <UserRound size={15} />
+            ) : column.icon === "student" ? (
+              <GraduationCap size={15} />
+            ) : (
+              <DoorOpen size={15} />
+            )}
+            <span>{column.name}</span>
+          </div>
+        ))}
+      </div>
+      <div className="timeline-body" style={bodyStyle}>
+        <div className="timeline-hours">
+          {window.labels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+        <div className="timeline-columns">
+          {visible.map((column) => (
+            <div className="timeline-column" key={column.id}>
+              {eventsForColumn(column)
+                .filter((event) => datePart(event.starts_at) === toKey(anchor))
+                .map((event) => (
+                  <TimelineEvent
+                    key={get(event, "id")}
+                    event={event}
+                    window={window}
+                    onOpen={onOpen}
+                  />
+                ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TimelineEvent({
+  event,
+  window,
+  onOpen,
+  draggable = false,
+}: {
+  event: Row;
+  window: ScheduleWindow;
+  onOpen: (id: string) => void;
+  draggable?: boolean;
+}) {
+  const duration = Math.max(1, window.end - window.start);
+  const top = Math.max(
+    0,
+    ((minutesOfDay(event.starts_at) - window.start) / duration) * 100,
+  );
+  const height = Math.max(
+    8,
+    ((minutesOfDay(event.ends_at) - minutesOfDay(event.starts_at)) / duration) *
+      100,
+  );
+  return (
+    <button
+      type="button"
+      draggable={draggable}
+      className={`timeline-event${draggable ? " draggable-lesson" : ""}`}
+      style={{ ...eventStyle(event), top: `${top}%`, height: `${height}%` }}
+      onDragStart={(dragEvent) =>
+        dragEvent.dataTransfer.setData("application/x-lesson", get(event, "id"))
+      }
+      onClick={() => onOpen(eventSessionId(event))}
+    >
+      <span>{timePart(event.starts_at)}</span>
+      <strong>{get(event, "course_title")}</strong>
+      <em>
+        {get(event, "run_name") ||
+          get(event, "topic") ||
+          get(event, "classroom_name") ||
+          get(event, "student_name")}
+      </em>
+    </button>
+  );
+}
+
+function ResourceMatrix({
+  resources,
+  columns,
+  eventsFor,
+  c,
+  language,
+  onOpen,
+  compact = false,
+}: {
+  resources: CalendarResource[];
+  columns: Date[];
+  eventsFor: (resource: CalendarResource) => Row[];
+  c: typeof calendarText.en;
+  language: Language;
+  onOpen: (id: string) => void;
+  compact?: boolean;
+}) {
   const locale = language === "zh" ? "zh-CN" : "en-US";
-  return <div className={compact ? "resource-matrix compact" : "resource-matrix"}><div className="matrix-grid" style={{ gridTemplateColumns: `180px repeat(${columns.length}, minmax(${compact ? 52 : 118}px, 1fr))` }}><div className="matrix-corner">{c.resource}</div>{columns.map((column) => <div className="matrix-date" key={toKey(column)}><span>{compact ? column.getDate() : column.toLocaleDateString(locale, { weekday: "short" })}</span>{!compact ? <strong>{column.getDate()}</strong> : null}</div>)}{resources.map((resource) => <ResourceMatrixRow key={resource.id} resource={resource} columns={columns} events={eventsFor(resource)} compact={compact} onOpen={onOpen} />)}</div></div>;
+  return (
+    <div className={compact ? "resource-matrix compact" : "resource-matrix"}>
+      <div
+        className="matrix-grid"
+        style={{
+          gridTemplateColumns: `180px repeat(${columns.length}, minmax(${compact ? 52 : 118}px, 1fr))`,
+        }}
+      >
+        <div className="matrix-corner">{c.resource}</div>
+        {columns.map((column) => (
+          <div className="matrix-date" key={toKey(column)}>
+            <span>
+              {compact
+                ? column.getDate()
+                : column.toLocaleDateString(locale, { weekday: "short" })}
+            </span>
+            {!compact ? <strong>{column.getDate()}</strong> : null}
+          </div>
+        ))}
+        {resources.map((resource) => (
+          <ResourceMatrixRow
+            key={resource.id}
+            resource={resource}
+            columns={columns}
+            events={eventsFor(resource)}
+            compact={compact}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function ResourceMatrixRow({ resource, columns, events, compact, onOpen }: { resource: CalendarResource; columns: Date[]; events: Row[]; compact: boolean; onOpen: (id: string) => void }) {
-  return <><div className="matrix-resource"><span>{resource.icon === "teacher" ? <UserRound size={15} /> : resource.icon === "student" ? <GraduationCap size={15} /> : <DoorOpen size={15} />}</span><strong>{resource.name}</strong></div>{columns.map((day) => { const cellEvents = events.filter((event) => datePart(event.starts_at) === toKey(day)); return <div className="matrix-cell" key={`${resource.id}-${toKey(day)}`}>{cellEvents.slice(0, compact ? 1 : 2).map((event) => <button type="button" key={get(event, "id")} className="matrix-event" style={eventStyle(event)} onClick={() => onOpen(eventSessionId(event))}>{compact ? <span>{cellEvents.length}</span> : <><b>{timePart(event.starts_at)}</b><span>{get(event, "course_title")}</span></>}</button>)}{cellEvents.length > (compact ? 1 : 2) ? <small>+{cellEvents.length - (compact ? 1 : 2)}</small> : null}</div>; })}</>;
+function ResourceMatrixRow({
+  resource,
+  columns,
+  events,
+  compact,
+  onOpen,
+}: {
+  resource: CalendarResource;
+  columns: Date[];
+  events: Row[];
+  compact: boolean;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <>
+      <div className="matrix-resource">
+        <span>
+          {resource.icon === "teacher" ? (
+            <UserRound size={15} />
+          ) : resource.icon === "student" ? (
+            <GraduationCap size={15} />
+          ) : (
+            <DoorOpen size={15} />
+          )}
+        </span>
+        <strong>{resource.name}</strong>
+      </div>
+      {columns.map((day) => {
+        const cellEvents = events.filter(
+          (event) => datePart(event.starts_at) === toKey(day),
+        );
+        return (
+          <div className="matrix-cell" key={`${resource.id}-${toKey(day)}`}>
+            {cellEvents.slice(0, compact ? 1 : 2).map((event) => (
+              <button
+                type="button"
+                key={get(event, "id")}
+                className="matrix-event"
+                style={eventStyle(event)}
+                onClick={() => onOpen(eventSessionId(event))}
+              >
+                {compact ? (
+                  <span>{cellEvents.length}</span>
+                ) : (
+                  <>
+                    <b>{timePart(event.starts_at)}</b>
+                    <span>{get(event, "course_title")}</span>
+                  </>
+                )}
+              </button>
+            ))}
+            {cellEvents.length > (compact ? 1 : 2) ? (
+              <small>+{cellEvents.length - (compact ? 1 : 2)}</small>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
-function SmartDatePicker({ value, events, onChange }: { value: string; events: Row[]; onChange: (value: string) => void }) {
+function SmartDatePicker({
+  value,
+  events,
+  onChange,
+}: {
+  value: string;
+  events: Row[];
+  onChange: (value: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(fromKey(value)));
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    startOfMonth(fromKey(value)),
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = fromKey(value);
   const today = toKey(new Date());
   const selectedKey = toKey(selected);
-  const coloursByDate = useMemo(() => events.reduce<Record<string, string[]>>((result, event) => {
-    const key = datePart(event.starts_at); if (!key) return result;
-    const colour = eventColour(event); if (!result[key]) result[key] = [];
-    if (!result[key].includes(colour)) result[key].push(colour);
-    return result;
-  }, {}), [events]);
-  useEffect(() => { setVisibleMonth(startOfMonth(selected)); }, [selectedKey]);
+  const coloursByDate = useMemo(
+    () =>
+      events.reduce<Record<string, string[]>>((result, event) => {
+        const key = datePart(event.starts_at);
+        if (!key) return result;
+        const colour = eventColour(event);
+        if (!result[key]) result[key] = [];
+        if (!result[key].includes(colour)) result[key].push(colour);
+        return result;
+      }, {}),
+    [events],
+  );
+  useEffect(() => {
+    setVisibleMonth(startOfMonth(selected));
+  }, [selectedKey]);
   useEffect(() => {
     if (!open) return;
-    const closeOnOutsidePress = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false); };
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
     document.addEventListener("pointerdown", closeOnOutsidePress);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
   }, [open]);
-  const firstCell = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1 - visibleMonth.getDay(), 12);
-  const monthTitle = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric" }).format(visibleMonth);
-  function chooseDate(day: Date) { onChange(toKey(day)); setOpen(false); }
-  return <div ref={rootRef} className="smart-date-picker"><button type="button" className={`smart-date-trigger${open ? " active" : ""}`} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((current) => !current)}><CalendarDays size={15} /><span>Date</span><strong>{value.replaceAll("-", "/")}</strong></button>{open ? <section className="smart-date-popover" role="dialog" aria-label="Choose schedule date"><header><button type="button" title="Previous month" aria-label="Previous month" onClick={() => setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1, 12))}><ChevronLeft size={17} /></button><strong>{monthTitle}</strong><button type="button" title="Next month" aria-label="Next month" onClick={() => setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1, 12))}><ChevronRight size={17} /></button></header><div className="smart-date-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="smart-date-grid">{Array.from({ length: 42 }, (_, index) => { const day = addDays(firstCell, index); const key = toKey(day); const colours = coloursByDate[key] ?? []; const outside = day.getMonth() !== visibleMonth.getMonth(); return <button type="button" key={key} className={`${outside ? "outside " : ""}${key === selectedKey ? "selected " : ""}${key === today ? "today" : ""}`} onClick={() => chooseDate(day)}><span>{day.getDate()}</span>{colours.length ? <i className="smart-date-dots" aria-label={`${colours.length} classes scheduled`}>{colours.slice(0, 3).map((colour) => <b key={colour} style={{ backgroundColor: colour }} />)}{colours.length > 3 ? <em>+{colours.length - 3}</em> : null}</i> : null}</button>; })}</div><footer><button type="button" onClick={() => chooseDate(new Date())}>Today</button></footer></section> : null}</div>;
+  const firstCell = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth(),
+    1 - visibleMonth.getDay(),
+    12,
+  );
+  const monthTitle = new Intl.DateTimeFormat("en-MY", {
+    month: "long",
+    year: "numeric",
+  }).format(visibleMonth);
+  function chooseDate(day: Date) {
+    onChange(toKey(day));
+    setOpen(false);
+  }
+  return (
+    <div ref={rootRef} className="smart-date-picker">
+      <button
+        type="button"
+        className={`smart-date-trigger${open ? " active" : ""}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <CalendarDays size={15} />
+        <span>Date</span>
+        <strong>{value.replaceAll("-", "/")}</strong>
+      </button>
+      {open ? (
+        <section
+          className="smart-date-popover"
+          role="dialog"
+          aria-label="Choose schedule date"
+        >
+          <header>
+            <button
+              type="button"
+              title="Previous month"
+              aria-label="Previous month"
+              onClick={() =>
+                setVisibleMonth(
+                  (month) =>
+                    new Date(month.getFullYear(), month.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <strong>{monthTitle}</strong>
+            <button
+              type="button"
+              title="Next month"
+              aria-label="Next month"
+              onClick={() =>
+                setVisibleMonth(
+                  (month) =>
+                    new Date(month.getFullYear(), month.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight size={17} />
+            </button>
+          </header>
+          <div className="smart-date-weekdays">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+          <div className="smart-date-grid">
+            {Array.from({ length: 42 }, (_, index) => {
+              const day = addDays(firstCell, index);
+              const key = toKey(day);
+              const colours = coloursByDate[key] ?? [];
+              const outside = day.getMonth() !== visibleMonth.getMonth();
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  className={`${outside ? "outside " : ""}${key === selectedKey ? "selected " : ""}${key === today ? "today" : ""}`}
+                  onClick={() => chooseDate(day)}
+                >
+                  <span>{day.getDate()}</span>
+                  {colours.length ? (
+                    <i
+                      className="smart-date-dots"
+                      aria-label={`${colours.length} classes scheduled`}
+                    >
+                      {colours.slice(0, 3).map((colour) => (
+                        <b key={colour} style={{ backgroundColor: colour }} />
+                      ))}
+                      {colours.length > 3 ? (
+                        <em>+{colours.length - 3}</em>
+                      ) : null}
+                    </i>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <footer>
+            <button type="button" onClick={() => chooseDate(new Date())}>
+              Today
+            </button>
+          </footer>
+        </section>
+      ) : null}
+    </div>
+  );
 }
 
-function CampusView({ data, t, loading, onOpenRoom }: { data: PortalData; t: typeof copy.en; loading: boolean; onOpenRoom: (id: string) => void }) {
+function CampusView({
+  data,
+  t,
+  loading,
+  onOpenRoom,
+}: {
+  data: PortalData;
+  t: typeof copy.en;
+  loading: boolean;
+  onOpenRoom: (id: string) => void;
+}) {
   const [campusId, setCampusId] = useState("");
   const [viewDate, setViewDate] = useState(() => toKey(new Date()));
   const [timeMode, setTimeMode] = useState<"now" | "day">("now");
-  const campus = data.campuses.find((item) => get(item, "id") === campusId) ?? data.campuses[0];
-  const rooms = campus ? data.classrooms.filter((room) => get(room, "campus_id") === get(campus, "id")) : [];
-  const today = toKey(new Date()); const tomorrow = toKey(addDays(new Date(), 1));
-  const referenceTime = timeMode === "now" ? Date.now() : new Date(`${viewDate}T00:00:00`).getTime();
-  const label = timeMode === "now" ? `Now · ${new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date())}` : `Viewing · ${new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${viewDate}T12:00:00`))}`;
-  function selectToday() { setViewDate(today); setTimeMode("now"); }
-  function selectNow() { setViewDate(today); setTimeMode("now"); }
-  function selectTomorrow() { setViewDate(tomorrow); setTimeMode("day"); }
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.campus}</h2><p>Live classroom availability, current lessons and what starts next.</p></div>{campus ? <label className="form-field campus-picker">Campus<select value={get(campus, "id")} onChange={(event) => setCampusId(event.target.value)}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label> : null}</div><section className="map-time-controls"><div className="map-time-actions"><button className={timeMode === "now" && viewDate === today ? "active" : ""} type="button" onClick={selectToday}>Today</button><button className={timeMode === "now" ? "active" : ""} type="button" onClick={selectNow}><Clock3 size={15} />Now onward</button><button className={timeMode === "day" && viewDate === tomorrow ? "active" : ""} type="button" onClick={selectTomorrow}>Tomorrow</button><SmartDatePicker value={viewDate} events={data.sessions} onChange={(nextDate) => { setViewDate(nextDate); setTimeMode(nextDate === today ? "now" : "day"); }} /></div><strong>{label}</strong></section>{campus ? <FloorMap campus={campus} rooms={rooms} sessions={data.sessions} attendance={data.attendance} showSchedule editable={false} viewDate={viewDate} referenceTime={referenceTime} onOpenRoom={onOpenRoom} /> : loading ? <section className="campus-loading-state"><MapIcon size={26} /><div><strong>Loading campus map</strong><span>Preparing rooms and today&apos;s schedule.</span></div></section> : <Empty text="No campus is configured yet." />}</section>;
+  const campus =
+    data.campuses.find((item) => get(item, "id") === campusId) ??
+    data.campuses[0];
+  const rooms = campus
+    ? data.classrooms.filter(
+        (room) => get(room, "campus_id") === get(campus, "id"),
+      )
+    : [];
+  const today = toKey(new Date());
+  const tomorrow = toKey(addDays(new Date(), 1));
+  const referenceTime =
+    timeMode === "now"
+      ? Date.now()
+      : new Date(`${viewDate}T00:00:00`).getTime();
+  const label =
+    timeMode === "now"
+      ? `Now · ${new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short" }).format(new Date())}`
+      : `Viewing · ${new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(`${viewDate}T12:00:00`))}`;
+  function selectToday() {
+    setViewDate(today);
+    setTimeMode("now");
+  }
+  function selectNow() {
+    setViewDate(today);
+    setTimeMode("now");
+  }
+  function selectTomorrow() {
+    setViewDate(tomorrow);
+    setTimeMode("day");
+  }
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{t.campus}</h2>
+          <p>
+            Live classroom availability, current lessons and what starts next.
+          </p>
+        </div>
+        {campus ? (
+          <label className="form-field campus-picker">
+            Campus
+            <select
+              value={get(campus, "id")}
+              onChange={(event) => setCampusId(event.target.value)}
+            >
+              {data.campuses.map((item) => (
+                <option key={get(item, "id")} value={get(item, "id")}>
+                  {get(item, "name")}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+      <section className="map-time-controls">
+        <div className="map-time-actions">
+          <button
+            className={timeMode === "now" && viewDate === today ? "active" : ""}
+            type="button"
+            onClick={selectToday}
+          >
+            Today
+          </button>
+          <button
+            className={timeMode === "now" ? "active" : ""}
+            type="button"
+            onClick={selectNow}
+          >
+            <Clock3 size={15} />
+            Now onward
+          </button>
+          <button
+            className={
+              timeMode === "day" && viewDate === tomorrow ? "active" : ""
+            }
+            type="button"
+            onClick={selectTomorrow}
+          >
+            Tomorrow
+          </button>
+          <SmartDatePicker
+            value={viewDate}
+            events={data.sessions}
+            onChange={(nextDate) => {
+              setViewDate(nextDate);
+              setTimeMode(nextDate === today ? "now" : "day");
+            }}
+          />
+        </div>
+        <strong>{label}</strong>
+      </section>
+      {campus ? (
+        <FloorMap
+          campus={campus}
+          rooms={rooms}
+          sessions={data.sessions}
+          attendance={data.attendance}
+          showSchedule
+          editable={false}
+          viewDate={viewDate}
+          referenceTime={referenceTime}
+          onOpenRoom={onOpenRoom}
+        />
+      ) : loading ? (
+        <section className="campus-loading-state">
+          <MapIcon size={26} />
+          <div>
+            <strong>Loading campus map</strong>
+            <span>Preparing rooms and today&apos;s schedule.</span>
+          </div>
+        </section>
+      ) : (
+        <Empty text="No campus is configured yet." />
+      )}
+    </section>
+  );
 }
 
-function LegacyFloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function LegacyFloorMap({
+  campus,
+  rooms,
+  sessions = [],
+  attendance = [],
+  showSchedule = false,
+  viewDate,
+  referenceTime,
+  editable,
+  onOpenRoom,
+  onSelectRoom,
+  onMoveRoom,
+}: {
+  campus: Row;
+  rooms: Row[];
+  sessions?: Row[];
+  attendance?: Row[];
+  showSchedule?: boolean;
+  viewDate?: string;
+  referenceTime?: number;
+  editable: boolean;
+  onOpenRoom: (id: string) => void;
+  onSelectRoom?: (id: string) => void;
+  onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
-  function movePosition(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
-    const current = drag.current; const rect = mapRef.current?.getBoundingClientRect();
+  const [positions, setPositions] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  const drag = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    last: { x: number; y: number };
+  } | null>(null);
+  function movePosition(
+    event: React.PointerEvent<HTMLButtonElement>,
+    room: Row,
+  ) {
+    const current = drag.current;
+    const rect = mapRef.current?.getBoundingClientRect();
     if (!current || current.id !== get(room, "id") || !rect) return;
-    const width = Number(room.map_width ?? 180); const height = Number(room.map_height ?? 110);
-    const x = Math.max(12, Math.min(campusMap.width - width - 12, Math.round(current.baseX + (event.clientX - current.startX) * (campusMap.width / rect.width))));
-    const y = Math.max(62, Math.min(campusMap.height - height - 12, Math.round(current.baseY + (event.clientY - current.startY) * (campusMap.height / rect.height))));
+    const width = Number(room.map_width ?? 180);
+    const height = Number(room.map_height ?? 110);
+    const x = Math.max(
+      12,
+      Math.min(
+        campusMap.width - width - 12,
+        Math.round(
+          current.baseX +
+            (event.clientX - current.startX) * (campusMap.width / rect.width),
+        ),
+      ),
+    );
+    const y = Math.max(
+      62,
+      Math.min(
+        campusMap.height - height - 12,
+        Math.round(
+          current.baseY +
+            (event.clientY - current.startY) * (campusMap.height / rect.height),
+        ),
+      ),
+    );
     current.last = { x, y };
-    setPositions((currentPositions) => ({ ...currentPositions, [get(room, "id")]: { x, y } }));
+    setPositions((currentPositions) => ({
+      ...currentPositions,
+      [get(room, "id")]: { x, y },
+    }));
   }
   function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
     if (!editable) return;
-    const current = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) };
-    drag.current = { id: get(room, "id"), startX: event.clientX, startY: event.clientY, baseX: current.x, baseY: current.y, last: current };
+    const current = positions[get(room, "id")] ?? {
+      x: Number(room.map_x ?? 80),
+      y: Number(room.map_y ?? 80),
+    };
+    drag.current = {
+      id: get(room, "id"),
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: current.x,
+      baseY: current.y,
+      last: current,
+    };
     event.currentTarget.setPointerCapture(event.pointerId);
     onSelectRoom?.(get(room, "id"));
   }
@@ -565,18 +4175,51 @@ function LegacyFloorMap({ campus, rooms, sessions = [], attendance = [], showSch
     if (!drag.current || drag.current.id !== get(room, "id")) return;
     const position = drag.current.last;
     drag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
     onMoveRoom?.(room, position);
   }
   const now = referenceTime ?? Date.now();
   function roomSchedule(room: Row) {
-    const roomSessions = sessions.filter((item) => get(item, "classroom_name") === get(room, "name") && (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate)).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
-    const current = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now && new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now);
-    const next = roomSessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now);
-    const nextStarts = next ? new Date(get(next, "starts_at").replace(" ", "T")).getTime() : 0;
-    const status = current ? "in_class" : next && nextStarts - now <= 90 * 60 * 1000 ? "starting_soon" : "available";
-    const count = (item: Row | undefined) => item ? attendance.filter((record) => get(record, "class_session_id") === get(item, "id")).length : 0;
-    return { current, next, status, currentCount: count(current), nextCount: count(next) };
+    const roomSessions = sessions
+      .filter(
+        (item) =>
+          get(item, "classroom_name") === get(room, "name") &&
+          (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate),
+      )
+      .sort((left, right) =>
+        get(left, "starts_at").localeCompare(get(right, "starts_at")),
+      );
+    const current = roomSessions.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now &&
+        new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now,
+    );
+    const next = roomSessions.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now,
+    );
+    const nextStarts = next
+      ? new Date(get(next, "starts_at").replace(" ", "T")).getTime()
+      : 0;
+    const status = current
+      ? "in_class"
+      : next && nextStarts - now <= 90 * 60 * 1000
+        ? "starting_soon"
+        : "available";
+    const count = (item: Row | undefined) =>
+      item
+        ? attendance.filter(
+            (record) => get(record, "class_session_id") === get(item, "id"),
+          ).length
+        : 0;
+    return {
+      current,
+      next,
+      status,
+      currentCount: count(current),
+      nextCount: count(next),
+    };
   }
   /*
   return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>Campus One · Level 2</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const next = sessionsByRoom.get(get(room, "name")); const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; return <button type="button" key={get(room, "id")} className={`${next ? "map-room occupied" : "map-room"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(Number(room.map_height ?? 110) / campusMap.height) * 100}%`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : next ? onOpenSession(get(next, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span>{next ? <em>{get(next, "course_title")} · {timePart(next.starts_at)}</em> : <small>{get(room, "resources") || "Available"}</small>}</button>; })}</div>;
@@ -584,171 +4227,1926 @@ function LegacyFloorMap({ campus, rooms, sessions = [], attendance = [], showSch
   /*
   return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room, index) => { const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; return <button type="button" key={get(room, "id")} className={`map-room${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(Number(room.map_height ?? 110) / campusMap.height) * 100}%`, "--room-colour": portraitColours[index % portraitColours.length] } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><DoorOpen size={20} /><strong>{get(room, "name")}</strong><span>{get(room, "room_type") || "classroom"}</span><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></button>; })}</div>;
   */
-  return <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}>
-    <div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div>
-    <div className="map-hall">MAIN WALKWAY</div>
-    {rooms.map((room) => {
-      const position = positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) };
-      const schedule = roomSchedule(room); const focus = schedule.current ?? schedule.next;
-      const courseColor = eventColour(focus ?? {}); const height = Math.max(Number(room.map_height ?? 110), showSchedule ? 142 : 110);
-      return <button type="button" key={get(room, "id")} className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}>
-        <GripVertical className="room-grip" size={15} />
-        <header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available"}</b> : null}</header>
-        {showSchedule ? <div className="room-card-schedule"><div className="room-slot current"><span>NOW</span>{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <><strong>No lesson now</strong><small>Room is ready</small></>}</div><div className="room-slot next"><span>NEXT{schedule.next ? ` · ${timePart(schedule.next.starts_at)}` : ""}</span>{schedule.next ? <><strong>{get(schedule.next, "course_title")}</strong><small>{get(schedule.next, "teacher_name")} · {schedule.nextCount} students</small></> : <><strong>Nothing booked</strong><small>Available later today</small></>}</div></div> : <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div>}
-      </button>;
-    })}
-  </div>;
+  return (
+    <div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}>
+      <div className="map-entry">
+        <MapPin size={17} />
+        <span>
+          {get(campus, "name")} · {get(campus, "map_label") || "Level 1"}
+        </span>
+      </div>
+      <div className="map-hall">MAIN WALKWAY</div>
+      {rooms.map((room) => {
+        const position = positions[get(room, "id")] ?? {
+          x: Number(room.map_x ?? 80),
+          y: Number(room.map_y ?? 80),
+        };
+        const schedule = roomSchedule(room);
+        const focus = schedule.current ?? schedule.next;
+        const courseColor = eventColour(focus ?? {});
+        const height = Math.max(
+          Number(room.map_height ?? 110),
+          showSchedule ? 142 : 110,
+        );
+        return (
+          <button
+            type="button"
+            key={get(room, "id")}
+            className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`}
+            style={
+              {
+                left: `${(position.x / campusMap.width) * 100}%`,
+                top: `${(position.y / campusMap.height) * 100}%`,
+                width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`,
+                height: `${(height / campusMap.height) * 100}%`,
+                "--room-course-colour": courseColor,
+              } as React.CSSProperties
+            }
+            onPointerDown={(event) => startMove(event, room)}
+            onPointerMove={(event) => movePosition(event, room)}
+            onPointerUp={(event) => endMove(event, room)}
+            onClick={() =>
+              editable
+                ? onSelectRoom?.(get(room, "id"))
+                : onOpenRoom(get(room, "id"))
+            }
+            title={editable ? `Move ${get(room, "name")}` : get(room, "name")}
+          >
+            <GripVertical className="room-grip" size={15} />
+            <header className="room-card-head">
+              <span>
+                <DoorOpen size={15} />
+                {get(room, "name")}
+              </span>
+              {showSchedule ? (
+                <b>
+                  {schedule.status === "in_class"
+                    ? "In class"
+                    : schedule.status === "starting_soon"
+                      ? "Starting soon"
+                      : "Available"}
+                </b>
+              ) : null}
+            </header>
+            {showSchedule ? (
+              <div className="room-card-schedule">
+                <div className="room-slot current">
+                  <span>NOW</span>
+                  {schedule.current ? (
+                    <>
+                      <strong>{get(schedule.current, "course_title")}</strong>
+                      <small>
+                        {get(schedule.current, "teacher_name")} ·{" "}
+                        {schedule.currentCount} students
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>No lesson now</strong>
+                      <small>Room is ready</small>
+                    </>
+                  )}
+                </div>
+                <div className="room-slot next">
+                  <span>
+                    NEXT
+                    {schedule.next
+                      ? ` · ${timePart(schedule.next.starts_at)}`
+                      : ""}
+                  </span>
+                  {schedule.next ? (
+                    <>
+                      <strong>{get(schedule.next, "course_title")}</strong>
+                      <small>
+                        {get(schedule.next, "teacher_name")} ·{" "}
+                        {schedule.nextCount} students
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Nothing booked</strong>
+                      <small>Available later today</small>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="room-resource">
+                <strong>{get(room, "room_type") || "classroom"}</strong>
+                <small>
+                  {get(room, "capacity")} seats ·{" "}
+                  {get(room, "resources") || "No resources set"}
+                </small>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
-function LegacyFloorMapDense({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function LegacyFloorMapDense({
+  campus,
+  rooms,
+  sessions = [],
+  attendance = [],
+  showSchedule = false,
+  viewDate,
+  referenceTime,
+  editable,
+  onOpenRoom,
+  onSelectRoom,
+  onMoveRoom,
+}: {
+  campus: Row;
+  rooms: Row[];
+  sessions?: Row[];
+  attendance?: Row[];
+  showSchedule?: boolean;
+  viewDate?: string;
+  referenceTime?: number;
+  editable: boolean;
+  onOpenRoom: (id: string) => void;
+  onSelectRoom?: (id: string) => void;
+  onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
+  const [positions, setPositions] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  const drag = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    last: { x: number; y: number };
+  } | null>(null);
   const now = referenceTime ?? Date.now();
-  const density = zoom >= 1.2 ? "all" : zoom >= .82 ? "focus" : "now";
+  const density = zoom >= 1.2 ? "all" : zoom >= 0.82 ? "focus" : "now";
   const zoomPercent = Math.round(zoom * 100);
-  function point(room: Row) { return positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; }
-  function roomSchedule(room: Row) {
-    const all = sessions.filter((item) => get(item, "classroom_name") === get(room, "name") && (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate)).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")));
-    const current = all.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now && new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now);
-    const next = all.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now);
-    const nextStarts = next ? new Date(get(next, "starts_at").replace(" ", "T")).getTime() : 0;
-    const status = current ? "in_class" : next && nextStarts - now <= 90 * 60 * 1000 ? "starting_soon" : "available";
-    const count = (item: Row | undefined) => item ? attendance.filter((record) => get(record, "class_session_id") === get(item, "id")).length : 0;
-    return { all, current, next, status, currentCount: count(current), nextCount: count(next) };
+  function point(room: Row) {
+    return (
+      positions[get(room, "id")] ?? {
+        x: Number(room.map_x ?? 80),
+        y: Number(room.map_y ?? 80),
+      }
+    );
   }
-  function sessionState(item: Row) { const start = new Date(get(item, "starts_at").replace(" ", "T")).getTime(); const end = new Date(get(item, "ends_at").replace(" ", "T")).getTime(); return end <= now ? "complete" : start <= now ? "current" : "upcoming"; }
-  function movePosition(event: React.PointerEvent<HTMLButtonElement>, room: Row) { const current = drag.current; const rect = mapRef.current?.getBoundingClientRect(); if (!current || current.id !== get(room, "id") || !rect) return; const width = Number(room.map_width ?? 180); const height = Number(room.map_height ?? 110); const x = Math.max(12, Math.min(campusMap.width - width - 12, Math.round(current.baseX + (event.clientX - current.startX) * (campusMap.width / rect.width)))); const y = Math.max(62, Math.min(campusMap.height - height - 12, Math.round(current.baseY + (event.clientY - current.startY) * (campusMap.height / rect.height)))); current.last = { x, y }; setPositions((value) => ({ ...value, [get(room, "id")]: { x, y } })); }
-  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!editable) return; const current = point(room); drag.current = { id: get(room, "id"), startX: event.clientX, startY: event.clientY, baseX: current.x, baseY: current.y, last: current }; event.currentTarget.setPointerCapture(event.pointerId); onSelectRoom?.(get(room, "id")); }
-  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!drag.current || drag.current.id !== get(room, "id")) return; const position = drag.current.last; drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); onMoveRoom?.(room, position); }
-  return <div className={`map-viewport map-density-${density}`}><div className="map-zoom-bar">{showSchedule ? <><button type="button" title="Zoom out" disabled={zoom <= .6} onClick={() => setZoom((value) => Math.max(.6, Math.round((value - .15) * 100) / 100))}><Minus size={15} /></button><input aria-label="Map zoom" type="range" min="0.6" max="1.35" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><button type="button" title="Zoom in" disabled={zoom >= 1.35} onClick={() => setZoom((value) => Math.min(1.35, Math.round((value + .15) * 100) / 100))}><ZoomIn size={15} /></button><strong>{zoomPercent}%</strong></> : <span>Room layout</span>}</div><div className="map-scroll"><div className="map-canvas" style={{ "--map-zoom": zoom } as React.CSSProperties}><div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"}><div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room) => { const position = point(room); const schedule = roomSchedule(room); const focus = schedule.current ?? schedule.next; const courseColor = eventColour(focus ?? {}); const allHeight = Math.max(Number(room.map_height ?? 110), 112 + schedule.all.length * 33); const height = showSchedule && density === "all" ? allHeight : Math.max(Number(room.map_height ?? 110), showSchedule ? density === "focus" ? 142 : 88 : 110); return <button type="button" key={get(room, "id")} className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => movePosition(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available"}</b> : null}</header>{showSchedule && density === "all" ? <div className="room-day-sessions">{schedule.all.length ? schedule.all.map((item) => <div key={get(item, "id")} className={`room-day-session ${sessionState(item)}`}><time>{timePart(item.starts_at)}</time><strong>{get(item, "course_title")}</strong><small>{get(item, "teacher_name")}</small></div>) : <div className="room-empty-day">No lessons today</div>}</div> : null}{showSchedule && density === "focus" ? <div className="room-card-schedule"><div className="room-slot current"><span>NOW</span>{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <><strong>No lesson now</strong><small>Room is ready</small></>}</div><div className="room-slot next"><span>NEXT{schedule.next ? ` · ${timePart(schedule.next.starts_at)}` : ""}</span>{schedule.next ? <><strong>{get(schedule.next, "course_title")}</strong><small>{get(schedule.next, "teacher_name")} · {schedule.nextCount} students</small></> : <><strong>Nothing booked</strong><small>Available later today</small></>}</div></div> : null}{showSchedule && density === "now" ? <div className="room-now-only">{schedule.current ? <><strong>{get(schedule.current, "course_title")}</strong><small>{get(schedule.current, "teacher_name")} · {schedule.currentCount} students</small></> : <small>No lesson now</small>}</div> : null}{!showSchedule ? <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div> : null}</button>; })}</div></div></div>{showSchedule ? <MapMini rooms={rooms} point={point} onOpenRoom={onOpenRoom} /> : null}</div>;
+  function roomSchedule(room: Row) {
+    const all = sessions
+      .filter(
+        (item) =>
+          get(item, "classroom_name") === get(room, "name") &&
+          (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate),
+      )
+      .sort((left, right) =>
+        get(left, "starts_at").localeCompare(get(right, "starts_at")),
+      );
+    const current = all.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() <= now &&
+        new Date(get(item, "ends_at").replace(" ", "T")).getTime() > now,
+    );
+    const next = all.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() > now,
+    );
+    const nextStarts = next
+      ? new Date(get(next, "starts_at").replace(" ", "T")).getTime()
+      : 0;
+    const status = current
+      ? "in_class"
+      : next && nextStarts - now <= 90 * 60 * 1000
+        ? "starting_soon"
+        : "available";
+    const count = (item: Row | undefined) =>
+      item
+        ? attendance.filter(
+            (record) => get(record, "class_session_id") === get(item, "id"),
+          ).length
+        : 0;
+    return {
+      all,
+      current,
+      next,
+      status,
+      currentCount: count(current),
+      nextCount: count(next),
+    };
+  }
+  function sessionState(item: Row) {
+    const start = new Date(get(item, "starts_at").replace(" ", "T")).getTime();
+    const end = new Date(get(item, "ends_at").replace(" ", "T")).getTime();
+    return end <= now ? "complete" : start <= now ? "current" : "upcoming";
+  }
+  function movePosition(
+    event: React.PointerEvent<HTMLButtonElement>,
+    room: Row,
+  ) {
+    const current = drag.current;
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!current || current.id !== get(room, "id") || !rect) return;
+    const width = Number(room.map_width ?? 180);
+    const height = Number(room.map_height ?? 110);
+    const x = Math.max(
+      12,
+      Math.min(
+        campusMap.width - width - 12,
+        Math.round(
+          current.baseX +
+            (event.clientX - current.startX) * (campusMap.width / rect.width),
+        ),
+      ),
+    );
+    const y = Math.max(
+      62,
+      Math.min(
+        campusMap.height - height - 12,
+        Math.round(
+          current.baseY +
+            (event.clientY - current.startY) * (campusMap.height / rect.height),
+        ),
+      ),
+    );
+    current.last = { x, y };
+    setPositions((value) => ({ ...value, [get(room, "id")]: { x, y } }));
+  }
+  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!editable) return;
+    const current = point(room);
+    drag.current = {
+      id: get(room, "id"),
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: current.x,
+      baseY: current.y,
+      last: current,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelectRoom?.(get(room, "id"));
+  }
+  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!drag.current || drag.current.id !== get(room, "id")) return;
+    const position = drag.current.last;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    onMoveRoom?.(room, position);
+  }
+  return (
+    <div className={`map-viewport map-density-${density}`}>
+      <div className="map-zoom-bar">
+        {showSchedule ? (
+          <>
+            <button
+              type="button"
+              title="Zoom out"
+              disabled={zoom <= 0.6}
+              onClick={() =>
+                setZoom((value) =>
+                  Math.max(0.6, Math.round((value - 0.15) * 100) / 100),
+                )
+              }
+            >
+              <Minus size={15} />
+            </button>
+            <input
+              aria-label="Map zoom"
+              type="range"
+              min="0.6"
+              max="1.35"
+              step="0.05"
+              value={zoom}
+              onChange={(event) => setZoom(Number(event.target.value))}
+            />
+            <button
+              type="button"
+              title="Zoom in"
+              disabled={zoom >= 1.35}
+              onClick={() =>
+                setZoom((value) =>
+                  Math.min(1.35, Math.round((value + 0.15) * 100) / 100),
+                )
+              }
+            >
+              <ZoomIn size={15} />
+            </button>
+            <strong>{zoomPercent}%</strong>
+          </>
+        ) : (
+          <span>Room layout</span>
+        )}
+      </div>
+      <div className="map-scroll">
+        <div
+          className="map-canvas"
+          style={{ "--map-zoom": zoom } as React.CSSProperties}
+        >
+          <div
+            ref={mapRef}
+            className={editable ? "floor-map editing" : "floor-map"}
+          >
+            <div className="map-entry">
+              <MapPin size={17} />
+              <span>
+                {get(campus, "name")} · {get(campus, "map_label") || "Level 1"}
+              </span>
+            </div>
+            <div className="map-hall">MAIN WALKWAY</div>
+            {rooms.map((room) => {
+              const position = point(room);
+              const schedule = roomSchedule(room);
+              const focus = schedule.current ?? schedule.next;
+              const courseColor = eventColour(focus ?? {});
+              const allHeight = Math.max(
+                Number(room.map_height ?? 110),
+                112 + schedule.all.length * 33,
+              );
+              const height =
+                showSchedule && density === "all"
+                  ? allHeight
+                  : Math.max(
+                      Number(room.map_height ?? 110),
+                      showSchedule ? (density === "focus" ? 142 : 88) : 110,
+                    );
+              return (
+                <button
+                  type="button"
+                  key={get(room, "id")}
+                  className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`}
+                  style={
+                    {
+                      left: `${(position.x / campusMap.width) * 100}%`,
+                      top: `${(position.y / campusMap.height) * 100}%`,
+                      width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`,
+                      height: `${(height / campusMap.height) * 100}%`,
+                      "--room-course-colour": courseColor,
+                    } as React.CSSProperties
+                  }
+                  onPointerDown={(event) => startMove(event, room)}
+                  onPointerMove={(event) => movePosition(event, room)}
+                  onPointerUp={(event) => endMove(event, room)}
+                  onClick={() =>
+                    editable
+                      ? onSelectRoom?.(get(room, "id"))
+                      : onOpenRoom(get(room, "id"))
+                  }
+                  title={
+                    editable ? `Move ${get(room, "name")}` : get(room, "name")
+                  }
+                >
+                  <GripVertical className="room-grip" size={15} />
+                  <header className="room-card-head">
+                    <span>
+                      <DoorOpen size={15} />
+                      {get(room, "name")}
+                    </span>
+                    {showSchedule ? (
+                      <b>
+                        {schedule.status === "in_class"
+                          ? "In class"
+                          : schedule.status === "starting_soon"
+                            ? "Starting soon"
+                            : "Available"}
+                      </b>
+                    ) : null}
+                  </header>
+                  {showSchedule && density === "all" ? (
+                    <div className="room-day-sessions">
+                      {schedule.all.length ? (
+                        schedule.all.map((item) => (
+                          <div
+                            key={get(item, "id")}
+                            className={`room-day-session ${sessionState(item)}`}
+                          >
+                            <time>{timePart(item.starts_at)}</time>
+                            <strong>{get(item, "course_title")}</strong>
+                            <small>{get(item, "teacher_name")}</small>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="room-empty-day">No lessons today</div>
+                      )}
+                    </div>
+                  ) : null}
+                  {showSchedule && density === "focus" ? (
+                    <div className="room-card-schedule">
+                      <div className="room-slot current">
+                        <span>NOW</span>
+                        {schedule.current ? (
+                          <>
+                            <strong>
+                              {get(schedule.current, "course_title")}
+                            </strong>
+                            <small>
+                              {get(schedule.current, "teacher_name")} ·{" "}
+                              {schedule.currentCount} students
+                            </small>
+                          </>
+                        ) : (
+                          <>
+                            <strong>No lesson now</strong>
+                            <small>Room is ready</small>
+                          </>
+                        )}
+                      </div>
+                      <div className="room-slot next">
+                        <span>
+                          NEXT
+                          {schedule.next
+                            ? ` · ${timePart(schedule.next.starts_at)}`
+                            : ""}
+                        </span>
+                        {schedule.next ? (
+                          <>
+                            <strong>
+                              {get(schedule.next, "course_title")}
+                            </strong>
+                            <small>
+                              {get(schedule.next, "teacher_name")} ·{" "}
+                              {schedule.nextCount} students
+                            </small>
+                          </>
+                        ) : (
+                          <>
+                            <strong>Nothing booked</strong>
+                            <small>Available later today</small>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                  {showSchedule && density === "now" ? (
+                    <div className="room-now-only">
+                      {schedule.current ? (
+                        <>
+                          <strong>
+                            {get(schedule.current, "course_title")}
+                          </strong>
+                          <small>
+                            {get(schedule.current, "teacher_name")} ·{" "}
+                            {schedule.currentCount} students
+                          </small>
+                        </>
+                      ) : (
+                        <small>No lesson now</small>
+                      )}
+                    </div>
+                  ) : null}
+                  {!showSchedule ? (
+                    <div className="room-resource">
+                      <strong>{get(room, "room_type") || "classroom"}</strong>
+                      <small>
+                        {get(room, "capacity")} seats ·{" "}
+                        {get(room, "resources") || "No resources set"}
+                      </small>
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {showSchedule ? (
+        <MapMini rooms={rooms} point={point} onOpenRoom={onOpenRoom} />
+      ) : null}
+    </div>
+  );
 }
 
-function FloorMap({ campus, rooms, sessions = [], attendance = [], showSchedule = false, viewDate, referenceTime, editable, onOpenRoom, onSelectRoom, onMoveRoom }: { campus: Row; rooms: Row[]; sessions?: Row[]; attendance?: Row[]; showSchedule?: boolean; viewDate?: string; referenceTime?: number; editable: boolean; onOpenRoom: (id: string) => void; onSelectRoom?: (id: string) => void; onMoveRoom?: (room: Row, position: { x: number; y: number }) => void }) {
+function FloorMap({
+  campus,
+  rooms,
+  sessions = [],
+  attendance = [],
+  showSchedule = false,
+  viewDate,
+  referenceTime,
+  editable,
+  onOpenRoom,
+  onSelectRoom,
+  onMoveRoom,
+}: {
+  campus: Row;
+  rooms: Row[];
+  sessions?: Row[];
+  attendance?: Row[];
+  showSchedule?: boolean;
+  viewDate?: string;
+  referenceTime?: number;
+  editable: boolean;
+  onOpenRoom: (id: string) => void;
+  onSelectRoom?: (id: string) => void;
+  onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const drag = useRef<{ id: string; startX: number; startY: number; baseX: number; baseY: number; last: { x: number; y: number } } | null>(null);
-  const now = referenceTime ?? Date.now(); const isToday = !viewDate || viewDate === toKey(new Date());
-  const density = !isToday ? "day" : zoom >= 1.2 ? "all" : zoom >= .82 ? "focus" : "now";
-  useEffect(() => { const viewport = mapRef.current?.closest(".map-viewport"); if (!viewport || !showSchedule) return; const onWheel = (event: WheelEvent) => { event.preventDefault(); setZoom((value) => Math.max(1, Math.min(1.35, Math.round((value + (event.deltaY < 0 ? .08 : -.08)) * 100) / 100))); }; viewport.addEventListener("wheel", onWheel, { passive: false }); return () => viewport.removeEventListener("wheel", onWheel); }, [showSchedule]);
-  useEffect(() => { if (zoom < 1) setZoom(1); }, [zoom]);
-  useEffect(() => { const scroll = mapRef.current?.closest(".map-scroll") as HTMLDivElement | null; if (!scroll) return; if (zoom <= 1) scroll.scrollTo({ left: 0, top: 0 }); let drag: { x: number; y: number; left: number; top: number } | null = null; const down = (event: PointerEvent) => { if (event.button !== 0 || (event.target as HTMLElement).closest(".map-room")) return; if (scroll.scrollWidth <= scroll.clientWidth && scroll.scrollHeight <= scroll.clientHeight) return; drag = { x: event.clientX, y: event.clientY, left: scroll.scrollLeft, top: scroll.scrollTop }; scroll.setPointerCapture(event.pointerId); scroll.classList.add("panning"); }; const move = (event: PointerEvent) => { if (!drag) return; scroll.scrollLeft = drag.left - (event.clientX - drag.x); scroll.scrollTop = drag.top - (event.clientY - drag.y); }; const end = (event: PointerEvent) => { if (!drag) return; drag = null; scroll.classList.remove("panning"); if (scroll.hasPointerCapture(event.pointerId)) scroll.releasePointerCapture(event.pointerId); }; scroll.addEventListener("pointerdown", down); scroll.addEventListener("pointermove", move); scroll.addEventListener("pointerup", end); scroll.addEventListener("pointercancel", end); return () => { scroll.removeEventListener("pointerdown", down); scroll.removeEventListener("pointermove", move); scroll.removeEventListener("pointerup", end); scroll.removeEventListener("pointercancel", end); }; }, [zoom]);
-  function point(room: Row) { return positions[get(room, "id")] ?? { x: Number(room.map_x ?? 80), y: Number(room.map_y ?? 80) }; }
-  function schedule(room: Row) { const all = sessions.filter((item) => get(item, "classroom_name") === get(room, "name") && (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate)).sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at"))); const current = all.find((item) => asTime(item.starts_at) <= now && asTime(item.ends_at) > now); const next = all.find((item) => asTime(item.starts_at) > now); const status = current ? "in_class" : next && asTime(next.starts_at) - now <= 90 * 60 * 1000 ? "starting_soon" : "available"; const count = (item: Row | undefined) => item ? attendance.filter((record) => get(record, "class_session_id") === get(item, "id")).length : 0; return { all, current, next, status, currentCount: count(current), nextCount: count(next) }; }
-  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!editable) return; const current = point(room); drag.current = { id: get(room, "id"), startX: event.clientX, startY: event.clientY, baseX: current.x, baseY: current.y, last: current }; event.currentTarget.setPointerCapture(event.pointerId); onSelectRoom?.(get(room, "id")); }
-  function moveRoom(event: React.PointerEvent<HTMLButtonElement>, room: Row) { const current = drag.current; const rect = mapRef.current?.getBoundingClientRect(); if (!current || current.id !== get(room, "id") || !rect) return; const width = Number(room.map_width ?? 180); const height = Number(room.map_height ?? 110); const x = Math.max(12, Math.min(campusMap.width - width - 12, Math.round(current.baseX + (event.clientX - current.startX) * (campusMap.width / rect.width)))); const y = Math.max(62, Math.min(campusMap.height - height - 12, Math.round(current.baseY + (event.clientY - current.startY) * (campusMap.height / rect.height)))); current.last = { x, y }; setPositions((value) => ({ ...value, [get(room, "id")]: { x, y } })); }
-  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) { if (!drag.current || drag.current.id !== get(room, "id")) return; const position = drag.current.last; drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); onMoveRoom?.(room, position); }
-  const floorplan = get(campus, "floorplan_url") || "/assets/floorplans/campus-one-level-2.png";
-  return <div className={`map-viewport map-density-${density}`}><div className="map-zoom-bar">{showSchedule ? <><button type="button" title="Zoom out" disabled={zoom <= .6} onClick={() => setZoom((value) => Math.max(.6, Math.round((value - .15) * 100) / 100))}><Minus size={15} /></button><input aria-label="Map zoom" type="range" min="0.6" max="1.35" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /><button type="button" title="Zoom in" disabled={zoom >= 1.35} onClick={() => setZoom((value) => Math.min(1.35, Math.round((value + .15) * 100) / 100))}><ZoomIn size={15} /></button><strong>{Math.round(zoom * 100)}%</strong></> : <span>Room layout</span>}</div><div className="map-scroll"><div className="map-canvas" style={{ "--map-zoom": zoom } as React.CSSProperties}><div ref={mapRef} className={editable ? "floor-map editing" : "floor-map"} style={{ "--floorplan": `url("${floorplan}")` } as React.CSSProperties}><div className="map-entry"><MapPin size={17} /><span>{get(campus, "name")} · {get(campus, "map_label") || "Level 1"}</span></div><div className="map-hall">MAIN WALKWAY</div>{rooms.map((room) => <RoomMapCard key={get(room, "id")} room={room} position={point(room)} schedule={schedule(room)} density={density} isToday={isToday} now={now} showSchedule={showSchedule} editable={editable} onPointerDown={(event) => startMove(event, room)} onPointerMove={(event) => moveRoom(event, room)} onPointerUp={(event) => endMove(event, room)} onClick={() => editable ? onSelectRoom?.(get(room, "id")) : onOpenRoom(get(room, "id"))} />)}</div></div></div>{showSchedule ? <MapMini rooms={rooms} point={point} onOpenRoom={onOpenRoom} /> : null}</div>;
+  const [positions, setPositions] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  const drag = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    last: { x: number; y: number };
+  } | null>(null);
+  const now = referenceTime ?? Date.now();
+  const isToday = !viewDate || viewDate === toKey(new Date());
+  const density = !isToday
+    ? "day"
+    : zoom >= 1.2
+      ? "all"
+      : zoom >= 0.82
+        ? "focus"
+        : "now";
+  useEffect(() => {
+    const viewport = mapRef.current?.closest(".map-viewport");
+    if (!viewport || !showSchedule) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setZoom((value) =>
+        Math.max(
+          1,
+          Math.min(
+            1.35,
+            Math.round((value + (event.deltaY < 0 ? 0.08 : -0.08)) * 100) / 100,
+          ),
+        ),
+      );
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [showSchedule]);
+  useEffect(() => {
+    if (zoom < 1) setZoom(1);
+  }, [zoom]);
+  useEffect(() => {
+    const scroll = mapRef.current?.closest(
+      ".map-scroll",
+    ) as HTMLDivElement | null;
+    if (!scroll) return;
+    if (zoom <= 1) scroll.scrollTo({ left: 0, top: 0 });
+    let drag: { x: number; y: number; left: number; top: number } | null = null;
+    const down = (event: PointerEvent) => {
+      if (
+        event.button !== 0 ||
+        (event.target as HTMLElement).closest(".map-room")
+      )
+        return;
+      if (
+        scroll.scrollWidth <= scroll.clientWidth &&
+        scroll.scrollHeight <= scroll.clientHeight
+      )
+        return;
+      drag = {
+        x: event.clientX,
+        y: event.clientY,
+        left: scroll.scrollLeft,
+        top: scroll.scrollTop,
+      };
+      scroll.setPointerCapture(event.pointerId);
+      scroll.classList.add("panning");
+    };
+    const move = (event: PointerEvent) => {
+      if (!drag) return;
+      scroll.scrollLeft = drag.left - (event.clientX - drag.x);
+      scroll.scrollTop = drag.top - (event.clientY - drag.y);
+    };
+    const end = (event: PointerEvent) => {
+      if (!drag) return;
+      drag = null;
+      scroll.classList.remove("panning");
+      if (scroll.hasPointerCapture(event.pointerId))
+        scroll.releasePointerCapture(event.pointerId);
+    };
+    scroll.addEventListener("pointerdown", down);
+    scroll.addEventListener("pointermove", move);
+    scroll.addEventListener("pointerup", end);
+    scroll.addEventListener("pointercancel", end);
+    return () => {
+      scroll.removeEventListener("pointerdown", down);
+      scroll.removeEventListener("pointermove", move);
+      scroll.removeEventListener("pointerup", end);
+      scroll.removeEventListener("pointercancel", end);
+    };
+  }, [zoom]);
+  function point(room: Row) {
+    return (
+      positions[get(room, "id")] ?? {
+        x: Number(room.map_x ?? 80),
+        y: Number(room.map_y ?? 80),
+      }
+    );
+  }
+  function schedule(room: Row) {
+    const all = sessions
+      .filter(
+        (item) =>
+          get(item, "classroom_name") === get(room, "name") &&
+          (!viewDate || get(item, "starts_at").slice(0, 10) === viewDate),
+      )
+      .sort((left, right) =>
+        get(left, "starts_at").localeCompare(get(right, "starts_at")),
+      );
+    const current = all.find(
+      (item) => asTime(item.starts_at) <= now && asTime(item.ends_at) > now,
+    );
+    const next = all.find((item) => asTime(item.starts_at) > now);
+    const status = current
+      ? "in_class"
+      : next && asTime(next.starts_at) - now <= 90 * 60 * 1000
+        ? "starting_soon"
+        : "available";
+    const count = (item: Row | undefined) =>
+      item
+        ? attendance.filter(
+            (record) => get(record, "class_session_id") === get(item, "id"),
+          ).length
+        : 0;
+    return {
+      all,
+      current,
+      next,
+      status,
+      currentCount: count(current),
+      nextCount: count(next),
+    };
+  }
+  function startMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!editable) return;
+    const current = point(room);
+    drag.current = {
+      id: get(room, "id"),
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: current.x,
+      baseY: current.y,
+      last: current,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelectRoom?.(get(room, "id"));
+  }
+  function moveRoom(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    const current = drag.current;
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!current || current.id !== get(room, "id") || !rect) return;
+    const width = Number(room.map_width ?? 180);
+    const height = Number(room.map_height ?? 110);
+    const x = Math.max(
+      12,
+      Math.min(
+        campusMap.width - width - 12,
+        Math.round(
+          current.baseX +
+            (event.clientX - current.startX) * (campusMap.width / rect.width),
+        ),
+      ),
+    );
+    const y = Math.max(
+      62,
+      Math.min(
+        campusMap.height - height - 12,
+        Math.round(
+          current.baseY +
+            (event.clientY - current.startY) * (campusMap.height / rect.height),
+        ),
+      ),
+    );
+    current.last = { x, y };
+    setPositions((value) => ({ ...value, [get(room, "id")]: { x, y } }));
+  }
+  function endMove(event: React.PointerEvent<HTMLButtonElement>, room: Row) {
+    if (!drag.current || drag.current.id !== get(room, "id")) return;
+    const position = drag.current.last;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    onMoveRoom?.(room, position);
+  }
+  const floorplan =
+    get(campus, "floorplan_url") || "/assets/floorplans/campus-one-level-2.png";
+  return (
+    <div className={`map-viewport map-density-${density}`}>
+      <div className="map-zoom-bar">
+        {showSchedule ? (
+          <>
+            <button
+              type="button"
+              title="Zoom out"
+              disabled={zoom <= 0.6}
+              onClick={() =>
+                setZoom((value) =>
+                  Math.max(0.6, Math.round((value - 0.15) * 100) / 100),
+                )
+              }
+            >
+              <Minus size={15} />
+            </button>
+            <input
+              aria-label="Map zoom"
+              type="range"
+              min="0.6"
+              max="1.35"
+              step="0.05"
+              value={zoom}
+              onChange={(event) => setZoom(Number(event.target.value))}
+            />
+            <button
+              type="button"
+              title="Zoom in"
+              disabled={zoom >= 1.35}
+              onClick={() =>
+                setZoom((value) =>
+                  Math.min(1.35, Math.round((value + 0.15) * 100) / 100),
+                )
+              }
+            >
+              <ZoomIn size={15} />
+            </button>
+            <strong>{Math.round(zoom * 100)}%</strong>
+          </>
+        ) : (
+          <span>Room layout</span>
+        )}
+      </div>
+      <div className="map-scroll">
+        <div
+          className="map-canvas"
+          style={{ "--map-zoom": zoom } as React.CSSProperties}
+        >
+          <div
+            ref={mapRef}
+            className={editable ? "floor-map editing" : "floor-map"}
+            style={
+              { "--floorplan": `url("${floorplan}")` } as React.CSSProperties
+            }
+          >
+            <div className="map-entry">
+              <MapPin size={17} />
+              <span>
+                {get(campus, "name")} · {get(campus, "map_label") || "Level 1"}
+              </span>
+            </div>
+            <div className="map-hall">MAIN WALKWAY</div>
+            {rooms.map((room) => (
+              <RoomMapCard
+                key={get(room, "id")}
+                room={room}
+                position={point(room)}
+                schedule={schedule(room)}
+                density={density}
+                isToday={isToday}
+                now={now}
+                showSchedule={showSchedule}
+                editable={editable}
+                onPointerDown={(event) => startMove(event, room)}
+                onPointerMove={(event) => moveRoom(event, room)}
+                onPointerUp={(event) => endMove(event, room)}
+                onClick={() =>
+                  editable
+                    ? onSelectRoom?.(get(room, "id"))
+                    : onOpenRoom(get(room, "id"))
+                }
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      {showSchedule ? (
+        <MapMini rooms={rooms} point={point} onOpenRoom={onOpenRoom} />
+      ) : null}
+    </div>
+  );
 }
 
-function LegacyRoomMapCard({ room, position, schedule, density, isToday, now, showSchedule, editable, onPointerDown, onPointerMove, onPointerUp, onClick }: { room: Row; position: { x: number; y: number }; schedule: { all: Row[]; current?: Row; next?: Row; status: string; currentCount: number; nextCount: number }; density: "all" | "focus" | "now" | "day"; isToday: boolean; now: number; showSchedule: boolean; editable: boolean; onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void; onClick: () => void }) {
-  const listMode = density === "all" || density === "day"; const focus = schedule.current ?? schedule.next; const courseColor = eventColour(focus ?? {}); const height = listMode ? Math.max(Number(room.map_height ?? 110), 70 + schedule.all.length * 36) : Math.max(Number(room.map_height ?? 110), showSchedule && density === "focus" ? 142 : 88); const tag = !isToday ? schedule.all.length ? `${schedule.all.length} lessons` : "Free" : schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available";
-  return <button type="button" className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onClick={onClick} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{tag}</b> : null}</header>{showSchedule && listMode && schedule.all.length ? <div className="room-day-sessions">{schedule.all.map((item) => <CourseSessionLine key={get(item, "id")} item={item} state={isToday ? asTime(item.ends_at) <= now ? "complete" : asTime(item.starts_at) <= now ? "current" : "upcoming" : "scheduled"} />)}</div> : null}{showSchedule && density === "focus" ? <div className="room-card-schedule">{schedule.current ? <div className="room-slot current"><span>NOW</span><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{schedule.next ? <div className="room-slot next"><span>NEXT · {timePart(schedule.next.starts_at)}</span><CourseSlot item={schedule.next} count={schedule.nextCount} /></div> : null}</div> : null}{showSchedule && density === "now" && schedule.current ? <div className="room-now-only"><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{!showSchedule ? <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div> : null}</button>;
-}
-
-function LegacyRoomMapCardV2({ room, position, schedule, density, isToday, now, showSchedule, editable, onPointerDown, onPointerMove, onPointerUp, onClick }: { room: Row; position: { x: number; y: number }; schedule: { all: Row[]; current?: Row; next?: Row; status: string; currentCount: number; nextCount: number }; density: "all" | "focus" | "now" | "day"; isToday: boolean; now: number; showSchedule: boolean; editable: boolean; onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void; onClick: () => void }) {
+function LegacyRoomMapCard({
+  room,
+  position,
+  schedule,
+  density,
+  isToday,
+  now,
+  showSchedule,
+  editable,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onClick,
+}: {
+  room: Row;
+  position: { x: number; y: number };
+  schedule: {
+    all: Row[];
+    current?: Row;
+    next?: Row;
+    status: string;
+    currentCount: number;
+    nextCount: number;
+  };
+  density: "all" | "focus" | "now" | "day";
+  isToday: boolean;
+  now: number;
+  showSchedule: boolean;
+  editable: boolean;
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onClick: () => void;
+}) {
   const listMode = density === "all" || density === "day";
   const focus = schedule.current ?? schedule.next;
   const courseColor = eventColour(focus ?? {});
-  const height = listMode ? Math.max(Number(room.map_height ?? 110), 78 + schedule.all.length * 36) : Math.max(Number(room.map_height ?? 110), showSchedule && density === "focus" ? 142 : 76);
-  const tag = !isToday ? schedule.all.length ? `${schedule.all.length} classes` : "Free" : schedule.status === "in_class" ? "In class" : schedule.status === "starting_soon" ? "Starting soon" : "Available";
-  const style = { left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties;
-  return <button type="button" className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`} style={style} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onClick={onClick} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{tag}</b> : null}</header>{showSchedule && schedule.all.length ? <div className="room-summary">{schedule.all.length} classes</div> : null}{showSchedule && listMode && schedule.all.length ? <div className="room-day-sessions">{schedule.all.map((item) => <CourseSessionLine key={get(item, "id")} item={item} state={isToday ? asTime(item.ends_at) <= now ? "complete" : asTime(item.starts_at) <= now ? "current" : "upcoming" : "scheduled"} />)}</div> : null}{showSchedule && density === "focus" ? <div className="room-card-schedule">{schedule.current ? <div className="room-slot current"><span>NOW</span><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{schedule.next ? <div className="room-slot next"><span>NEXT · {timePart(schedule.next.starts_at)}</span><CourseSlot item={schedule.next} count={schedule.nextCount} /></div> : null}</div> : null}{showSchedule && density === "now" && schedule.current ? <div className="room-now-only"><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{!showSchedule ? <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div> : null}</button>;
+  const height = listMode
+    ? Math.max(Number(room.map_height ?? 110), 70 + schedule.all.length * 36)
+    : Math.max(
+        Number(room.map_height ?? 110),
+        showSchedule && density === "focus" ? 142 : 88,
+      );
+  const tag = !isToday
+    ? schedule.all.length
+      ? `${schedule.all.length} lessons`
+      : "Free"
+    : schedule.status === "in_class"
+      ? "In class"
+      : schedule.status === "starting_soon"
+        ? "Starting soon"
+        : "Available";
+  return (
+    <button
+      type="button"
+      className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`}
+      style={
+        {
+          left: `${(position.x / campusMap.width) * 100}%`,
+          top: `${(position.y / campusMap.height) * 100}%`,
+          width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`,
+          height: `${(height / campusMap.height) * 100}%`,
+          "--room-course-colour": courseColor,
+        } as React.CSSProperties
+      }
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      title={editable ? `Move ${get(room, "name")}` : get(room, "name")}
+    >
+      <GripVertical className="room-grip" size={15} />
+      <header className="room-card-head">
+        <span>
+          <DoorOpen size={15} />
+          {get(room, "name")}
+        </span>
+        {showSchedule ? <b>{tag}</b> : null}
+      </header>
+      {showSchedule && listMode && schedule.all.length ? (
+        <div className="room-day-sessions">
+          {schedule.all.map((item) => (
+            <CourseSessionLine
+              key={get(item, "id")}
+              item={item}
+              state={
+                isToday
+                  ? asTime(item.ends_at) <= now
+                    ? "complete"
+                    : asTime(item.starts_at) <= now
+                      ? "current"
+                      : "upcoming"
+                  : "scheduled"
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+      {showSchedule && density === "focus" ? (
+        <div className="room-card-schedule">
+          {schedule.current ? (
+            <div className="room-slot current">
+              <span>NOW</span>
+              <CourseSlot
+                item={schedule.current}
+                count={schedule.currentCount}
+              />
+            </div>
+          ) : null}
+          {schedule.next ? (
+            <div className="room-slot next">
+              <span>NEXT · {timePart(schedule.next.starts_at)}</span>
+              <CourseSlot item={schedule.next} count={schedule.nextCount} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {showSchedule && density === "now" && schedule.current ? (
+        <div className="room-now-only">
+          <CourseSlot item={schedule.current} count={schedule.currentCount} />
+        </div>
+      ) : null}
+      {!showSchedule ? (
+        <div className="room-resource">
+          <strong>{get(room, "room_type") || "classroom"}</strong>
+          <small>
+            {get(room, "capacity")} seats ·{" "}
+            {get(room, "resources") || "No resources set"}
+          </small>
+        </div>
+      ) : null}
+    </button>
+  );
 }
 
-function RoomMapCard({ room, position, schedule, density, isToday, now, showSchedule, editable, onPointerDown, onPointerMove, onPointerUp, onClick }: { room: Row; position: { x: number; y: number }; schedule: { all: Row[]; current?: Row; next?: Row; status: string; currentCount: number; nextCount: number }; density: "all" | "focus" | "now" | "day"; isToday: boolean; now: number; showSchedule: boolean; editable: boolean; onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void; onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void; onClick: () => void }) {
+function LegacyRoomMapCardV2({
+  room,
+  position,
+  schedule,
+  density,
+  isToday,
+  now,
+  showSchedule,
+  editable,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onClick,
+}: {
+  room: Row;
+  position: { x: number; y: number };
+  schedule: {
+    all: Row[];
+    current?: Row;
+    next?: Row;
+    status: string;
+    currentCount: number;
+    nextCount: number;
+  };
+  density: "all" | "focus" | "now" | "day";
+  isToday: boolean;
+  now: number;
+  showSchedule: boolean;
+  editable: boolean;
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onClick: () => void;
+}) {
   const listMode = density === "all" || density === "day";
   const focus = schedule.current ?? schedule.next;
   const courseColor = eventColour(focus ?? {});
-  const bookedMinutes = schedule.all.reduce((sum, item) => sum + Math.max(0, (asTime(item.ends_at) - asTime(item.starts_at)) / 60000), 0);
-  const availability = !schedule.all.length ? "empty" : bookedMinutes >= 480 ? "full" : "partial";
-  const availabilityLabel = availability === "empty" ? "Empty" : availability === "full" ? "Full" : "Partly available";
+  const height = listMode
+    ? Math.max(Number(room.map_height ?? 110), 78 + schedule.all.length * 36)
+    : Math.max(
+        Number(room.map_height ?? 110),
+        showSchedule && density === "focus" ? 142 : 76,
+      );
+  const tag = !isToday
+    ? schedule.all.length
+      ? `${schedule.all.length} classes`
+      : "Free"
+    : schedule.status === "in_class"
+      ? "In class"
+      : schedule.status === "starting_soon"
+        ? "Starting soon"
+        : "Available";
+  const style = {
+    left: `${(position.x / campusMap.width) * 100}%`,
+    top: `${(position.y / campusMap.height) * 100}%`,
+    width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`,
+    height: `${(height / campusMap.height) * 100}%`,
+    "--room-course-colour": courseColor,
+  } as React.CSSProperties;
+  return (
+    <button
+      type="button"
+      className={`map-room map-room-${showSchedule ? schedule.status : "resource"}${editable ? " draggable" : ""}`}
+      style={style}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      title={editable ? `Move ${get(room, "name")}` : get(room, "name")}
+    >
+      <GripVertical className="room-grip" size={15} />
+      <header className="room-card-head">
+        <span>
+          <DoorOpen size={15} />
+          {get(room, "name")}
+        </span>
+        {showSchedule ? <b>{tag}</b> : null}
+      </header>
+      {showSchedule && schedule.all.length ? (
+        <div className="room-summary">{schedule.all.length} classes</div>
+      ) : null}
+      {showSchedule && listMode && schedule.all.length ? (
+        <div className="room-day-sessions">
+          {schedule.all.map((item) => (
+            <CourseSessionLine
+              key={get(item, "id")}
+              item={item}
+              state={
+                isToday
+                  ? asTime(item.ends_at) <= now
+                    ? "complete"
+                    : asTime(item.starts_at) <= now
+                      ? "current"
+                      : "upcoming"
+                  : "scheduled"
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+      {showSchedule && density === "focus" ? (
+        <div className="room-card-schedule">
+          {schedule.current ? (
+            <div className="room-slot current">
+              <span>NOW</span>
+              <CourseSlot
+                item={schedule.current}
+                count={schedule.currentCount}
+              />
+            </div>
+          ) : null}
+          {schedule.next ? (
+            <div className="room-slot next">
+              <span>NEXT · {timePart(schedule.next.starts_at)}</span>
+              <CourseSlot item={schedule.next} count={schedule.nextCount} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {showSchedule && density === "now" && schedule.current ? (
+        <div className="room-now-only">
+          <CourseSlot item={schedule.current} count={schedule.currentCount} />
+        </div>
+      ) : null}
+      {!showSchedule ? (
+        <div className="room-resource">
+          <strong>{get(room, "room_type") || "classroom"}</strong>
+          <small>
+            {get(room, "capacity")} seats ·{" "}
+            {get(room, "resources") || "No resources set"}
+          </small>
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function RoomMapCard({
+  room,
+  position,
+  schedule,
+  density,
+  isToday,
+  now,
+  showSchedule,
+  editable,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onClick,
+}: {
+  room: Row;
+  position: { x: number; y: number };
+  schedule: {
+    all: Row[];
+    current?: Row;
+    next?: Row;
+    status: string;
+    currentCount: number;
+    nextCount: number;
+  };
+  density: "all" | "focus" | "now" | "day";
+  isToday: boolean;
+  now: number;
+  showSchedule: boolean;
+  editable: boolean;
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onClick: () => void;
+}) {
+  const listMode = density === "all" || density === "day";
+  const focus = schedule.current ?? schedule.next;
+  const courseColor = eventColour(focus ?? {});
+  const bookedMinutes = schedule.all.reduce(
+    (sum, item) =>
+      sum +
+      Math.max(0, (asTime(item.ends_at) - asTime(item.starts_at)) / 60000),
+    0,
+  );
+  const availability = !schedule.all.length
+    ? "empty"
+    : bookedMinutes >= 480
+      ? "full"
+      : "partial";
+  const availabilityLabel =
+    availability === "empty"
+      ? "Empty"
+      : availability === "full"
+        ? "Full"
+        : "Partly available";
   const countLabel = `${schedule.all.length} ${schedule.all.length === 1 ? "class" : "classes"}`;
-  const height = listMode ? Math.max(Number(room.map_height ?? 110), 78 + schedule.all.length * 36) : Math.max(Number(room.map_height ?? 110), showSchedule && density === "focus" ? 142 : 76);
-  const style = { left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%`, width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`, height: `${(height / campusMap.height) * 100}%`, "--room-course-colour": courseColor } as React.CSSProperties;
-  return <button type="button" className={`map-room map-room-${showSchedule ? schedule.status : "resource"} room-availability-${availability}${editable ? " draggable" : ""}`} style={style} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onClick={onClick} title={editable ? `Move ${get(room, "name")}` : get(room, "name")}><GripVertical className="room-grip" size={15} /><header className="room-card-head"><span><DoorOpen size={15} />{get(room, "name")}</span>{showSchedule ? <b>{availabilityLabel}</b> : null}</header>{showSchedule && schedule.all.length ? <div className="room-summary">{countLabel}</div> : null}{showSchedule && listMode && schedule.all.length ? <div className="room-day-sessions">{schedule.all.map((item) => <CourseSessionLine key={get(item, "id")} item={item} state={isToday ? asTime(item.ends_at) <= now ? "complete" : asTime(item.starts_at) <= now ? "current" : "upcoming" : "scheduled"} />)}</div> : null}{showSchedule && density === "focus" ? <div className="room-card-schedule">{schedule.current ? <div className="room-slot current"><span>NOW</span><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{schedule.next ? <div className="room-slot next"><span>NEXT · {timePart(schedule.next.starts_at)}</span><CourseSlot item={schedule.next} count={schedule.nextCount} /></div> : null}</div> : null}{showSchedule && density === "now" && schedule.current ? <div className="room-now-only"><CourseSlot item={schedule.current} count={schedule.currentCount} /></div> : null}{!showSchedule ? <div className="room-resource"><strong>{get(room, "room_type") || "classroom"}</strong><small>{get(room, "capacity")} seats · {get(room, "resources") || "No resources set"}</small></div> : null}</button>;
+  const height = listMode
+    ? Math.max(Number(room.map_height ?? 110), 78 + schedule.all.length * 36)
+    : Math.max(
+        Number(room.map_height ?? 110),
+        showSchedule && density === "focus" ? 142 : 76,
+      );
+  const style = {
+    left: `${(position.x / campusMap.width) * 100}%`,
+    top: `${(position.y / campusMap.height) * 100}%`,
+    width: `${(Number(room.map_width ?? 180) / campusMap.width) * 100}%`,
+    height: `${(height / campusMap.height) * 100}%`,
+    "--room-course-colour": courseColor,
+  } as React.CSSProperties;
+  return (
+    <button
+      type="button"
+      className={`map-room map-room-${showSchedule ? schedule.status : "resource"} room-availability-${availability}${editable ? " draggable" : ""}`}
+      style={style}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      title={editable ? `Move ${get(room, "name")}` : get(room, "name")}
+    >
+      <GripVertical className="room-grip" size={15} />
+      <header className="room-card-head">
+        <span>
+          <DoorOpen size={15} />
+          {get(room, "name")}
+        </span>
+        {showSchedule ? <b>{availabilityLabel}</b> : null}
+      </header>
+      {showSchedule && schedule.all.length ? (
+        <div className="room-summary">{countLabel}</div>
+      ) : null}
+      {showSchedule && listMode && schedule.all.length ? (
+        <div className="room-day-sessions">
+          {schedule.all.map((item) => (
+            <CourseSessionLine
+              key={get(item, "id")}
+              item={item}
+              state={
+                isToday
+                  ? asTime(item.ends_at) <= now
+                    ? "complete"
+                    : asTime(item.starts_at) <= now
+                      ? "current"
+                      : "upcoming"
+                  : "scheduled"
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+      {showSchedule && density === "focus" ? (
+        <div className="room-card-schedule">
+          {schedule.current ? (
+            <div className="room-slot current">
+              <span>NOW</span>
+              <CourseSlot
+                item={schedule.current}
+                count={schedule.currentCount}
+              />
+            </div>
+          ) : null}
+          {schedule.next ? (
+            <div className="room-slot next">
+              <span>NEXT · {timePart(schedule.next.starts_at)}</span>
+              <CourseSlot item={schedule.next} count={schedule.nextCount} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {showSchedule && density === "now" && schedule.current ? (
+        <div className="room-now-only">
+          <CourseSlot item={schedule.current} count={schedule.currentCount} />
+        </div>
+      ) : null}
+      {!showSchedule ? (
+        <div className="room-resource">
+          <strong>{get(room, "room_type") || "classroom"}</strong>
+          <small>
+            {get(room, "capacity")} seats ·{" "}
+            {get(room, "resources") || "No resources set"}
+          </small>
+        </div>
+      ) : null}
+    </button>
+  );
 }
 
-function CourseMarker({ item }: { item: Row }) { const subject = get(item, "subject").toLowerCase(); const Icon = subject.includes("music") || subject.includes("violin") ? Music2 : subject.includes("math") ? LayoutGrid : BookOpen; return <span className="course-marker" style={{ "--course-colour": eventColour(item) } as React.CSSProperties}><Icon size={12} /></span>; }
-function CourseSlot({ item, count }: { item: Row; count: number }) { return <div className="course-slot"><CourseMarker item={item} /><div><strong>{get(item, "course_title")}</strong><small>{get(item, "teacher_name")} · {count} students</small></div></div>; }
-function CourseSessionLine({ item, state }: { item: Row; state: "complete" | "current" | "upcoming" | "scheduled" }) { return <div className={`room-day-session ${state}`}><time>{timeRange(item)}</time><CourseMarker item={item} /><div><strong>{get(item, "course_title")}</strong><small>{get(item, "teacher_name")}</small></div></div>; }
-function asTime(value: unknown) { return new Date(String(value).replace(" ", "T")).getTime(); }
-function timeRange(item: Row) { return `${timePart(item.starts_at)}–${timePart(item.ends_at)}`; }
+function CourseMarker({ item }: { item: Row }) {
+  const subject = get(item, "subject").toLowerCase();
+  const Icon =
+    subject.includes("music") || subject.includes("violin")
+      ? Music2
+      : subject.includes("math")
+        ? LayoutGrid
+        : BookOpen;
+  return (
+    <span
+      className="course-marker"
+      style={{ "--course-colour": eventColour(item) } as React.CSSProperties}
+    >
+      <Icon size={12} />
+    </span>
+  );
+}
+function CourseSlot({ item, count }: { item: Row; count: number }) {
+  return (
+    <div className="course-slot">
+      <CourseMarker item={item} />
+      <div>
+        <strong>{get(item, "course_title")}</strong>
+        <small>
+          {get(item, "teacher_name")} · {count} students
+        </small>
+      </div>
+    </div>
+  );
+}
+function CourseSessionLine({
+  item,
+  state,
+}: {
+  item: Row;
+  state: "complete" | "current" | "upcoming" | "scheduled";
+}) {
+  return (
+    <div className={`room-day-session ${state}`}>
+      <time>{timeRange(item)}</time>
+      <CourseMarker item={item} />
+      <div>
+        <strong>{get(item, "course_title")}</strong>
+        <small>{get(item, "teacher_name")}</small>
+      </div>
+    </div>
+  );
+}
+function asTime(value: unknown) {
+  return new Date(String(value).replace(" ", "T")).getTime();
+}
+function timeRange(item: Row) {
+  return `${timePart(item.starts_at)}–${timePart(item.ends_at)}`;
+}
 
-function MapMini({ rooms, point, onOpenRoom }: { rooms: Row[]; point: (room: Row) => { x: number; y: number }; onOpenRoom: (id: string) => void }) { return <div className="map-mini" aria-label="Map overview"><span>MAP</span>{rooms.map((room) => { const position = point(room); return <button type="button" key={get(room, "id")} title={get(room, "name")} onClick={() => onOpenRoom(get(room, "id"))} style={{ left: `${(position.x / campusMap.width) * 100}%`, top: `${(position.y / campusMap.height) * 100}%` }} />; })}</div>; }
+function MapMini({
+  rooms,
+  point,
+  onOpenRoom,
+}: {
+  rooms: Row[];
+  point: (room: Row) => { x: number; y: number };
+  onOpenRoom: (id: string) => void;
+}) {
+  return (
+    <div className="map-mini" aria-label="Map overview">
+      <span>MAP</span>
+      {rooms.map((room) => {
+        const position = point(room);
+        return (
+          <button
+            type="button"
+            key={get(room, "id")}
+            title={get(room, "name")}
+            onClick={() => onOpenRoom(get(room, "id"))}
+            style={{
+              left: `${(position.x / campusMap.width) * 100}%`,
+              top: `${(position.y / campusMap.height) * 100}%`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
-function DirectoryView({ type, rows, data, t, onOpen }: { type: "student" | "teacher"; rows: Row[]; data: PortalData; t: typeof copy.en; onOpen: (id: string) => void }) {
+function DirectoryView({
+  type,
+  rows,
+  data,
+  t,
+  onOpen,
+}: {
+  type: "student" | "teacher";
+  rows: Row[];
+  data: PortalData;
+  t: typeof copy.en;
+  onOpen: (id: string) => void;
+}) {
   const isStudent = type === "student";
   const [layout, setLayout] = useState<"cards" | "grid">("cards");
   const people = rows.map((person) => {
     const personId = get(person, "id");
-    const lessons = isStudent ? data.attendance.filter((item) => get(item, "student_id") === personId) : data.teacherBookings.filter((item) => get(item, "teacher_id") === personId);
-    const active = isStudent ? data.enrollments.filter((item) => get(item, "student_id") === personId && get(item, "status") === "enrolled").length : lessons.length;
+    const lessons = isStudent
+      ? data.attendance.filter((item) => get(item, "student_id") === personId)
+      : data.teacherBookings.filter(
+          (item) => get(item, "teacher_id") === personId,
+        );
+    const active = isStudent
+      ? data.enrollments.filter(
+          (item) =>
+            get(item, "student_id") === personId &&
+            get(item, "status") === "enrolled",
+        ).length
+      : lessons.length;
     return { person, personId, active, lessons };
   });
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{isStudent ? t.students : t.teachers}</h2><p>{isStudent ? t.studentHint : t.teacherHint}</p></div><div className="directory-view-actions"><span className="record-count">{rows.length}</span><div className="view-switch" aria-label="Directory layout"><button className={layout === "cards" ? "active" : ""} type="button" title="Card view" onClick={() => setLayout("cards")}><LayoutGrid size={16} /></button><button className={layout === "grid" ? "active" : ""} type="button" title="Grid view" onClick={() => setLayout("grid")}><List size={17} /></button></div></div></div>{layout === "cards" ? <div className="directory-grid">{people.map(({ person, personId, active }) => <button className="person-card" type="button" key={personId} onClick={() => onOpen(personId)}><div className="person-avatar"><img src={avatarUrl(person)} alt="" /></div><div className="person-main"><strong>{get(person, "name")}</strong><span>{isStudent ? get(person, "level") : get(person, "subject")}</span></div><Status value={get(person, "status")} /><div className="person-stats"><span><b>{active}</b>{isStudent ? " classes" : " lessons"}</span><span>{isStudent ? get(person, "guardian_phone") : get(person, "phone")}</span></div><div className="person-action">{t.openDetail}<ChevronRight size={15} /></div></button>)}{!rows.length ? <Empty text={t.noData} /> : null}</div> : <DirectoryTable people={people} isStudent={isStudent} onOpen={onOpen} />}</section>;
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{isStudent ? t.students : t.teachers}</h2>
+          <p>{isStudent ? t.studentHint : t.teacherHint}</p>
+        </div>
+        <div className="directory-view-actions">
+          <span className="record-count">{rows.length}</span>
+          <div className="view-switch" aria-label="Directory layout">
+            <button
+              className={layout === "cards" ? "active" : ""}
+              type="button"
+              title="Card view"
+              onClick={() => setLayout("cards")}
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              className={layout === "grid" ? "active" : ""}
+              type="button"
+              title="Grid view"
+              onClick={() => setLayout("grid")}
+            >
+              <List size={17} />
+            </button>
+          </div>
+        </div>
+      </div>
+      {layout === "cards" ? (
+        <div className="directory-grid">
+          {people.map(({ person, personId, active }) => (
+            <button
+              className="person-card"
+              type="button"
+              key={personId}
+              onClick={() => onOpen(personId)}
+            >
+              <div className="person-avatar">
+                <img src={avatarUrl(person)} alt="" />
+              </div>
+              <div className="person-main">
+                <strong>{get(person, "name")}</strong>
+                <span>
+                  {isStudent ? get(person, "level") : get(person, "subject")}
+                </span>
+              </div>
+              <Status value={get(person, "status")} />
+              <div className="person-stats">
+                <span>
+                  <b>{active}</b>
+                  {isStudent ? " classes" : " lessons"}
+                </span>
+                <span>
+                  {isStudent
+                    ? get(person, "guardian_phone")
+                    : get(person, "phone")}
+                </span>
+              </div>
+              <div className="person-action">
+                {t.openDetail}
+                <ChevronRight size={15} />
+              </div>
+            </button>
+          ))}
+          {!rows.length ? <Empty text={t.noData} /> : null}
+        </div>
+      ) : (
+        <DirectoryTable people={people} isStudent={isStudent} onOpen={onOpen} />
+      )}
+    </section>
+  );
 }
 
-function DirectoryTable({ people, isStudent, onOpen }: { people: { person: Row; personId: string; active: number; lessons: Row[] }[]; isStudent: boolean; onOpen: (id: string) => void }) {
-  return <div className="table-scroll directory-grid-table"><table className="data-table"><thead><tr><th>{isStudent ? "Student" : "Teacher"}</th><th>{isStudent ? "Level" : "Subject"}</th><th>{isStudent ? "Classes" : "Lessons"}</th><th>Contact</th><th>Status</th><th>Actions</th></tr></thead><tbody>{people.map(({ person, personId, active }) => <tr key={personId}><td><div className="table-person"><img src={avatarUrl(person)} alt="" /><strong>{get(person, "name")}</strong></div></td><td>{isStudent ? get(person, "level") : get(person, "subject")}</td><td>{active}</td><td>{isStudent ? get(person, "guardian_phone") : get(person, "phone")}</td><td><Status value={get(person, "status")} /></td><td><div className="table-actions"><button className="table-button" type="button" onClick={() => onOpen(personId)}>Open</button><button className="table-button subtle" type="button" onClick={() => onOpen(personId)}>Edit</button></div></td></tr>)}{!people.length ? <tr><td className="empty-cell" colSpan={6}>No records</td></tr> : null}</tbody></table></div>;
+function DirectoryTable({
+  people,
+  isStudent,
+  onOpen,
+}: {
+  people: { person: Row; personId: string; active: number; lessons: Row[] }[];
+  isStudent: boolean;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <div className="table-scroll directory-grid-table">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>{isStudent ? "Student" : "Teacher"}</th>
+            <th>{isStudent ? "Level" : "Subject"}</th>
+            <th>{isStudent ? "Classes" : "Lessons"}</th>
+            <th>Contact</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {people.map(({ person, personId, active }) => (
+            <tr key={personId}>
+              <td>
+                <div className="table-person">
+                  <img src={avatarUrl(person)} alt="" />
+                  <strong>{get(person, "name")}</strong>
+                </div>
+              </td>
+              <td>
+                {isStudent ? get(person, "level") : get(person, "subject")}
+              </td>
+              <td>{active}</td>
+              <td>
+                {isStudent
+                  ? get(person, "guardian_phone")
+                  : get(person, "phone")}
+              </td>
+              <td>
+                <Status value={get(person, "status")} />
+              </td>
+              <td>
+                <div className="table-actions">
+                  <button
+                    className="table-button"
+                    type="button"
+                    onClick={() => onOpen(personId)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    className="table-button subtle"
+                    type="button"
+                    onClick={() => onOpen(personId)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!people.length ? (
+            <tr>
+              <td className="empty-cell" colSpan={6}>
+                No records
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function DirectoryViewV2({ type, rows, data, t, onOpen, onCreate }: { type: "student" | "teacher"; rows: Row[]; data: PortalData; t: typeof copy.en; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onOpen: (id: string) => void; onCreate?: () => void }) {
+function DirectoryViewV2({
+  type,
+  rows,
+  data,
+  t,
+  onOpen,
+  onCreate,
+}: {
+  type: "student" | "teacher";
+  rows: Row[];
+  data: PortalData;
+  t: typeof copy.en;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onOpen: (id: string) => void;
+  onCreate?: () => void;
+}) {
   const isStudent = type === "student";
   const [layout, setLayout] = useState<"cards" | "grid">("cards");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("name");
   const [columns, setColumns] = useState({ contact: true, activity: true });
-  const people = rows.map((person) => {
-    const id = get(person, "id");
-    const active = isStudent ? data.enrollments.filter((item) => get(item, "student_id") === id && get(item, "status") === "enrolled").length : data.teacherBookings.filter((item) => get(item, "teacher_id") === id).length;
-    return { person, id, active };
-  }).filter(({ person }) => `${get(person, "name")} ${isStudent ? get(person, "level") : get(person, "subject")}`.toLowerCase().includes(query.toLowerCase()) && (status === "all" || get(person, "status") === status)).sort((a, b) => sort === "activity" ? b.active - a.active : get(a.person, "name").localeCompare(get(b.person, "name")));
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{isStudent ? t.students : t.teachers}</h2><p>{isStudent ? t.studentHint : t.teacherHint}</p></div><div className="directory-view-actions">{isStudent ? <button className="primary-button" type="button" onClick={onCreate}><UserRoundPlus size={16} />Add student</button> : null}<span className="record-count">{people.length}</span></div></div><div className="grid-toolbar"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${isStudent ? "students" : "teachers"}`} /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All status</option><option value={isStudent ? "active" : "available"}>{isStudent ? "Active" : "Available"}</option></select><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="name">Sort: name</option><option value="activity">Sort: activity</option></select><details className="column-menu"><summary><SlidersHorizontal size={15} />Columns</summary><label><input checked={columns.activity} type="checkbox" onChange={() => setColumns((value) => ({ ...value, activity: !value.activity }))} />{isStudent ? "Classes" : "Lessons"}</label><label><input checked={columns.contact} type="checkbox" onChange={() => setColumns((value) => ({ ...value, contact: !value.contact }))} />Contact</label></details><div className="view-switch"><button className={layout === "cards" ? "active" : ""} type="button" title="Card view" onClick={() => setLayout("cards")}><LayoutGrid size={16} /></button><button className={layout === "grid" ? "active" : ""} type="button" title="Grid view" onClick={() => setLayout("grid")}><List size={17} /></button></div></div>{layout === "cards" ? <div className="directory-grid">{people.map(({ person, id, active }) => <button className="person-card" type="button" key={id} onClick={() => onOpen(id)}><div className={isStudent ? "person-avatar" : "person-avatar teacher-avatar"}><Avatar person={person} /></div><div className="person-main"><strong>{get(person, "name")}</strong><span>{isStudent ? get(person, "level") : get(person, "subject")}</span></div><Status value={get(person, "status")} /><div className="person-stats"><span><b>{active}</b>{isStudent ? " classes" : " lessons"}</span><span>{isStudent ? get(person, "guardian_phone") : get(person, "phone")}</span></div><div className="person-action">{t.openDetail}<ChevronRight size={15} /></div></button>)}{!people.length ? <Empty text="No people match these filters." /> : null}</div> : <DirectoryGridTable people={people} isStudent={isStudent} columns={columns} onOpen={onOpen} />}</section>;
+  const people = rows
+    .map((person) => {
+      const id = get(person, "id");
+      const active = isStudent
+        ? data.enrollments.filter(
+            (item) =>
+              get(item, "student_id") === id &&
+              get(item, "status") === "enrolled",
+          ).length
+        : data.teacherBookings.filter((item) => get(item, "teacher_id") === id)
+            .length;
+      return { person, id, active };
+    })
+    .filter(
+      ({ person }) =>
+        `${get(person, "name")} ${isStudent ? get(person, "level") : get(person, "subject")}`
+          .toLowerCase()
+          .includes(query.toLowerCase()) &&
+        (status === "all" || get(person, "status") === status),
+    )
+    .sort((a, b) =>
+      sort === "activity"
+        ? b.active - a.active
+        : get(a.person, "name").localeCompare(get(b.person, "name")),
+    );
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{isStudent ? t.students : t.teachers}</h2>
+          <p>{isStudent ? t.studentHint : t.teacherHint}</p>
+        </div>
+        <div className="directory-view-actions">
+          {isStudent ? (
+            <button className="primary-button" type="button" onClick={onCreate}>
+              <UserRoundPlus size={16} />
+              Add student
+            </button>
+          ) : null}
+          <span className="record-count">{people.length}</span>
+        </div>
+      </div>
+      <div className="grid-toolbar">
+        <label>
+          <Search size={15} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Search ${isStudent ? "students" : "teachers"}`}
+          />
+        </label>
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
+          <option value="all">All status</option>
+          <option value={isStudent ? "active" : "available"}>
+            {isStudent ? "Active" : "Available"}
+          </option>
+        </select>
+        <select value={sort} onChange={(event) => setSort(event.target.value)}>
+          <option value="name">Sort: name</option>
+          <option value="activity">Sort: activity</option>
+        </select>
+        <details className="column-menu">
+          <summary>
+            <SlidersHorizontal size={15} />
+            Columns
+          </summary>
+          <label>
+            <input
+              checked={columns.activity}
+              type="checkbox"
+              onChange={() =>
+                setColumns((value) => ({ ...value, activity: !value.activity }))
+              }
+            />
+            {isStudent ? "Classes" : "Lessons"}
+          </label>
+          <label>
+            <input
+              checked={columns.contact}
+              type="checkbox"
+              onChange={() =>
+                setColumns((value) => ({ ...value, contact: !value.contact }))
+              }
+            />
+            Contact
+          </label>
+        </details>
+        <div className="view-switch">
+          <button
+            className={layout === "cards" ? "active" : ""}
+            type="button"
+            title="Card view"
+            onClick={() => setLayout("cards")}
+          >
+            <LayoutGrid size={16} />
+          </button>
+          <button
+            className={layout === "grid" ? "active" : ""}
+            type="button"
+            title="Grid view"
+            onClick={() => setLayout("grid")}
+          >
+            <List size={17} />
+          </button>
+        </div>
+      </div>
+      {layout === "cards" ? (
+        <div className="directory-grid">
+          {people.map(({ person, id, active }) => (
+            <button
+              className="person-card"
+              type="button"
+              key={id}
+              onClick={() => onOpen(id)}
+            >
+              <div
+                className={
+                  isStudent ? "person-avatar" : "person-avatar teacher-avatar"
+                }
+              >
+                <Avatar person={person} />
+              </div>
+              <div className="person-main">
+                <strong>{get(person, "name")}</strong>
+                <span>
+                  {isStudent ? get(person, "level") : get(person, "subject")}
+                </span>
+              </div>
+              <Status value={get(person, "status")} />
+              <div className="person-stats">
+                <span>
+                  <b>{active}</b>
+                  {isStudent ? " classes" : " lessons"}
+                </span>
+                <span>
+                  {isStudent
+                    ? get(person, "guardian_phone")
+                    : get(person, "phone")}
+                </span>
+              </div>
+              <div className="person-action">
+                {t.openDetail}
+                <ChevronRight size={15} />
+              </div>
+            </button>
+          ))}
+          {!people.length ? (
+            <Empty text="No people match these filters." />
+          ) : null}
+        </div>
+      ) : (
+        <DirectoryGridTable
+          people={people}
+          isStudent={isStudent}
+          columns={columns}
+          onOpen={onOpen}
+        />
+      )}
+    </section>
+  );
 }
 
-function DirectoryGridTable({ people, isStudent, columns, onOpen }: { people: { person: Row; id: string; active: number }[]; isStudent: boolean; columns: { contact: boolean; activity: boolean }; onOpen: (id: string) => void }) {
-  const gridColumns: GridColumn[] = [{ key: "person", label: isStudent ? "Student" : "Teacher" }, { key: "subject", label: isStudent ? "Level" : "Subject" }, ...(columns.activity ? [{ key: "activity", label: isStudent ? "Classes" : "Lessons" }] : []), ...(columns.contact ? [{ key: "contact", label: "Contact" }] : []), { key: "status", label: "Status" }, { key: "actions", label: "Actions" }];
-  const rows = people.map(({ person, id, active }) => ({ ...person, id, activity: active }));
-  return <div className="directory-grid-table"><ResizableDataTable columns={gridColumns} rows={rows} empty="No records" renderCell={(row, column) => {
-    if (column.key === "person") return <div className={isStudent ? "table-person" : "table-person teacher-table-person"}><Avatar person={row} /><strong>{get(row, "name")}</strong></div>;
-    if (column.key === "subject") return isStudent ? get(row, "level") : get(row, "subject");
-    if (column.key === "contact") return isStudent ? get(row, "guardian_phone") : get(row, "phone");
-    if (column.key === "status") return <Status value={get(row, "status")} />;
-    if (column.key === "actions") return <div className="table-actions"><button className="table-button" type="button" onClick={(event) => { event.stopPropagation(); onOpen(get(row, "id")); }}>Open</button><button className="table-button subtle" type="button" onClick={(event) => { event.stopPropagation(); onOpen(get(row, "id")); }}>Edit</button></div>;
-    return get(row, column.key) || "-";
-  }} onRowClick={(row) => onOpen(get(row, "id"))} /></div>;
-}
-
-function CourseManager({ data, run, busy, t, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpen: (id: string) => void }) {
-  const [showForm, setShowForm] = useState(false);
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.courses}</h2><p>{t.courseHint}</p></div><button className="primary-button" type="button" onClick={() => setShowForm(!showForm)}><Plus size={16} />{t.newCourse}</button></div>{showForm ? <CourseForm run={run} busy={busy} close={() => setShowForm(false)} t={t} /> : null}<div className="course-grid">{data.courses.map((course) => <article key={get(course, "id")} className="course-card"><CourseVisual course={course} /><div className="course-body"><span className="code">{get(course, "code")}</span><h3>{get(course, "title")}</h3><p>{get(course, "subject")} · {get(course, "level")}</p><div className="course-facts"><span><CalendarDays size={15} />{get(course, "default_sessions")} lessons</span><span><Banknote size={15} />{amount(course.list_price)}</span></div><footer><Status value={get(course, "status")} /><span>{get(course, "run_count")} classes</span></footer></div></article>)}</div></section>;
-}
-
-function CourseCatalogue({ data, run, busy, t, onOpen }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpen: (id: string) => void }) {
-  const [showForm, setShowForm] = useState(false);
-  return <section className="operation-stack">
-    <div className="view-intro"><div><h2>{t.courses}</h2><p>{t.courseHint}</p></div><button className="primary-button" type="button" onClick={() => setShowForm((value) => !value)}><Plus size={16} />{t.newCourse}</button></div>
-    {showForm ? <CourseForm run={run} busy={busy} close={() => setShowForm(false)} t={t} /> : null}
-    <div className="course-grid">
-      {data.courses.map((course) => <button type="button" key={get(course, "id")} className="course-card course-card-button" onClick={() => onOpen(get(course, "id"))}>
-        <CourseVisual course={course} />
-        <div className="course-body"><span className="code">{get(course, "code")}</span><h3>{get(course, "title")}</h3><p>{get(course, "subject")} · {get(course, "level")}</p><div className="course-facts"><span><CalendarDays size={15} />{get(course, "default_sessions")} lessons</span><span><Banknote size={15} />{amount(course.list_price)}</span></div><footer><Status value={get(course, "status")} /><span>{get(course, "run_count")} intakes</span></footer></div>
-        <ChevronRight className="course-card-arrow" size={19} />
-      </button>)}
-      {!data.courses.length ? <Empty text={t.noData} /> : null}
+function DirectoryGridTable({
+  people,
+  isStudent,
+  columns,
+  onOpen,
+}: {
+  people: { person: Row; id: string; active: number }[];
+  isStudent: boolean;
+  columns: { contact: boolean; activity: boolean };
+  onOpen: (id: string) => void;
+}) {
+  const gridColumns: GridColumn[] = [
+    { key: "person", label: isStudent ? "Student" : "Teacher" },
+    { key: "subject", label: isStudent ? "Level" : "Subject" },
+    ...(columns.activity
+      ? [{ key: "activity", label: isStudent ? "Classes" : "Lessons" }]
+      : []),
+    ...(columns.contact ? [{ key: "contact", label: "Contact" }] : []),
+    { key: "status", label: "Status" },
+    { key: "actions", label: "Actions" },
+  ];
+  const rows = people.map(({ person, id, active }) => ({
+    ...person,
+    id,
+    activity: active,
+  }));
+  return (
+    <div className="directory-grid-table">
+      <ResizableDataTable
+        columns={gridColumns}
+        rows={rows}
+        empty="No records"
+        renderCell={(row, column) => {
+          if (column.key === "person")
+            return (
+              <div
+                className={
+                  isStudent
+                    ? "table-person"
+                    : "table-person teacher-table-person"
+                }
+              >
+                <Avatar person={row} />
+                <strong>{get(row, "name")}</strong>
+              </div>
+            );
+          if (column.key === "subject")
+            return isStudent ? get(row, "level") : get(row, "subject");
+          if (column.key === "contact")
+            return isStudent ? get(row, "guardian_phone") : get(row, "phone");
+          if (column.key === "status")
+            return <Status value={get(row, "status")} />;
+          if (column.key === "actions")
+            return (
+              <div className="table-actions">
+                <button
+                  className="table-button"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(get(row, "id"));
+                  }}
+                >
+                  Open
+                </button>
+                <button
+                  className="table-button subtle"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(get(row, "id"));
+                  }}
+                >
+                  Edit
+                </button>
+              </div>
+            );
+          return get(row, column.key) || "-";
+        }}
+        onRowClick={(row) => onOpen(get(row, "id"))}
+      />
     </div>
-  </section>;
+  );
+}
+
+function CourseManager({
+  data,
+  run,
+  busy,
+  t,
+  onOpen,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onOpen: (id: string) => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{t.courses}</h2>
+          <p>{t.courseHint}</p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setShowForm(!showForm)}
+        >
+          <Plus size={16} />
+          {t.newCourse}
+        </button>
+      </div>
+      {showForm ? (
+        <CourseForm
+          run={run}
+          busy={busy}
+          close={() => setShowForm(false)}
+          t={t}
+        />
+      ) : null}
+      <div className="course-grid">
+        {data.courses.map((course) => (
+          <article key={get(course, "id")} className="course-card">
+            <CourseVisual course={course} />
+            <div className="course-body">
+              <span className="code">{get(course, "code")}</span>
+              <h3>{get(course, "title")}</h3>
+              <p>
+                {get(course, "subject")} · {get(course, "level")}
+              </p>
+              <div className="course-facts">
+                <span>
+                  <CalendarDays size={15} />
+                  {get(course, "default_sessions")} lessons
+                </span>
+                <span>
+                  <Banknote size={15} />
+                  {amount(course.list_price)}
+                </span>
+              </div>
+              <footer>
+                <Status value={get(course, "status")} />
+                <span>{get(course, "run_count")} classes</span>
+              </footer>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CourseCatalogue({
+  data,
+  run,
+  busy,
+  t,
+  onOpen,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onOpen: (id: string) => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{t.courses}</h2>
+          <p>{t.courseHint}</p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setShowForm((value) => !value)}
+        >
+          <Plus size={16} />
+          {t.newCourse}
+        </button>
+      </div>
+      {showForm ? (
+        <CourseForm
+          run={run}
+          busy={busy}
+          close={() => setShowForm(false)}
+          t={t}
+        />
+      ) : null}
+      <div className="course-grid">
+        {data.courses.map((course) => (
+          <button
+            type="button"
+            key={get(course, "id")}
+            className="course-card course-card-button"
+            onClick={() => onOpen(get(course, "id"))}
+          >
+            <CourseVisual course={course} />
+            <div className="course-body">
+              <span className="code">{get(course, "code")}</span>
+              <h3>{get(course, "title")}</h3>
+              <p>
+                {get(course, "subject")} · {get(course, "level")}
+              </p>
+              <div className="course-facts">
+                <span>
+                  <CalendarDays size={15} />
+                  {get(course, "default_sessions")} lessons
+                </span>
+                <span>
+                  <Banknote size={15} />
+                  {amount(course.list_price)}
+                </span>
+              </div>
+              <footer>
+                <Status value={get(course, "status")} />
+                <span>{get(course, "run_count")} intakes</span>
+              </footer>
+            </div>
+            <ChevronRight className="course-card-arrow" size={19} />
+          </button>
+        ))}
+        {!data.courses.length ? <Empty text={t.noData} /> : null}
+      </div>
+    </section>
+  );
 }
 
 function CourseVisual({ course }: { course: Row }) {
-  const descriptor = `${get(course, "subject")} ${get(course, "title")} ${get(course, "course_title")}`.toLowerCase();
-  const subject = descriptor.includes("math") ? "math" : descriptor.includes("science") ? "science" : descriptor.includes("chinese") ? "chinese" : descriptor.includes("bahasa") || descriptor.includes("malay") ? "bahasa" : descriptor.includes("music") || descriptor.includes("violin") ? "music" : "english";
-  const year = descriptor.match(/year\s*(\d+)/)?.[1] || (subject === "music" ? "starter" : "mixed");
+  const descriptor =
+    `${get(course, "subject")} ${get(course, "title")} ${get(course, "course_title")}`.toLowerCase();
+  const subject = descriptor.includes("math")
+    ? "math"
+    : descriptor.includes("science")
+      ? "science"
+      : descriptor.includes("chinese")
+        ? "chinese"
+        : descriptor.includes("bahasa") || descriptor.includes("malay")
+          ? "bahasa"
+          : descriptor.includes("music") || descriptor.includes("violin")
+            ? "music"
+            : "english";
+  const year =
+    descriptor.match(/year\s*(\d+)/)?.[1] ||
+    (subject === "music" ? "starter" : "mixed");
   const visual = {
     math: { Icon: Calculator, prop: "÷", label: "MATH" },
     science: { Icon: FlaskConical, prop: "✦", label: "SCIENCE" },
@@ -758,96 +6156,1240 @@ function CourseVisual({ course }: { course: Row }) {
     english: { Icon: BookOpen, prop: "Aa", label: "ENGLISH" },
   }[subject];
   const Icon = visual.Icon;
-  const image = { math: "/assets/courses/mathematics-props-v2.png", science: "/assets/courses/science-props-v2.png", chinese: "/assets/courses/chinese-props-v2.png", bahasa: "/assets/courses/bahasa-props-v2.png", music: "/assets/courses/music-props-v2.png", english: "/assets/courses/english-props-v2.png" }[subject];
-  return <div className={`course-visual abstract-course-visual course-subject-${subject} course-year-${year}`} style={{ "--course-colour": eventColour({ course_color: get(course, "display_color") || get(course, "run_course_color") || get(course, "course_color") }) } as React.CSSProperties}><img className="course-prop-image" src={image} alt="" /><i className="course-image-scrim" /><span className="course-year-label">{year === "starter" ? "START" : year === "mixed" ? "ALL" : `Y${year}`}</span><div className="course-prop"><Icon size={22} strokeWidth={2.25} /><b>{visual.prop}</b></div><div className="course-subject-label"><span>{visual.label}</span></div></div>;
+  const image = {
+    math: "/assets/courses/mathematics-props-v2.png",
+    science: "/assets/courses/science-props-v2.png",
+    chinese: "/assets/courses/chinese-props-v2.png",
+    bahasa: "/assets/courses/bahasa-props-v2.png",
+    music: "/assets/courses/music-props-v2.png",
+    english: "/assets/courses/english-props-v2.png",
+  }[subject];
+  return (
+    <div
+      className={`course-visual abstract-course-visual course-subject-${subject} course-year-${year}`}
+      style={
+        {
+          "--course-colour": eventColour({
+            course_color:
+              get(course, "display_color") ||
+              get(course, "run_course_color") ||
+              get(course, "course_color"),
+          }),
+        } as React.CSSProperties
+      }
+    >
+      <img className="course-prop-image" src={image} alt="" />
+      <i className="course-image-scrim" />
+      <span className="course-year-label">
+        {year === "starter" ? "START" : year === "mixed" ? "ALL" : `Y${year}`}
+      </span>
+      <div className="course-prop">
+        <Icon size={22} strokeWidth={2.25} />
+        <b>{visual.prop}</b>
+      </div>
+      <div className="course-subject-label">
+        <span>{visual.label}</span>
+      </div>
+    </div>
+  );
 }
 
-function CourseForm({ run, busy, close, t }: { run: (action: string, values?: Row) => Promise<void>; busy: boolean; close: () => void; t: typeof copy.en }) {
+function CourseForm({
+  run,
+  busy,
+  close,
+  t,
+}: {
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  close: () => void;
+  t: typeof copy.en;
+}) {
   const [color, setColor] = useState(defaultCourseColour);
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createCourse", { ...values, color }).then(close); }
-  return <form className="inline-form course-form" onSubmit={submit}><FormField name="title" label="Course name" required /><FormField name="subject" label={t.subject} required /><FormField name="level" label={t.level} required /><FormField name="sessions" type="number" label="Lessons" defaultValue="8" min="1" required /><FormField name="minutes" type="number" label="Minutes" defaultValue="90" min="30" required /><FormField name="price" type="number" label={`${t.price} (RM)`} defaultValue="0" min="0" step="0.01" required /><CourseColourPicker value={color} onChange={setColor} disabled={busy} /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button><button className="quiet-button" type="button" onClick={close}>{t.cancel}</button></form>;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createCourse", { ...values, color }).then(close);
+  }
+  return (
+    <form className="inline-form course-form" onSubmit={submit}>
+      <FormField name="title" label="Course name" required />
+      <FormField name="subject" label={t.subject} required />
+      <FormField name="level" label={t.level} required />
+      <FormField
+        name="sessions"
+        type="number"
+        label="Lessons"
+        defaultValue="8"
+        min="1"
+        required
+      />
+      <FormField
+        name="minutes"
+        type="number"
+        label="Minutes"
+        defaultValue="90"
+        min="30"
+        required
+      />
+      <FormField
+        name="price"
+        type="number"
+        label={`${t.price} (RM)`}
+        defaultValue="0"
+        min="0"
+        step="0.01"
+        required
+      />
+      <CourseColourPicker value={color} onChange={setColor} disabled={busy} />
+      <button className="primary-button" disabled={busy} type="submit">
+        <Check size={16} />
+        {t.save}
+      </button>
+      <button className="quiet-button" type="button" onClick={close}>
+        {t.cancel}
+      </button>
+    </form>
+  );
 }
 
-function CourseColourPicker({ value, onChange, disabled, compact = false }: { value: string; onChange: (color: string) => void; disabled: boolean; compact?: boolean }) {
-  return <div className={compact ? "course-colour-picker compact" : "course-colour-picker"} aria-label="Course colour"><span>{compact ? "Colour" : "Course colour"}</span><div>{courseColourOptions.map((color) => <button key={color} type="button" disabled={disabled} className={value === color ? "selected" : ""} style={{ "--swatch-colour": color } as React.CSSProperties} onClick={() => onChange(color)} title={color}><i /></button>)}</div></div>;
+function CourseColourPicker({
+  value,
+  onChange,
+  disabled,
+  compact = false,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  disabled: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={
+        compact ? "course-colour-picker compact" : "course-colour-picker"
+      }
+      aria-label="Course colour"
+    >
+      <span>{compact ? "Colour" : "Course colour"}</span>
+      <div>
+        {courseColourOptions.map((color) => (
+          <button
+            key={color}
+            type="button"
+            disabled={disabled}
+            className={value === color ? "selected" : ""}
+            style={{ "--swatch-colour": color } as React.CSSProperties}
+            onClick={() => onChange(color)}
+            title={color}
+          >
+            <i />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function ClassroomManager({ data, run, busy, t, onOpenRoom }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpenRoom: (id: string) => void }) {
-  const [editing, setEditing] = useState(false); const [adding, setAdding] = useState(false); const [campusForm, setCampusForm] = useState<"create" | "edit" | null>(null); const [selectedId, setSelectedId] = useState(""); const [campusId, setCampusId] = useState("");
-  const campus = data.campuses.find((item) => get(item, "id") === campusId) ?? data.campuses[0];
-  const rooms = campus ? data.classrooms.filter((item) => get(item, "campus_id") === get(campus, "id")) : [];
-  const selected = rooms.find((item) => get(item, "id") === selectedId) ?? rooms[0];
-  function moveRoom(room: Row, position: { x: number; y: number }) { void run("updateClassroomMap", { classroomId: get(room, "id"), mapX: position.x, mapY: position.y, mapWidth: room.map_width, mapHeight: room.map_height, roomType: room.room_type, resources: room.resources }); }
-  function saveLayout(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateClassroomMap", { ...values, classroomId: get(selected, "id") }); }
-  function createRoom(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createClassroom", values).then(() => setAdding(false)); }
-  function saveCampus(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); const action = campusForm === "edit" ? "updateCampus" : "createCampus"; void run(action, { ...values, campusId: campusForm === "edit" ? get(campus, "id") : undefined }).then(() => setCampusForm(null)); }
-  function uploadFloorplan(file?: File) { if (!file || !campus) return; if (!file.type.startsWith("image/") || file.size > 1_300_000) return; const reader = new FileReader(); reader.onload = () => void run("updateCampusFloorplan", { campusId: get(campus, "id"), mapImage: String(reader.result) }); reader.readAsDataURL(file); }
-  return <section className="operation-stack"><div className="view-intro"><div><h2>{t.classrooms}</h2><p>{t.classroomHint}</p></div><div className="action-group"><button className="quiet-button" type="button" onClick={() => setCampusForm("create")}><Plus size={16} />Add campus</button>{campus ? <button className="quiet-button" type="button" onClick={() => setCampusForm("edit")}><Building2 size={16} />Edit campus</button> : null}<button className="quiet-button" type="button" onClick={() => setAdding(!adding)}><Plus size={16} />{t.addClassroom}</button><button className={editing ? "quiet-button active" : "primary-button"} type="button" onClick={() => setEditing(!editing)}><MapIcon size={16} />{t.roomLayout}</button></div></div><section className="management-panel campus-management"><div className="panel-row"><h3>Campus</h3><label className="form-field campus-picker"><select value={get(campus, "id")} onChange={(event) => { setCampusId(event.target.value); setSelectedId(""); }}>{data.campuses.map((item) => <option key={get(item, "id")} value={get(item, "id")}>{get(item, "name")}</option>)}</select></label></div>{campusForm ? <form className="inline-form compact" onSubmit={saveCampus}><FormField name="name" label="Campus name" defaultValue={campusForm === "edit" ? get(campus, "name") : ""} required /><FormField name="address" label="Address" defaultValue={campusForm === "edit" ? get(campus, "address") : ""} /><FormField name="mapLabel" label="Map label" defaultValue={campusForm === "edit" ? get(campus, "map_label") : "Level 1"} required /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button><button className="quiet-button" type="button" onClick={() => setCampusForm(null)}>{t.cancel}</button></form> : null}{campus ? <label className="floorplan-upload"><MapIcon size={16} /><span>Upload floor plan</span><small>PNG or JPG, up to 1.3 MB</small><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => uploadFloorplan(event.target.files?.[0])} /></label> : null}</section>{adding && campus ? <form className="inline-form compact" onSubmit={createRoom}><input type="hidden" name="campusId" value={get(campus, "id")} /><FormField name="name" label={t.classroom} required /><FormField name="capacity" label={t.capacity} type="number" defaultValue="16" min="1" required /><FormField name="roomType" label={t.type} defaultValue="classroom" required /><FormField name="resources" label={t.resources} defaultValue="Whiteboard, projector" /><button className="primary-button" disabled={busy} type="submit"><Plus size={16} />{t.addClassroom}</button></form> : null}{campus ? <FloorMap campus={campus} rooms={rooms} editable={editing} onOpenRoom={onOpenRoom} onSelectRoom={setSelectedId} onMoveRoom={moveRoom} /> : <Empty text="Add a campus to create classrooms." />}{editing && selected ? <form key={get(selected, "id")} className="inline-form compact" onSubmit={saveLayout}><SelectField name="classroomId" label={t.classroom} rows={rooms} value={get(selected, "id")} onChange={setSelectedId} /><FormField name="roomType" label={t.type} defaultValue={get(selected, "room_type")} /><FormField name="resources" label={t.resources} defaultValue={get(selected, "resources")} /><FormField name="mapWidth" label="Width" type="number" defaultValue={get(selected, "map_width")} min="80" /><FormField name="mapHeight" label="Height" type="number" defaultValue={get(selected, "map_height")} min="60" /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button></form> : null}<Table columns={[["code", "Code"], ["name", t.classroom], ["campus_name", "Campus"], ["room_type", t.type], ["resources", t.resources], ["capacity", t.capacity], ["status", t.status]]} rows={rooms} empty={t.noData} /></section>;
+function ClassroomManager({
+  data,
+  run,
+  busy,
+  t,
+  onOpenRoom,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onOpenRoom: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [campusForm, setCampusForm] = useState<"create" | "edit" | null>(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [campusId, setCampusId] = useState("");
+  const campus =
+    data.campuses.find((item) => get(item, "id") === campusId) ??
+    data.campuses[0];
+  const rooms = campus
+    ? data.classrooms.filter(
+        (item) => get(item, "campus_id") === get(campus, "id"),
+      )
+    : [];
+  const selected =
+    rooms.find((item) => get(item, "id") === selectedId) ?? rooms[0];
+  function moveRoom(room: Row, position: { x: number; y: number }) {
+    void run("updateClassroomMap", {
+      classroomId: get(room, "id"),
+      mapX: position.x,
+      mapY: position.y,
+      mapWidth: room.map_width,
+      mapHeight: room.map_height,
+      roomType: room.room_type,
+      resources: room.resources,
+    });
+  }
+  function saveLayout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("updateClassroomMap", {
+      ...values,
+      classroomId: get(selected, "id"),
+    });
+  }
+  function createRoom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createClassroom", values).then(() => setAdding(false));
+  }
+  function saveCampus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const action = campusForm === "edit" ? "updateCampus" : "createCampus";
+    void run(action, {
+      ...values,
+      campusId: campusForm === "edit" ? get(campus, "id") : undefined,
+    }).then(() => setCampusForm(null));
+  }
+  function uploadFloorplan(file?: File) {
+    if (!file || !campus) return;
+    if (!file.type.startsWith("image/") || file.size > 1_300_000) return;
+    const reader = new FileReader();
+    reader.onload = () =>
+      void run("updateCampusFloorplan", {
+        campusId: get(campus, "id"),
+        mapImage: String(reader.result),
+      });
+    reader.readAsDataURL(file);
+  }
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>{t.classrooms}</h2>
+          <p>{t.classroomHint}</p>
+        </div>
+        <div className="action-group">
+          <button
+            className="quiet-button"
+            type="button"
+            onClick={() => setCampusForm("create")}
+          >
+            <Plus size={16} />
+            Add campus
+          </button>
+          {campus ? (
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() => setCampusForm("edit")}
+            >
+              <Building2 size={16} />
+              Edit campus
+            </button>
+          ) : null}
+          <button
+            className="quiet-button"
+            type="button"
+            onClick={() => setAdding(!adding)}
+          >
+            <Plus size={16} />
+            {t.addClassroom}
+          </button>
+          <button
+            className={editing ? "quiet-button active" : "primary-button"}
+            type="button"
+            onClick={() => setEditing(!editing)}
+          >
+            <MapIcon size={16} />
+            {t.roomLayout}
+          </button>
+        </div>
+      </div>
+      <section className="management-panel campus-management">
+        <div className="panel-row">
+          <h3>Campus</h3>
+          <label className="form-field campus-picker">
+            <select
+              value={get(campus, "id")}
+              onChange={(event) => {
+                setCampusId(event.target.value);
+                setSelectedId("");
+              }}
+            >
+              {data.campuses.map((item) => (
+                <option key={get(item, "id")} value={get(item, "id")}>
+                  {get(item, "name")}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {campusForm ? (
+          <form className="inline-form compact" onSubmit={saveCampus}>
+            <FormField
+              name="name"
+              label="Campus name"
+              defaultValue={campusForm === "edit" ? get(campus, "name") : ""}
+              required
+            />
+            <FormField
+              name="address"
+              label="Address"
+              defaultValue={campusForm === "edit" ? get(campus, "address") : ""}
+            />
+            <FormField
+              name="mapLabel"
+              label="Map label"
+              defaultValue={
+                campusForm === "edit" ? get(campus, "map_label") : "Level 1"
+              }
+              required
+            />
+            <button className="primary-button" disabled={busy} type="submit">
+              <Check size={16} />
+              {t.save}
+            </button>
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() => setCampusForm(null)}
+            >
+              {t.cancel}
+            </button>
+          </form>
+        ) : null}
+        {campus ? (
+          <label className="floorplan-upload">
+            <MapIcon size={16} />
+            <span>Upload floor plan</span>
+            <small>PNG or JPG, up to 1.3 MB</small>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => uploadFloorplan(event.target.files?.[0])}
+            />
+          </label>
+        ) : null}
+      </section>
+      {adding && campus ? (
+        <form className="inline-form compact" onSubmit={createRoom}>
+          <input type="hidden" name="campusId" value={get(campus, "id")} />
+          <FormField name="name" label={t.classroom} required />
+          <FormField
+            name="capacity"
+            label={t.capacity}
+            type="number"
+            defaultValue="16"
+            min="1"
+            required
+          />
+          <FormField
+            name="roomType"
+            label={t.type}
+            defaultValue="classroom"
+            required
+          />
+          <FormField
+            name="resources"
+            label={t.resources}
+            defaultValue="Whiteboard, projector"
+          />
+          <button className="primary-button" disabled={busy} type="submit">
+            <Plus size={16} />
+            {t.addClassroom}
+          </button>
+        </form>
+      ) : null}
+      {campus ? (
+        <FloorMap
+          campus={campus}
+          rooms={rooms}
+          editable={editing}
+          onOpenRoom={onOpenRoom}
+          onSelectRoom={setSelectedId}
+          onMoveRoom={moveRoom}
+        />
+      ) : (
+        <Empty text="Add a campus to create classrooms." />
+      )}
+      {editing && selected ? (
+        <form
+          key={get(selected, "id")}
+          className="inline-form compact"
+          onSubmit={saveLayout}
+        >
+          <SelectField
+            name="classroomId"
+            label={t.classroom}
+            rows={rooms}
+            value={get(selected, "id")}
+            onChange={setSelectedId}
+          />
+          <FormField
+            name="roomType"
+            label={t.type}
+            defaultValue={get(selected, "room_type")}
+          />
+          <FormField
+            name="resources"
+            label={t.resources}
+            defaultValue={get(selected, "resources")}
+          />
+          <FormField
+            name="mapWidth"
+            label="Width"
+            type="number"
+            defaultValue={get(selected, "map_width")}
+            min="80"
+          />
+          <FormField
+            name="mapHeight"
+            label="Height"
+            type="number"
+            defaultValue={get(selected, "map_height")}
+            min="60"
+          />
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            {t.save}
+          </button>
+        </form>
+      ) : null}
+      <Table
+        columns={[
+          ["code", "Code"],
+          ["name", t.classroom],
+          ["campus_name", "Campus"],
+          ["room_type", t.type],
+          ["resources", t.resources],
+          ["capacity", t.capacity],
+          ["status", t.status],
+        ]}
+        rows={rooms}
+        empty={t.noData}
+      />
+    </section>
+  );
 }
 
-function ClassManager({ data, run, busy, t, onOpenCourse }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpenCourse: (id: string) => void }) {
-  return <CourseRunLibrary data={data} run={run} busy={busy} t={t} onOpenCourse={onOpenCourse} />;
+function ClassManager({
+  data,
+  run,
+  busy,
+  t,
+  onOpenCourse,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onOpenCourse: (id: string) => void;
+}) {
+  return (
+    <CourseRunLibrary
+      data={data}
+      run={run}
+      busy={busy}
+      t={t}
+      onOpenCourse={onOpenCourse}
+    />
+  );
 }
 
-function CourseRunLibrary({ data, run, busy, t, onOpenCourse }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onOpenCourse: (id: string) => void }) {
+function CourseRunLibrary({
+  data,
+  run,
+  busy,
+  t,
+  onOpenCourse,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onOpenCourse: (id: string) => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("");
   const [subject, setSubject] = useState("");
-  function createRun(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createClassRun", values).then(() => setAdding(false)); }
-  const courseGroups = data.courses.map((course) => ({ course, intakes: data.runs.filter((item) => get(item, "course_id") === get(course, "id")).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at)) })).filter((group) => group.intakes.length);
-  const subjects = Array.from(new Set(courseGroups.map(({ course }) => get(course, "subject")).filter(Boolean))).sort();
-  const years = ["G4", "G5", "G6", "F1", "L1", "F2", "L2", "F3", "L3", "F4", "H1", "F5", "H2", "H3"];
+  function createRun(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createClassRun", values).then(() => setAdding(false));
+  }
+  const courseGroups = data.courses
+    .map((course) => ({
+      course,
+      intakes: data.runs
+        .filter((item) => get(item, "course_id") === get(course, "id"))
+        .sort(
+          (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+        ),
+    }))
+    .filter((group) => group.intakes.length);
+  const subjects = Array.from(
+    new Set(
+      courseGroups.map(({ course }) => get(course, "subject")).filter(Boolean),
+    ),
+  ).sort();
+  const years = [
+    "G4",
+    "G5",
+    "G6",
+    "F1",
+    "L1",
+    "F2",
+    "L2",
+    "F3",
+    "L3",
+    "F4",
+    "H1",
+    "F5",
+    "H2",
+    "H3",
+  ];
   const courseYears = (course: Row) => {
-    const detail = `${get(course, "title")} ${get(course, "level")}`.toUpperCase();
-    const matches = years.filter((item) => new RegExp(`\\b${item}\\b`).test(detail));
-    if (detail.includes("PRIMARY")) return matches.length ? matches : ["G4", "G5", "G6"];
-    if (detail.includes("LOWER")) return matches.length ? matches : ["F1", "L1", "F2", "L2", "F3", "L3"];
-    if (detail.includes("HIGHER")) return matches.length ? matches : ["F4", "H1", "F5", "H2", "H3"];
+    const detail =
+      `${get(course, "title")} ${get(course, "level")}`.toUpperCase();
+    const matches = years.filter((item) =>
+      new RegExp(`\\b${item}\\b`).test(detail),
+    );
+    if (detail.includes("PRIMARY"))
+      return matches.length ? matches : ["G4", "G5", "G6"];
+    if (detail.includes("LOWER"))
+      return matches.length ? matches : ["F1", "L1", "F2", "L2", "F3", "L3"];
+    if (detail.includes("HIGHER"))
+      return matches.length ? matches : ["F4", "H1", "F5", "H2", "H3"];
     return matches;
   };
   const visibleGroups = courseGroups.filter(({ course }) => {
-    const searchable = `${get(course, "code")} ${get(course, "title")} ${get(course, "subject")} ${get(course, "level")} ${get(course, "centre_code")}`.toLowerCase();
-    return (!query.trim() || searchable.includes(query.trim().toLowerCase()))
-      && (!subject || get(course, "subject") === subject)
-      && (!year || courseYears(course).includes(year));
+    const searchable =
+      `${get(course, "code")} ${get(course, "title")} ${get(course, "subject")} ${get(course, "level")} ${get(course, "centre_code")}`.toLowerCase();
+    return (
+      (!query.trim() || searchable.includes(query.trim().toLowerCase())) &&
+      (!subject || get(course, "subject") === subject) &&
+      (!year || courseYears(course).includes(year))
+    );
   });
-  return <section className="operation-stack"><div className="view-intro"><div><h2>Courses</h2><p>Each card is one course product. Open it to switch, edit and schedule its named classes.</p></div><button className="primary-button" type="button" onClick={() => setAdding(!adding)}><Plus size={16} />Open class</button></div><div className="course-catalogue-filters"><label className="course-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search course, subject or level" /></label><label><span>Year</span><select value={year} onChange={(event) => setYear(event.target.value)}><option value="">All years</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label><span>Subject</span><select value={subject} onChange={(event) => setSubject(event.target.value)}><option value="">All subjects</option>{subjects.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{query || year || subject ? <button className="quiet-button course-filter-reset" type="button" onClick={() => { setQuery(""); setYear(""); setSubject(""); }}>Clear</button> : null}<strong>{visibleGroups.length} courses</strong></div>{adding ? <section className="management-panel"><h3>Open class</h3><form className="inline-form" onSubmit={createRun}><SelectField name="courseId" label="Course product" rows={data.courses} value="" /><SelectField name="termId" label={t.term} rows={data.terms} value="" /><label className="form-field"><span>Teaching mode</span><select name="deliveryMode" defaultValue="onsite"><option value="onsite">On-site class</option><option value="online">Online class</option></select></label><label className="form-field"><span>Teaching language</span><select name="languageId" required>{data.languages.map((language) => <option key={get(language, "id")} value={get(language, "id")}>{get(language, "name")}</option>)}</select></label><label className="form-field"><span>Class teacher</span><select name="teacherId" required>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")} · {get(teacher, "language_names")}</option>)}</select></label><FormField name="name" label="Class name" placeholder="e.g. July 2026 · Saturday AM" required /><FormField name="capacity" type="number" label={t.capacity} defaultValue="16" min="1" required /><FormField name="price" type="number" label={`${t.price} (RM)`} defaultValue="0" min="0" /><button className="primary-button" disabled={busy} type="submit"><Plus size={16} />Open class</button></form></section> : null}<div className="run-card-grid">{visibleGroups.map(({ course, intakes }) => { const futureLessons = data.sessions.filter((session) => intakes.some((intake) => get(intake, "id") === get(session, "class_run_id")) && asTime(session.starts_at) >= Date.now()).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at)); const next = futureLessons[0]; const enrolled = intakes.reduce((sum, intake) => sum + Number(intake.student_count || 0), 0); return <article className="run-card run-course-group" key={get(course, "id")}><button type="button" className="run-card-open" onClick={() => onOpenCourse(get(course, "id"))}><CourseVisual course={course} /><div className="run-card-body"><span className="code">{get(course, "code")}</span><h3>{get(course, "title")}</h3><p>{get(course, "subject")} · {get(course, "level")}</p><div className="run-card-facts"><span><UsersRound size={15} />{enrolled} learners</span><span><BookOpen size={15} />{intakes.length} {intakes.length === 1 ? "class" : "classes"}</span></div><footer><Status value={get(course, "status")} /><span>Open course</span></footer></div><ChevronRight className="run-card-arrow" size={20} /></button><div className="run-card-next" style={eventStyle(next ?? course)}><span>NEXT LESSON</span>{next ? <><strong>{get(next, "topic")}</strong><p>{get(next, "run_name")}</p><small>{datePart(next.starts_at)} · {timePart(next.starts_at)}</small></> : <><strong>No lesson scheduled</strong><p>Open the course to add a class or lesson.</p></>}</div></article>; })}{!visibleGroups.length ? <Empty text="No courses match these filters." /> : null}</div></section>;
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>Courses</h2>
+          <p>
+            Each card is one course product. Open it to switch, edit and
+            schedule its named classes.
+          </p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setAdding(!adding)}
+        >
+          <Plus size={16} />
+          Open class
+        </button>
+      </div>
+      <div className="course-catalogue-filters">
+        <label className="course-search">
+          <Search size={17} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search course, subject or level"
+          />
+        </label>
+        <label>
+          <span>Year</span>
+          <select
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+          >
+            <option value="">All years</option>
+            {years.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Subject</span>
+          <select
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          >
+            <option value="">All subjects</option>
+            {subjects.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        {query || year || subject ? (
+          <button
+            className="quiet-button course-filter-reset"
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setYear("");
+              setSubject("");
+            }}
+          >
+            Clear
+          </button>
+        ) : null}
+        <strong>{visibleGroups.length} courses</strong>
+      </div>
+      {adding ? (
+        <section className="management-panel">
+          <h3>Open class</h3>
+          <form className="inline-form" onSubmit={createRun}>
+            <SelectField
+              name="courseId"
+              label="Course product"
+              rows={data.courses}
+              value=""
+            />
+            <SelectField
+              name="termId"
+              label={t.term}
+              rows={data.terms}
+              value=""
+            />
+            <label className="form-field">
+              <span>Teaching mode</span>
+              <select name="deliveryMode" defaultValue="onsite">
+                <option value="onsite">On-site class</option>
+                <option value="online">Online class</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Teaching language</span>
+              <select name="languageId" required>
+                {data.languages.map((language) => (
+                  <option key={get(language, "id")} value={get(language, "id")}>
+                    {get(language, "name")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Class teacher</span>
+              <select name="teacherId" required>
+                {data.teachers.map((teacher) => (
+                  <option key={get(teacher, "id")} value={get(teacher, "id")}>
+                    {get(teacher, "name")} · {get(teacher, "language_names")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FormField
+              name="name"
+              label="Class name"
+              placeholder="e.g. July 2026 · Saturday AM"
+              required
+            />
+            <FormField
+              name="capacity"
+              type="number"
+              label={t.capacity}
+              defaultValue="16"
+              min="1"
+              required
+            />
+            <FormField
+              name="price"
+              type="number"
+              label={`${t.price} (RM)`}
+              defaultValue="0"
+              min="0"
+            />
+            <button className="primary-button" disabled={busy} type="submit">
+              <Plus size={16} />
+              Open class
+            </button>
+          </form>
+        </section>
+      ) : null}
+      <div className="run-card-grid">
+        {visibleGroups.map(({ course, intakes }) => {
+          const futureLessons = data.sessions
+            .filter(
+              (session) =>
+                intakes.some(
+                  (intake) =>
+                    get(intake, "id") === get(session, "class_run_id"),
+                ) && asTime(session.starts_at) >= Date.now(),
+            )
+            .sort(
+              (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+            );
+          const next = futureLessons[0];
+          const enrolled = intakes.reduce(
+            (sum, intake) => sum + Number(intake.student_count || 0),
+            0,
+          );
+          return (
+            <article
+              className="run-card run-course-group"
+              key={get(course, "id")}
+            >
+              <button
+                type="button"
+                className="run-card-open"
+                onClick={() => onOpenCourse(get(course, "id"))}
+              >
+                <CourseVisual course={course} />
+                <div className="run-card-body">
+                  <span className="code">{get(course, "code")}</span>
+                  <h3>{get(course, "title")}</h3>
+                  <p>
+                    {get(course, "subject")} · {get(course, "level")}
+                  </p>
+                  <div className="run-card-facts">
+                    <span>
+                      <UsersRound size={15} />
+                      {enrolled} learners
+                    </span>
+                    <span>
+                      <BookOpen size={15} />
+                      {intakes.length}{" "}
+                      {intakes.length === 1 ? "class" : "classes"}
+                    </span>
+                  </div>
+                  <footer>
+                    <Status value={get(course, "status")} />
+                    <span>Open course</span>
+                  </footer>
+                </div>
+                <ChevronRight className="run-card-arrow" size={20} />
+              </button>
+              <div className="run-card-next" style={eventStyle(next ?? course)}>
+                <span>NEXT LESSON</span>
+                {next ? (
+                  <>
+                    <strong>{get(next, "topic")}</strong>
+                    <p>{get(next, "run_name")}</p>
+                    <small>
+                      {datePart(next.starts_at)} · {timePart(next.starts_at)}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <strong>No lesson scheduled</strong>
+                    <p>Open the course to add a class or lesson.</p>
+                  </>
+                )}
+              </div>
+            </article>
+          );
+        })}
+        {!visibleGroups.length ? (
+          <Empty text="No courses match these filters." />
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
-function LegacyCourseRunEditor({ runItem, data, run, busy, t, onBack, onOpen }: { runItem: Row; data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onBack: () => void; onOpen: (id: string) => void }) {
+function LegacyCourseRunEditor({
+  runItem,
+  data,
+  run,
+  busy,
+  t,
+  onBack,
+  onOpen,
+}: {
+  runItem: Row;
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+}) {
   const [addingLesson, setAddingLesson] = useState(false);
-  const runId = get(runItem, "id"); const sessions = data.sessions.filter((item) => get(item, "class_run_id") === runId); const enrolled = data.enrollments.filter((item) => get(item, "class_run_id") === runId);
-  function updateRun(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateRun", { ...values, runId }); }
-  function createSession(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createSession", { ...values, runId }).then(() => setAddingLesson(false)); }
-  return <section className="operation-stack course-editor"><button className="back-button" type="button" onClick={onBack}><ChevronLeft size={17} />All courses</button><header className="course-editor-header"><CourseVisual course={runItem} /><div><span className="code">{get(runItem, "code")}</span><h2>{get(runItem, "course_title")}</h2><p>{get(runItem, "name")} · {get(runItem, "term_name")}</p></div><Status value={get(runItem, "status")} /></header><div className="run-summary"><span><UsersRound size={17} /><b>{get(runItem, "student_count")}/{get(runItem, "capacity")}</b>Students</span><span><CalendarDays size={17} /><b>{sessions.length}</b>Lessons</span><span><Banknote size={17} /><b>{amount(runItem.price)}</b>Course fee</span></div><section className="management-panel"><h3>Class details</h3><form className="inline-form compact" onSubmit={updateRun}><FormField name="name" label="Class name" defaultValue={get(runItem, "name")} required /><FormField name="capacity" label={t.capacity} type="number" defaultValue={get(runItem, "capacity")} min="1" required /><FormField name="price" label={`${t.price} (RM)`} type="number" defaultValue={get(runItem, "price")} min="0" required /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button></form></section><section className="management-panel"><div className="panel-row"><h3>Lessons</h3><button className="primary-button table-button" type="button" onClick={() => setAddingLesson(!addingLesson)}><Plus size={15} />Add lesson</button></div>{addingLesson ? <form className="inline-form lesson-form" onSubmit={createSession}><FormField name="topic" label={t.lessonContent} required /><FormField name="startsAt" type="datetime-local" label={t.start} required /><FormField name="endsAt" type="datetime-local" label={t.end} required /><SelectField name="classroomId" label={t.classroom} rows={data.classrooms} value="" /><SelectField name="teacherId" label={t.teacher} rows={data.teachers} value="" /><FormField name="payAmount" type="number" label={`${t.pay} (RM)`} defaultValue="0" min="0" /><button className="primary-button" disabled={busy} type="submit"><Plus size={16} />Add lesson</button></form> : null}<ClickableTable columns={[["session_no", "#"], ["topic", t.lessonContent], ["starts_at", t.start], ["teacher_name", t.teacher], ["classroom_name", t.classroom], ["pay_amount", t.pay], ["status", t.status]]} rows={sessions} moneyKeys={["pay_amount"]} empty={t.noData} onOpen={onOpen} /></section><section className="management-panel"><h3>Students</h3><Table columns={[["student_name", t.students], ["course_title", "Course"], ["contracted_fee", "Course fee"], ["invoice_status", "Payment"], ["status", t.status]]} rows={enrolled} moneyKeys={["contracted_fee"]} empty={t.noData} /></section></section>;
+  const runId = get(runItem, "id");
+  const sessions = data.sessions.filter(
+    (item) => get(item, "class_run_id") === runId,
+  );
+  const enrolled = data.enrollments.filter(
+    (item) => get(item, "class_run_id") === runId,
+  );
+  function updateRun(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("updateRun", { ...values, runId });
+  }
+  function createSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createSession", { ...values, runId }).then(() =>
+      setAddingLesson(false),
+    );
+  }
+  return (
+    <section className="operation-stack course-editor">
+      <button className="back-button" type="button" onClick={onBack}>
+        <ChevronLeft size={17} />
+        All courses
+      </button>
+      <header className="course-editor-header">
+        <CourseVisual course={runItem} />
+        <div>
+          <span className="code">{get(runItem, "code")}</span>
+          <h2>{get(runItem, "course_title")}</h2>
+          <p>
+            {get(runItem, "name")} · {get(runItem, "term_name")}
+          </p>
+        </div>
+        <Status value={get(runItem, "status")} />
+      </header>
+      <div className="run-summary">
+        <span>
+          <UsersRound size={17} />
+          <b>
+            {get(runItem, "student_count")}/{get(runItem, "capacity")}
+          </b>
+          Students
+        </span>
+        <span>
+          <CalendarDays size={17} />
+          <b>{sessions.length}</b>Lessons
+        </span>
+        <span>
+          <Banknote size={17} />
+          <b>{amount(runItem.price)}</b>Course fee
+        </span>
+      </div>
+      <section className="management-panel">
+        <h3>Class details</h3>
+        <form className="inline-form compact" onSubmit={updateRun}>
+          <FormField
+            name="name"
+            label="Class name"
+            defaultValue={get(runItem, "name")}
+            required
+          />
+          <FormField
+            name="capacity"
+            label={t.capacity}
+            type="number"
+            defaultValue={get(runItem, "capacity")}
+            min="1"
+            required
+          />
+          <FormField
+            name="price"
+            label={`${t.price} (RM)`}
+            type="number"
+            defaultValue={get(runItem, "price")}
+            min="0"
+            required
+          />
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            {t.save}
+          </button>
+        </form>
+      </section>
+      <section className="management-panel">
+        <div className="panel-row">
+          <h3>Lessons</h3>
+          <button
+            className="primary-button table-button"
+            type="button"
+            onClick={() => setAddingLesson(!addingLesson)}
+          >
+            <Plus size={15} />
+            Add lesson
+          </button>
+        </div>
+        {addingLesson ? (
+          <form className="inline-form lesson-form" onSubmit={createSession}>
+            <FormField name="topic" label={t.lessonContent} required />
+            <FormField
+              name="startsAt"
+              type="datetime-local"
+              label={t.start}
+              required
+            />
+            <FormField
+              name="endsAt"
+              type="datetime-local"
+              label={t.end}
+              required
+            />
+            <SelectField
+              name="classroomId"
+              label={t.classroom}
+              rows={data.classrooms}
+              value=""
+            />
+            <SelectField
+              name="teacherId"
+              label={t.teacher}
+              rows={data.teachers}
+              value=""
+            />
+            <FormField
+              name="payAmount"
+              type="number"
+              label={`${t.pay} (RM)`}
+              defaultValue="0"
+              min="0"
+            />
+            <button className="primary-button" disabled={busy} type="submit">
+              <Plus size={16} />
+              Add lesson
+            </button>
+          </form>
+        ) : null}
+        <ClickableTable
+          columns={[
+            ["session_no", "#"],
+            ["topic", t.lessonContent],
+            ["starts_at", t.start],
+            ["teacher_name", t.teacher],
+            ["classroom_name", t.classroom],
+            ["pay_amount", t.pay],
+            ["status", t.status],
+          ]}
+          rows={sessions}
+          moneyKeys={["pay_amount"]}
+          empty={t.noData}
+          onOpen={onOpen}
+        />
+      </section>
+      <section className="management-panel">
+        <h3>Students</h3>
+        <Table
+          columns={[
+            ["student_name", t.students],
+            ["course_title", "Course"],
+            ["contracted_fee", "Course fee"],
+            ["invoice_status", "Payment"],
+            ["status", t.status],
+          ]}
+          rows={enrolled}
+          moneyKeys={["contracted_fee"]}
+          empty={t.noData}
+        />
+      </section>
+    </section>
+  );
 }
 
-function CourseRunEditor({ runItem, data, run, busy, t, onBack, onOpen }: { runItem: Row; data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en; onBack: () => void; onOpen: (id: string) => void }) {
+function CourseRunEditor({
+  runItem,
+  data,
+  run,
+  busy,
+  t,
+  onBack,
+  onOpen,
+}: {
+  runItem: Row;
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+}) {
   const [addingLesson, setAddingLesson] = useState(false);
   const [tab, setTab] = useState("summary");
   const runId = get(runItem, "id");
-  const sessions = data.sessions.filter((item) => get(item, "class_run_id") === runId);
-  const enrolled = data.enrollments.filter((item) => get(item, "class_run_id") === runId);
-  const invoices = data.invoices.filter((item) => enrolled.some((enrollment) => get(enrollment, "invoice_id") === get(item, "id")));
-  const paid = invoices.reduce((sum, item) => sum + Number(item.paid_amount ?? 0), 0);
-  const due = invoices.reduce((sum, item) => sum + Math.max(0, Number(item.total_amount ?? 0) - Number(item.paid_amount ?? 0)), 0);
-  function updateRun(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateRun", { ...values, runId }); }
-  function createSession(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createSession", { ...values, runId }).then(() => setAddingLesson(false)); }
-  return <section className="operation-stack course-editor"><button className="back-button" type="button" onClick={onBack}><ChevronLeft size={17} />All courses</button><header className="course-editor-header"><CourseVisual course={runItem} /><div><span className="code">{get(runItem, "code")}</span><h2>{get(runItem, "course_title")}</h2><p>{get(runItem, "name")} · {get(runItem, "term_name")}</p></div><Status value={get(runItem, "status")} /></header><div className="run-summary"><span><UsersRound size={17} /><b>{get(runItem, "student_count")}/{get(runItem, "capacity")}</b>Students</span><span><CalendarDays size={17} /><b>{sessions.length}</b>Lessons</span><span><Banknote size={17} /><b>{amount(runItem.price)}</b>Course fee</span></div><div className="entity-workspace course-workspace"><main className="entity-main">{tab === "summary" ? <section className="management-panel"><div className="panel-row"><h3>Class details</h3><button className="table-button" type="button" onClick={() => setTab("lessons")}><Plus size={15} />Add lesson</button></div><form className="inline-form compact" onSubmit={updateRun}><FormField name="name" label="Class name" defaultValue={get(runItem, "name")} required /><FormField name="capacity" label={t.capacity} type="number" defaultValue={get(runItem, "capacity")} min="1" required /><FormField name="price" label={`${t.price} (RM)`} type="number" defaultValue={get(runItem, "price")} min="0" required /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{t.save}</button></form></section> : null}{tab === "lessons" ? <section className="management-panel"><div className="panel-row"><h3>Lessons</h3><button className="primary-button table-button" type="button" onClick={() => setAddingLesson(!addingLesson)}><Plus size={15} />Add lesson</button></div>{addingLesson ? <form className="inline-form lesson-form" onSubmit={createSession}><FormField name="topic" label={t.lessonContent} required /><FormField name="startsAt" type="datetime-local" label={t.start} required /><FormField name="endsAt" type="datetime-local" label={t.end} required /><SelectField name="classroomId" label={t.classroom} rows={data.classrooms} value="" /><SelectField name="teacherId" label={t.teacher} rows={data.teachers} value="" /><FormField name="payAmount" type="number" label={`${t.pay} (RM)`} defaultValue="0" min="0" /><button className="primary-button" disabled={busy} type="submit"><Plus size={16} />Add lesson</button></form> : null}<ClickableTable columns={[["session_no", "#"], ["topic", t.lessonContent], ["starts_at", t.start], ["teacher_name", t.teacher], ["classroom_name", t.classroom], ["pay_amount", t.pay], ["status", t.status]]} rows={sessions} moneyKeys={["pay_amount"]} empty={t.noData} onOpen={onOpen} /></section> : null}{tab === "students" ? <section className="management-panel"><h3>Students</h3><Table columns={[["student_name", t.students], ["course_title", "Course"], ["contracted_fee", "Course fee"], ["invoice_status", "Payment"], ["status", t.status]]} rows={enrolled} moneyKeys={["contracted_fee"]} empty={t.noData} /></section> : null}{tab === "finance" ? <section className="management-panel"><div className="detail-metrics"><MetricCard label="Collected" value={amount(paid)} /><MetricCard label="Outstanding" value={amount(due)} /><MetricCard label="Invoices" value={String(invoices.length)} /></div><h3>Course billing</h3><InvoiceTable rows={invoices} run={run} busy={busy} /></section> : null}</main><DetailTabs active={tab} onChange={setTab} tabs={[{ id: "summary", label: "Summary" }, { id: "lessons", label: "Lessons", count: sessions.length }, { id: "students", label: "Students", count: enrolled.length }, { id: "finance", label: "Income" }]} /></div></section>;
+  const sessions = data.sessions.filter(
+    (item) => get(item, "class_run_id") === runId,
+  );
+  const enrolled = data.enrollments.filter(
+    (item) => get(item, "class_run_id") === runId,
+  );
+  const invoices = data.invoices.filter((item) =>
+    enrolled.some(
+      (enrollment) => get(enrollment, "invoice_id") === get(item, "id"),
+    ),
+  );
+  const paid = invoices.reduce(
+    (sum, item) => sum + Number(item.paid_amount ?? 0),
+    0,
+  );
+  const due = invoices.reduce(
+    (sum, item) =>
+      sum +
+      Math.max(
+        0,
+        Number(item.total_amount ?? 0) - Number(item.paid_amount ?? 0),
+      ),
+    0,
+  );
+  function updateRun(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("updateRun", { ...values, runId });
+  }
+  function createSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createSession", { ...values, runId }).then(() =>
+      setAddingLesson(false),
+    );
+  }
+  return (
+    <section className="operation-stack course-editor">
+      <button className="back-button" type="button" onClick={onBack}>
+        <ChevronLeft size={17} />
+        All courses
+      </button>
+      <header className="course-editor-header">
+        <CourseVisual course={runItem} />
+        <div>
+          <span className="code">{get(runItem, "code")}</span>
+          <h2>{get(runItem, "course_title")}</h2>
+          <p>
+            {get(runItem, "name")} · {get(runItem, "term_name")}
+          </p>
+        </div>
+        <Status value={get(runItem, "status")} />
+      </header>
+      <div className="run-summary">
+        <span>
+          <UsersRound size={17} />
+          <b>
+            {get(runItem, "student_count")}/{get(runItem, "capacity")}
+          </b>
+          Students
+        </span>
+        <span>
+          <CalendarDays size={17} />
+          <b>{sessions.length}</b>Lessons
+        </span>
+        <span>
+          <Banknote size={17} />
+          <b>{amount(runItem.price)}</b>Course fee
+        </span>
+      </div>
+      <div className="entity-workspace course-workspace">
+        <main className="entity-main">
+          {tab === "summary" ? (
+            <section className="management-panel">
+              <div className="panel-row">
+                <h3>Class details</h3>
+                <button
+                  className="table-button"
+                  type="button"
+                  onClick={() => setTab("lessons")}
+                >
+                  <Plus size={15} />
+                  Add lesson
+                </button>
+              </div>
+              <form className="inline-form compact" onSubmit={updateRun}>
+                <FormField
+                  name="name"
+                  label="Class name"
+                  defaultValue={get(runItem, "name")}
+                  required
+                />
+                <FormField
+                  name="capacity"
+                  label={t.capacity}
+                  type="number"
+                  defaultValue={get(runItem, "capacity")}
+                  min="1"
+                  required
+                />
+                <FormField
+                  name="price"
+                  label={`${t.price} (RM)`}
+                  type="number"
+                  defaultValue={get(runItem, "price")}
+                  min="0"
+                  required
+                />
+                <button
+                  className="primary-button"
+                  disabled={busy}
+                  type="submit"
+                >
+                  <Check size={16} />
+                  {t.save}
+                </button>
+              </form>
+            </section>
+          ) : null}
+          {tab === "lessons" ? (
+            <section className="management-panel">
+              <div className="panel-row">
+                <h3>Lessons</h3>
+                <button
+                  className="primary-button table-button"
+                  type="button"
+                  onClick={() => setAddingLesson(!addingLesson)}
+                >
+                  <Plus size={15} />
+                  Add lesson
+                </button>
+              </div>
+              {addingLesson ? (
+                <form
+                  className="inline-form lesson-form"
+                  onSubmit={createSession}
+                >
+                  <FormField name="topic" label={t.lessonContent} required />
+                  <FormField
+                    name="startsAt"
+                    type="datetime-local"
+                    label={t.start}
+                    required
+                  />
+                  <FormField
+                    name="endsAt"
+                    type="datetime-local"
+                    label={t.end}
+                    required
+                  />
+                  <SelectField
+                    name="classroomId"
+                    label={t.classroom}
+                    rows={data.classrooms}
+                    value=""
+                  />
+                  <SelectField
+                    name="teacherId"
+                    label={t.teacher}
+                    rows={data.teachers}
+                    value=""
+                  />
+                  <FormField
+                    name="payAmount"
+                    type="number"
+                    label={`${t.pay} (RM)`}
+                    defaultValue="0"
+                    min="0"
+                  />
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    type="submit"
+                  >
+                    <Plus size={16} />
+                    Add lesson
+                  </button>
+                </form>
+              ) : null}
+              <ClickableTable
+                columns={[
+                  ["session_no", "#"],
+                  ["topic", t.lessonContent],
+                  ["starts_at", t.start],
+                  ["teacher_name", t.teacher],
+                  ["classroom_name", t.classroom],
+                  ["pay_amount", t.pay],
+                  ["status", t.status],
+                ]}
+                rows={sessions}
+                moneyKeys={["pay_amount"]}
+                empty={t.noData}
+                onOpen={onOpen}
+              />
+            </section>
+          ) : null}
+          {tab === "students" ? (
+            <section className="management-panel">
+              <h3>Students</h3>
+              <Table
+                columns={[
+                  ["student_name", t.students],
+                  ["course_title", "Course"],
+                  ["contracted_fee", "Course fee"],
+                  ["invoice_status", "Payment"],
+                  ["status", t.status],
+                ]}
+                rows={enrolled}
+                moneyKeys={["contracted_fee"]}
+                empty={t.noData}
+              />
+            </section>
+          ) : null}
+          {tab === "finance" ? (
+            <section className="management-panel">
+              <div className="detail-metrics">
+                <MetricCard label="Collected" value={amount(paid)} />
+                <MetricCard label="Outstanding" value={amount(due)} />
+                <MetricCard label="Invoices" value={String(invoices.length)} />
+              </div>
+              <h3>Course billing</h3>
+              <InvoiceTable rows={invoices} run={run} busy={busy} />
+            </section>
+          ) : null}
+        </main>
+        <DetailTabs
+          active={tab}
+          onChange={setTab}
+          tabs={[
+            { id: "summary", label: "Summary" },
+            { id: "lessons", label: "Lessons", count: sessions.length },
+            { id: "students", label: "Students", count: enrolled.length },
+            { id: "finance", label: "Income" },
+          ]}
+        />
+      </div>
+    </section>
+  );
 }
 
-function lessonsForRun(data: PortalData, runId: string) { return data.sessions.filter((item) => get(item, "class_run_id") === runId).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at)); }
-function classDateRange(lessons: Row[]) { const first = lessons[0]; const last = lessons[lessons.length - 1]; if (!first || !last) return "Schedule not set"; return `${malaysiaDate(first.starts_at)} ${timePart(first.starts_at)} - ${malaysiaDate(last.ends_at || last.starts_at)} ${timePart(last.ends_at || last.starts_at)}`; }
-function classDefaultTime(lessons: Row[]) { const first = lessons[0]; return first ? `${new Date(`${datePart(first.starts_at)}T12:00:00`).toLocaleDateString("en-MY", { weekday: "short" })} ${timeRange(first)}` : "No time set"; }
-function runRoom(data: PortalData, lessons: Row[]) { const lesson = lessons.find((item) => get(item, "classroom_id")); return data.classrooms.find((room) => get(room, "id") === get(lesson, "classroom_id")); }
-function openSeats(runItem: Row) { return Math.max(0, Number(runItem.capacity || 0) - Number(runItem.student_count || 0)); }
-function canJoinLate(runItem: Row) { const value = String(runItem.allow_late_join ?? "1").toLowerCase(); return value !== "0" && value !== "false" && value !== "no"; }
+function lessonsForRun(data: PortalData, runId: string) {
+  return data.sessions
+    .filter((item) => get(item, "class_run_id") === runId)
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+}
+function classDateRange(lessons: Row[]) {
+  const first = lessons[0];
+  const last = lessons[lessons.length - 1];
+  if (!first || !last) return "Schedule not set";
+  return `${malaysiaDate(first.starts_at)} ${timePart(first.starts_at)} - ${malaysiaDate(last.ends_at || last.starts_at)} ${timePart(last.ends_at || last.starts_at)}`;
+}
+function classDefaultTime(lessons: Row[]) {
+  const first = lessons[0];
+  return first
+    ? `${new Date(`${datePart(first.starts_at)}T12:00:00`).toLocaleDateString("en-MY", { weekday: "short" })} ${timeRange(first)}`
+    : "No time set";
+}
+function runRoom(data: PortalData, lessons: Row[]) {
+  const lesson = lessons.find((item) => get(item, "classroom_id"));
+  return data.classrooms.find(
+    (room) => get(room, "id") === get(lesson, "classroom_id"),
+  );
+}
+function openSeats(runItem: Row) {
+  return Math.max(
+    0,
+    Number(runItem.capacity || 0) - Number(runItem.student_count || 0),
+  );
+}
+function canJoinLate(runItem: Row) {
+  const value = String(runItem.allow_late_join ?? "1").toLowerCase();
+  return value !== "0" && value !== "false" && value !== "no";
+}
 function lessonWeekPattern(lessons: Row[]) {
-  const days = lessons.map((lesson) => new Date(`${datePart(lesson.starts_at)}T12:00:00`).getDay());
+  const days = lessons.map((lesson) =>
+    new Date(`${datePart(lesson.starts_at)}T12:00:00`).getDay(),
+  );
   const hasWeekend = days.some((day) => day === 0 || day === 6);
   const hasWeekday = days.some((day) => day >= 1 && day <= 5);
-  return hasWeekend && hasWeekday ? "mixed" : hasWeekend ? "weekend" : "weekday";
+  return hasWeekend && hasWeekday
+    ? "mixed"
+    : hasWeekend
+      ? "weekend"
+      : "weekday";
 }
 function lessonDaypart(lessons: Row[]) {
   const first = lessons[0];
@@ -857,10 +7399,17 @@ function lessonDaypart(lessons: Row[]) {
   if (hour < 17) return "afternoon";
   return "evening";
 }
-function classRangeMatches(lessons: Row[], startAfter: string, endBefore: string, lateJoin: boolean) {
-  const first = lessons[0]; const last = lessons[lessons.length - 1];
+function classRangeMatches(
+  lessons: Row[],
+  startAfter: string,
+  endBefore: string,
+  lateJoin: boolean,
+) {
+  const first = lessons[0];
+  const last = lessons[lessons.length - 1];
   if (!first || !last) return !startAfter && !endBefore;
-  const start = datePart(first.starts_at); const end = datePart(last.ends_at || last.starts_at);
+  const start = datePart(first.starts_at);
+  const end = datePart(last.ends_at || last.starts_at);
   if (lateJoin) {
     if (startAfter && end < startAfter) return false;
     if (endBefore && start > endBefore) return false;
@@ -871,7 +7420,17 @@ function classRangeMatches(lessons: Row[], startAfter: string, endBefore: string
   return true;
 }
 
-function EnrollmentManager({ data, run, busy, t }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean; t: typeof copy.en }) {
+function EnrollmentManager({
+  data,
+  run,
+  busy,
+  t,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  t: typeof copy.en;
+}) {
   const [startAfter, setStartAfter] = useState("");
   const [endBefore, setEndBefore] = useState("");
   const [people, setPeople] = useState("");
@@ -881,64 +7440,407 @@ function EnrollmentManager({ data, run, busy, t }: { data: PortalData; run: (act
   const [weekPattern, setWeekPattern] = useState("all");
   const [daypart, setDaypart] = useState("all");
   const [selectedRun, setSelectedRun] = useState<Row | null>(null);
-  const subjects = Array.from(new Set(data.courses.map((course) => get(course, "subject")).filter(Boolean))).sort();
+  const subjects = Array.from(
+    new Set(
+      data.courses.map((course) => get(course, "subject")).filter(Boolean),
+    ),
+  ).sort();
   const requested = Math.max(1, Number(people || 1));
   function chooseMonth(month: number) {
     const start = `2026-${String(month).padStart(2, "0")}-01`;
     const end = new Date(2026, month, 0).toISOString().slice(0, 10);
-    setStartAfter(start); setEndBefore(end);
+    setStartAfter(start);
+    setEndBefore(end);
   }
-  function matchesRun(runItem: Row, nextWeekPattern = weekPattern, nextDaypart = daypart) {
+  function matchesRun(
+    runItem: Row,
+    nextWeekPattern = weekPattern,
+    nextDaypart = daypart,
+  ) {
     if (get(runItem, "status") === "finished") return false;
     const lessons = lessonsForRun(data, get(runItem, "id"));
     const first = lessons[0];
-    const course = data.courses.find((item) => get(item, "id") === get(runItem, "course_id"));
+    const course = data.courses.find(
+      (item) => get(item, "id") === get(runItem, "course_id"),
+    );
     const room = runRoom(data, lessons);
-    if (!classRangeMatches(lessons, startAfter, endBefore, canJoinLate(runItem))) return false;
+    if (
+      !classRangeMatches(lessons, startAfter, endBefore, canJoinLate(runItem))
+    )
+      return false;
     if (campusId && get(room, "campus_id") !== campusId) return false;
     if (time && first && timePart(first.starts_at) !== time) return false;
     if (subject && get(course, "subject") !== subject) return false;
-    if (nextWeekPattern !== "all" && lessonWeekPattern(lessons) !== nextWeekPattern) return false;
-    if (nextDaypart !== "all" && lessonDaypart(lessons) !== nextDaypart) return false;
+    if (
+      nextWeekPattern !== "all" &&
+      lessonWeekPattern(lessons) !== nextWeekPattern
+    )
+      return false;
+    if (nextDaypart !== "all" && lessonDaypart(lessons) !== nextDaypart)
+      return false;
     return openSeats(runItem) > 0;
   }
-  const results = data.runs.filter((runItem) => matchesRun(runItem)).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const availableSeats = results.reduce((sum, runItem) => sum + openSeats(runItem), 0);
-  const seatCount = (nextWeekPattern = weekPattern, nextDaypart = daypart) => data.runs.filter((runItem) => matchesRun(runItem, nextWeekPattern, nextDaypart)).reduce((sum, runItem) => sum + openSeats(runItem), 0);
-  const weekOptions = [["all", "All days"], ["weekend", "Weekend"], ["weekday", "Weekday"], ["mixed", "Mixed"]];
-  const timeOptions = [["all", "Any time"], ["morning", "Morning"], ["afternoon", "Afternoon"], ["evening", "Evening"]];
-  return <section className="operation-stack enrollment-workspace"><div className="view-intro"><div><h2>Enrolments</h2><p>Find available class intakes, add a student and choose whether to collect payment now.</p></div></div><section className="management-panel enrollment-search-panel"><div className="enrollment-filter-head"><div><span>SEARCH CLASS INTAKES</span><h3>What is the family looking for?</h3></div><div className="enrollment-availability-total"><strong>{availableSeats}</strong><span>seats available</span></div><div className="month-shortcuts"><button type="button" onClick={() => chooseMonth(7)}>July</button><button type="button" onClick={() => chooseMonth(8)}>August</button><button type="button" onClick={() => chooseMonth(9)}>September</button><button type="button" onClick={() => { setStartAfter(""); setEndBefore(""); }}>Clear dates</button></div></div><div className="enrollment-filter-grid"><FormField label="Earliest start" type="date" value={startAfter} onChange={(event) => setStartAfter(event.target.value)} /><FormField label="Latest end" type="date" value={endBefore} onChange={(event) => setEndBefore(event.target.value)} /><FormField label="Seats needed" type="number" min="1" placeholder="Any" value={people} onChange={(event) => setPeople(event.target.value)} /><label className="form-field"><span>Campus</span><select value={campusId} onChange={(event) => setCampusId(event.target.value)}><option value="">Any campus</option>{data.campuses.map((campus) => <option key={get(campus, "id")} value={get(campus, "id")}>{get(campus, "name")}</option>)}</select></label><FormField label="Default time" type="time" value={time} onChange={(event) => setTime(event.target.value)} /><label className="form-field"><span>Subject</span><select value={subject} onChange={(event) => setSubject(event.target.value)}><option value="">Any subject</option>{subjects.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div><div className="enrollment-filter-segments"><div><span>Day pattern</span><div>{weekOptions.map(([value, label]) => <button key={value} type="button" className={weekPattern === value ? "active" : ""} onClick={() => setWeekPattern(value)}>{label}<b>{seatCount(value, daypart)}</b></button>)}</div></div><div><span>Time of day</span><div>{timeOptions.map(([value, label]) => <button key={value} type="button" className={daypart === value ? "active" : ""} onClick={() => setDaypart(value)}>{label}<b>{seatCount(weekPattern, value)}</b></button>)}</div></div></div></section><div className="enrollment-result-head"><div><span>{results.length}</span><strong>Matching class intakes</strong></div><p>Late-join classes stay visible when your selected dates overlap their running period.</p></div><div className="enrollment-result-grid">{results.map((runItem) => <EnrollmentResultCard key={get(runItem, "id")} data={data} runItem={runItem} requested={requested} onEnroll={() => setSelectedRun(runItem)} />)}{!results.length ? <Empty text="No class intake matches these filters." /> : null}</div>{selectedRun ? <EnrollmentDialog data={data} busy={busy} run={run} initialRun={selectedRun} onClose={() => setSelectedRun(null)} /> : null}</section>;
+  const results = data.runs
+    .filter((runItem) => matchesRun(runItem))
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const availableSeats = results.reduce(
+    (sum, runItem) => sum + openSeats(runItem),
+    0,
+  );
+  const seatCount = (nextWeekPattern = weekPattern, nextDaypart = daypart) =>
+    data.runs
+      .filter((runItem) => matchesRun(runItem, nextWeekPattern, nextDaypart))
+      .reduce((sum, runItem) => sum + openSeats(runItem), 0);
+  const weekOptions = [
+    ["all", "All days"],
+    ["weekend", "Weekend"],
+    ["weekday", "Weekday"],
+    ["mixed", "Mixed"],
+  ];
+  const timeOptions = [
+    ["all", "Any time"],
+    ["morning", "Morning"],
+    ["afternoon", "Afternoon"],
+    ["evening", "Evening"],
+  ];
+  return (
+    <section className="operation-stack enrollment-workspace">
+      <div className="view-intro">
+        <div>
+          <h2>Enrolments</h2>
+          <p>
+            Find available class intakes, add a student and choose whether to
+            collect payment now.
+          </p>
+        </div>
+      </div>
+      <section className="management-panel enrollment-search-panel">
+        <div className="enrollment-filter-head">
+          <div>
+            <span>SEARCH CLASS INTAKES</span>
+            <h3>What is the family looking for?</h3>
+          </div>
+          <div className="enrollment-availability-total">
+            <strong>{availableSeats}</strong>
+            <span>seats available</span>
+          </div>
+          <div className="month-shortcuts">
+            <button type="button" onClick={() => chooseMonth(7)}>
+              July
+            </button>
+            <button type="button" onClick={() => chooseMonth(8)}>
+              August
+            </button>
+            <button type="button" onClick={() => chooseMonth(9)}>
+              September
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStartAfter("");
+                setEndBefore("");
+              }}
+            >
+              Clear dates
+            </button>
+          </div>
+        </div>
+        <div className="enrollment-filter-grid">
+          <FormField
+            label="Earliest start"
+            type="date"
+            value={startAfter}
+            onChange={(event) => setStartAfter(event.target.value)}
+          />
+          <FormField
+            label="Latest end"
+            type="date"
+            value={endBefore}
+            onChange={(event) => setEndBefore(event.target.value)}
+          />
+          <FormField
+            label="Seats needed"
+            type="number"
+            min="1"
+            placeholder="Any"
+            value={people}
+            onChange={(event) => setPeople(event.target.value)}
+          />
+          <label className="form-field">
+            <span>Campus</span>
+            <select
+              value={campusId}
+              onChange={(event) => setCampusId(event.target.value)}
+            >
+              <option value="">Any campus</option>
+              {data.campuses.map((campus) => (
+                <option key={get(campus, "id")} value={get(campus, "id")}>
+                  {get(campus, "name")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <FormField
+            label="Default time"
+            type="time"
+            value={time}
+            onChange={(event) => setTime(event.target.value)}
+          />
+          <label className="form-field">
+            <span>Subject</span>
+            <select
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+            >
+              <option value="">Any subject</option>
+              {subjects.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="enrollment-filter-segments">
+          <div>
+            <span>Day pattern</span>
+            <div>
+              {weekOptions.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={weekPattern === value ? "active" : ""}
+                  onClick={() => setWeekPattern(value)}
+                >
+                  {label}
+                  <b>{seatCount(value, daypart)}</b>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span>Time of day</span>
+            <div>
+              {timeOptions.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={daypart === value ? "active" : ""}
+                  onClick={() => setDaypart(value)}
+                >
+                  {label}
+                  <b>{seatCount(weekPattern, value)}</b>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="enrollment-result-head">
+        <div>
+          <span>{results.length}</span>
+          <strong>Matching class intakes</strong>
+        </div>
+        <p>
+          Late-join classes stay visible when your selected dates overlap their
+          running period.
+        </p>
+      </div>
+      <div className="enrollment-result-grid">
+        {results.map((runItem) => (
+          <EnrollmentResultCard
+            key={get(runItem, "id")}
+            data={data}
+            runItem={runItem}
+            requested={requested}
+            onEnroll={() => setSelectedRun(runItem)}
+          />
+        ))}
+        {!results.length ? (
+          <Empty text="No class intake matches these filters." />
+        ) : null}
+      </div>
+      {selectedRun ? (
+        <EnrollmentDialog
+          data={data}
+          busy={busy}
+          run={run}
+          initialRun={selectedRun}
+          onClose={() => setSelectedRun(null)}
+        />
+      ) : null}
+    </section>
+  );
 }
 
-function EnrollmentResultCard({ data, runItem, requested, onEnroll }: { data: PortalData; runItem: Row; requested: number; onEnroll: () => void }) {
+function EnrollmentResultCard({
+  data,
+  runItem,
+  requested,
+  onEnroll,
+}: {
+  data: PortalData;
+  runItem: Row;
+  requested: number;
+  onEnroll: () => void;
+}) {
   const lessons = lessonsForRun(data, get(runItem, "id"));
-  const course = data.courses.find((item) => get(item, "id") === get(runItem, "course_id")) ?? runItem;
+  const course =
+    data.courses.find(
+      (item) => get(item, "id") === get(runItem, "course_id"),
+    ) ?? runItem;
   const room = runRoom(data, lessons);
   const seats = openSeats(runItem);
-  const availability = seats <= 0 ? "full" : seats < requested ? "partly_available" : "available";
-  return <article className="run-card run-course-group enrollment-result-card" style={eventStyle(runItem)}><button type="button" className="run-card-open" onClick={onEnroll}><CourseVisual course={course} /><div className="run-card-body"><span className="code">{get(runItem, "code")}</span><h3>{get(runItem, "course_title")}</h3><p>{get(runItem, "name")}</p><div className="enrollment-price-line"><strong className="enrollment-price">{amount(runItem.price)}</strong><small>{lessons.length || Number(runItem.session_count || 0)} lessons</small></div><div className="enrollment-tags"><span>{lessonWeekPattern(lessons)}</span><span>{lessonDaypart(lessons)}</span>{canJoinLate(runItem) ? <span className="joinable">Can join late</span> : <span>Start only</span>}</div><div className="enrollment-card-lines"><span><CalendarDays size={14} />{classDateRange(lessons)}</span><span><Clock3 size={14} />{classDefaultTime(lessons)}</span><span><MapPin size={14} />{get(room, "campus_name") || get(room, "location") || "Campus"} · {get(room, "name") || "Room pending"}</span></div><footer><Status value={availability} /><span>{seats}/{get(runItem, "capacity")} seats open</span></footer></div><ChevronRight className="run-card-arrow" size={20} /></button><div className="enrollment-result-warning">{availability === "partly_available" ? <><ShieldCheck size={14} />Only {seats} seats available for {requested} requested.</> : lessons.length ? <><Check size={14} />Full time range is ready.</> : <><Clock3 size={14} />Schedule needs review before enrolment.</>}</div></article>;
+  const availability =
+    seats <= 0 ? "full" : seats < requested ? "partly_available" : "available";
+  return (
+    <article
+      className="run-card run-course-group enrollment-result-card"
+      style={eventStyle(runItem)}
+    >
+      <button type="button" className="run-card-open" onClick={onEnroll}>
+        <CourseVisual course={course} />
+        <div className="run-card-body">
+          <span className="code">{get(runItem, "code")}</span>
+          <h3>{get(runItem, "course_title")}</h3>
+          <p>{get(runItem, "name")}</p>
+          <div className="enrollment-price-line">
+            <strong className="enrollment-price">
+              {amount(runItem.price)}
+            </strong>
+            <small>
+              {lessons.length || Number(runItem.session_count || 0)} lessons
+            </small>
+          </div>
+          <div className="enrollment-tags">
+            <span>{lessonWeekPattern(lessons)}</span>
+            <span>{lessonDaypart(lessons)}</span>
+            {canJoinLate(runItem) ? (
+              <span className="joinable">Can join late</span>
+            ) : (
+              <span>Start only</span>
+            )}
+          </div>
+          <div className="enrollment-card-lines">
+            <span>
+              <CalendarDays size={14} />
+              {classDateRange(lessons)}
+            </span>
+            <span>
+              <Clock3 size={14} />
+              {classDefaultTime(lessons)}
+            </span>
+            <span>
+              <MapPin size={14} />
+              {get(room, "campus_name") ||
+                get(room, "location") ||
+                "Campus"} · {get(room, "name") || "Room pending"}
+            </span>
+          </div>
+          <footer>
+            <Status value={availability} />
+            <span>
+              {seats}/{get(runItem, "capacity")} seats open
+            </span>
+          </footer>
+        </div>
+        <ChevronRight className="run-card-arrow" size={20} />
+      </button>
+      <div className="enrollment-result-warning">
+        {availability === "partly_available" ? (
+          <>
+            <ShieldCheck size={14} />
+            Only {seats} seats available for {requested} requested.
+          </>
+        ) : lessons.length ? (
+          <>
+            <Check size={14} />
+            Full time range is ready.
+          </>
+        ) : (
+          <>
+            <Clock3 size={14} />
+            Schedule needs review before enrolment.
+          </>
+        )}
+      </div>
+    </article>
+  );
 }
 
-type QuickStudentDraft = { name: string; level: string; phone: string; email: string };
+type QuickStudentDraft = {
+  name: string;
+  level: string;
+  phone: string;
+  email: string;
+};
 
-function EnrollmentDialog({ data, busy, run, initialRun, courseId, onClose }: { data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; initialRun?: Row; courseId?: string; onClose: () => void }) {
-  const availableRuns = (courseId ? data.runs.filter((item) => get(item, "course_id") === courseId) : initialRun ? [initialRun] : data.runs).filter((item) => get(item, "status") !== "finished").sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const [runId, setRunId] = useState(get(initialRun, "id") || get(availableRuns[0], "id"));
+function EnrollmentDialog({
+  data,
+  busy,
+  run,
+  initialRun,
+  courseId,
+  onClose,
+}: {
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  initialRun?: Row;
+  courseId?: string;
+  onClose: () => void;
+}) {
+  const availableRuns = (
+    courseId
+      ? data.runs.filter((item) => get(item, "course_id") === courseId)
+      : initialRun
+        ? [initialRun]
+        : data.runs
+  )
+    .filter((item) => get(item, "status") !== "finished")
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const [runId, setRunId] = useState(
+    get(initialRun, "id") || get(availableRuns[0], "id"),
+  );
   const [studentQuery, setStudentQuery] = useState("");
   const [studentId, setStudentId] = useState("");
   const [studentDialogOpen, setStudentDialogOpen] = useState(false);
-  const [quickStudent, setQuickStudent] = useState<QuickStudentDraft | null>(null);
+  const [quickStudent, setQuickStudent] = useState<QuickStudentDraft | null>(
+    null,
+  );
   const [discount, setDiscount] = useState(0);
   const [payNow, setPayNow] = useState(true);
-  const selected = availableRuns.find((item) => get(item, "id") === runId) ?? availableRuns[0];
-  const selectedLessons = selected ? lessonsForRun(data, get(selected, "id")) : [];
-  const alreadyEnrolled = data.enrollments.filter((item) => get(item, "class_run_id") === get(selected, "id")).map((item) => get(item, "student_id"));
-  const students = data.students.filter((student) => !alreadyEnrolled.includes(get(student, "id")) && `${get(student, "name")} ${get(student, "code")} ${get(student, "level")}`.toLowerCase().includes(studentQuery.toLowerCase())).slice(0, 8);
+  const selected =
+    availableRuns.find((item) => get(item, "id") === runId) ?? availableRuns[0];
+  const selectedLessons = selected
+    ? lessonsForRun(data, get(selected, "id"))
+    : [];
+  const alreadyEnrolled = data.enrollments
+    .filter((item) => get(item, "class_run_id") === get(selected, "id"))
+    .map((item) => get(item, "student_id"));
+  const students = data.students
+    .filter(
+      (student) =>
+        !alreadyEnrolled.includes(get(student, "id")) &&
+        `${get(student, "name")} ${get(student, "code")} ${get(student, "level")}`
+          .toLowerCase()
+          .includes(studentQuery.toLowerCase()),
+    )
+    .slice(0, 8);
   const original = Number(selected?.price || 0);
   const finalPrice = Math.max(0, original - discount);
   const [amountReceived, setAmountReceived] = useState(finalPrice);
-  useEffect(() => { setDiscount(0); setAmountReceived(Number(selected?.price || 0)); setStudentId(""); setQuickStudent(null); }, [runId]);
-  function changeDiscount(value: number) { const next = Math.max(0, Math.min(value, original)); setDiscount(next); setAmountReceived(Math.max(0, original - next)); }
+  useEffect(() => {
+    setDiscount(0);
+    setAmountReceived(Number(selected?.price || 0));
+    setStudentId("");
+    setQuickStudent(null);
+  }, [runId]);
+  function changeDiscount(value: number) {
+    const next = Math.max(0, Math.min(value, original));
+    setDiscount(next);
+    setAmountReceived(Math.max(0, original - next));
+  }
   function submit(event: FormEvent<HTMLFormElement>, mode: "now" | "later") {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -957,202 +7859,2245 @@ function EnrollmentDialog({ data, busy, run, initialRun, courseId, onClose }: { 
       payNow: collectNow,
     }).then(onClose);
   }
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog enrollment-dialog" role="dialog" aria-modal="true" onSubmit={(event) => submit(event, payNow ? "now" : "later")} onMouseDown={(event) => event.stopPropagation()}><header><div><span>ENROL STUDENT</span><h3>{get(selected, "course_title") || "Choose a class"}</h3><p>Select a class intake, choose a student, then collect payment or save it for later.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><section className="enrollment-dialog-body"><div className="enrollment-class-picker">{availableRuns.map((runItem) => { const lessons = lessonsForRun(data, get(runItem, "id")); const seats = openSeats(runItem); return <button type="button" key={get(runItem, "id")} className={get(runItem, "id") === get(selected, "id") ? "active" : ""} style={eventStyle(runItem)} onClick={() => setRunId(get(runItem, "id"))}><strong>{get(runItem, "name")}</strong><span>{classDateRange(lessons)}</span><b>{amount(runItem.price)} <small>{lessons.length || Number(runItem.session_count || 0)} lessons</small></b><div className="enrollment-tags compact"><span>{lessonWeekPattern(lessons)}</span>{canJoinLate(runItem) ? <span className="joinable">Can join late</span> : <span>Start only</span>}</div><Status value={seats > 0 ? seats < 3 ? "partly_available" : "available" : "full"} /></button>; })}</div>{selected ? <div className="enrollment-selected-summary" style={eventStyle(selected)}><div><span>Class intake</span><strong>{get(selected, "name")}</strong><p>{classDefaultTime(selectedLessons)} · {classDateRange(selectedLessons)}</p></div><div><span>Seats</span><strong>{openSeats(selected)}/{get(selected, "capacity")}</strong><p>{openSeats(selected) <= 0 ? "This class is full." : openSeats(selected) < 3 ? "Limited availability." : "Available for enrolment."}</p></div></div> : null}<section className="enrollment-student-picker"><div className="sheet-section-title"><h3>Student</h3><div className="segmented-control"><button type="button" className={!quickStudent ? "active" : ""} onClick={() => { setQuickStudent(null); setStudentId(""); }}>Existing</button><button type="button" className={quickStudent ? "active" : ""} onClick={() => setStudentDialogOpen(true)}><Plus size={14} />Quick add</button></div></div>{quickStudent ? <div className="quick-student-summary"><div className="quick-student-avatar">{quickStudent.name.slice(0, 1).toUpperCase()}</div><div><span>New student</span><strong>{quickStudent.name}</strong><p>{quickStudent.level} / {quickStudent.phone || "Phone pending"} / {quickStudent.email || "Email pending"}</p></div><button type="button" className="quiet-button" onClick={() => setStudentDialogOpen(true)}>Edit</button></div> : <><label className="search-box enrollment-student-search"><Search size={16} /><input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search student name, code or level" /></label><div className="student-pick-list">{students.map((student) => <button type="button" key={get(student, "id")} className={studentId === get(student, "id") ? "active" : ""} onClick={() => setStudentId(get(student, "id"))}><Avatar person={student} /><div><strong>{get(student, "name")}</strong><span>{get(student, "level")} / {get(student, "guardian_phone")}</span></div></button>)}{!students.length ? <Empty text="No available student found. Use Quick add to create one." /> : null}</div></>}</section><section className="enrollment-payment-panel"><div className="sheet-section-title"><h3>Payment</h3><div className="segmented-control"><button type="button" className={payNow ? "active" : ""} onClick={() => setPayNow(true)}>Pay now</button><button type="button" className={!payNow ? "active" : ""} onClick={() => setPayNow(false)}>Pay later</button></div></div><div className="payment-summary"><div><span>Original price</span><strong>{amount(original)}</strong></div><div><span>Discount</span><strong>{amount(discount)}</strong></div><div><span>Final price</span><strong>{amount(finalPrice)}</strong></div></div><div className="payment-form-grid"><FormField label="Discount (RM)" name="discountInput" type="number" min="0" max={original} step="0.01" value={discount} onChange={(event) => changeDiscount(Number(event.target.value))} />{payNow ? <><label className="form-field"><span>Payment method</span><select name="method" defaultValue="duitnow_qr"><option value="duitnow_qr">DuitNow QR</option><option value="duitnow_transfer">DuitNow transfer</option><option value="fpx_online_banking">FPX / online banking</option><option value="touch_n_go_ewallet">Touch 'n Go eWallet</option><option value="grabpay">GrabPay</option><option value="debit_credit_card">Debit / credit card</option><option value="cash">Cash</option></select></label><FormField label="Payment proof / receipt reference" name="proofReference" placeholder="Receipt, DuitNow or bank reference" /><label className="form-field payment-note"><span>Note</span><textarea name="note" placeholder="Optional payment note" /></label></> : <p className="pay-later-note">The student will be enrolled and an unpaid invoice will be created for follow-up.</p>}</div></section></section><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button>{payNow ? <label className="payment-final-amount"><span>Amount received (RM)</span><input name="amount" type="number" min="0.01" max={finalPrice || 0.01} step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(Number(event.target.value))} /></label> : null}<button className="primary-button" disabled={busy || !selected || (!quickStudent && !studentId) || (payNow && amountReceived <= 0)} type="submit">{payNow ? <><Banknote size={15} />Pay & enrol</> : <><Check size={15} />Save, pay later</>}</button></footer></form>{studentDialogOpen ? <QuickStudentDialog initial={quickStudent} onClose={() => setStudentDialogOpen(false)} onSave={(draft) => { setQuickStudent(draft); setStudentId(""); setStudentDialogOpen(false); }} /> : null}</div>;
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="course-edit-dialog enrollment-dialog"
+        role="dialog"
+        aria-modal="true"
+        onSubmit={(event) => submit(event, payNow ? "now" : "later")}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>ENROL STUDENT</span>
+            <h3>{get(selected, "course_title") || "Choose a class"}</h3>
+            <p>
+              Select a class intake, choose a student, then collect payment or
+              save it for later.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <section className="enrollment-dialog-body">
+          <div className="enrollment-class-picker">
+            {availableRuns.map((runItem) => {
+              const lessons = lessonsForRun(data, get(runItem, "id"));
+              const seats = openSeats(runItem);
+              return (
+                <button
+                  type="button"
+                  key={get(runItem, "id")}
+                  className={
+                    get(runItem, "id") === get(selected, "id") ? "active" : ""
+                  }
+                  style={eventStyle(runItem)}
+                  onClick={() => setRunId(get(runItem, "id"))}
+                >
+                  <strong>{get(runItem, "name")}</strong>
+                  <span>{classDateRange(lessons)}</span>
+                  <b>
+                    {amount(runItem.price)}{" "}
+                    <small>
+                      {lessons.length || Number(runItem.session_count || 0)}{" "}
+                      lessons
+                    </small>
+                  </b>
+                  <div className="enrollment-tags compact">
+                    <span>{lessonWeekPattern(lessons)}</span>
+                    {canJoinLate(runItem) ? (
+                      <span className="joinable">Can join late</span>
+                    ) : (
+                      <span>Start only</span>
+                    )}
+                  </div>
+                  <Status
+                    value={
+                      seats > 0
+                        ? seats < 3
+                          ? "partly_available"
+                          : "available"
+                        : "full"
+                    }
+                  />
+                </button>
+              );
+            })}
+          </div>
+          {selected ? (
+            <div
+              className="enrollment-selected-summary"
+              style={eventStyle(selected)}
+            >
+              <div>
+                <span>Class intake</span>
+                <strong>{get(selected, "name")}</strong>
+                <p>
+                  {classDefaultTime(selectedLessons)} ·{" "}
+                  {classDateRange(selectedLessons)}
+                </p>
+              </div>
+              <div>
+                <span>Seats</span>
+                <strong>
+                  {openSeats(selected)}/{get(selected, "capacity")}
+                </strong>
+                <p>
+                  {openSeats(selected) <= 0
+                    ? "This class is full."
+                    : openSeats(selected) < 3
+                      ? "Limited availability."
+                      : "Available for enrolment."}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          <section className="enrollment-student-picker">
+            <div className="sheet-section-title">
+              <h3>Student</h3>
+              <div className="segmented-control">
+                <button
+                  type="button"
+                  className={!quickStudent ? "active" : ""}
+                  onClick={() => {
+                    setQuickStudent(null);
+                    setStudentId("");
+                  }}
+                >
+                  Existing
+                </button>
+                <button
+                  type="button"
+                  className={quickStudent ? "active" : ""}
+                  onClick={() => setStudentDialogOpen(true)}
+                >
+                  <Plus size={14} />
+                  Quick add
+                </button>
+              </div>
+            </div>
+            {quickStudent ? (
+              <div className="quick-student-summary">
+                <div className="quick-student-avatar">
+                  {quickStudent.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <span>New student</span>
+                  <strong>{quickStudent.name}</strong>
+                  <p>
+                    {quickStudent.level} /{" "}
+                    {quickStudent.phone || "Phone pending"} /{" "}
+                    {quickStudent.email || "Email pending"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setStudentDialogOpen(true)}
+                >
+                  Edit
+                </button>
+              </div>
+            ) : (
+              <>
+                <label className="search-box enrollment-student-search">
+                  <Search size={16} />
+                  <input
+                    value={studentQuery}
+                    onChange={(event) => setStudentQuery(event.target.value)}
+                    placeholder="Search student name, code or level"
+                  />
+                </label>
+                <div className="student-pick-list">
+                  {students.map((student) => (
+                    <button
+                      type="button"
+                      key={get(student, "id")}
+                      className={
+                        studentId === get(student, "id") ? "active" : ""
+                      }
+                      onClick={() => setStudentId(get(student, "id"))}
+                    >
+                      <Avatar person={student} />
+                      <div>
+                        <strong>{get(student, "name")}</strong>
+                        <span>
+                          {get(student, "level")} /{" "}
+                          {get(student, "guardian_phone")}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                  {!students.length ? (
+                    <Empty text="No available student found. Use Quick add to create one." />
+                  ) : null}
+                </div>
+              </>
+            )}
+          </section>
+          <section className="enrollment-payment-panel">
+            <div className="sheet-section-title">
+              <h3>Payment</h3>
+              <div className="segmented-control">
+                <button
+                  type="button"
+                  className={payNow ? "active" : ""}
+                  onClick={() => setPayNow(true)}
+                >
+                  Pay now
+                </button>
+                <button
+                  type="button"
+                  className={!payNow ? "active" : ""}
+                  onClick={() => setPayNow(false)}
+                >
+                  Pay later
+                </button>
+              </div>
+            </div>
+            <div className="payment-summary">
+              <div>
+                <span>Original price</span>
+                <strong>{amount(original)}</strong>
+              </div>
+              <div>
+                <span>Discount</span>
+                <strong>{amount(discount)}</strong>
+              </div>
+              <div>
+                <span>Final price</span>
+                <strong>{amount(finalPrice)}</strong>
+              </div>
+            </div>
+            <div className="payment-form-grid">
+              <FormField
+                label="Discount (RM)"
+                name="discountInput"
+                type="number"
+                min="0"
+                max={original}
+                step="0.01"
+                value={discount}
+                onChange={(event) => changeDiscount(Number(event.target.value))}
+              />
+              {payNow ? (
+                <>
+                  <label className="form-field">
+                    <span>Payment method</span>
+                    <select name="method" defaultValue="duitnow_qr">
+                      <option value="duitnow_qr">DuitNow QR</option>
+                      <option value="duitnow_transfer">DuitNow transfer</option>
+                      <option value="fpx_online_banking">
+                        FPX / online banking
+                      </option>
+                      <option value="touch_n_go_ewallet">
+                        Touch 'n Go eWallet
+                      </option>
+                      <option value="grabpay">GrabPay</option>
+                      <option value="debit_credit_card">
+                        Debit / credit card
+                      </option>
+                      <option value="cash">Cash</option>
+                    </select>
+                  </label>
+                  <FormField
+                    label="Payment proof / receipt reference"
+                    name="proofReference"
+                    placeholder="Receipt, DuitNow or bank reference"
+                  />
+                  <label className="form-field payment-note">
+                    <span>Note</span>
+                    <textarea name="note" placeholder="Optional payment note" />
+                  </label>
+                </>
+              ) : (
+                <p className="pay-later-note">
+                  The student will be enrolled and an unpaid invoice will be
+                  created for follow-up.
+                </p>
+              )}
+            </div>
+          </section>
+        </section>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          {payNow ? (
+            <label className="payment-final-amount">
+              <span>Amount received (RM)</span>
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                max={finalPrice || 0.01}
+                step="0.01"
+                value={amountReceived}
+                onChange={(event) =>
+                  setAmountReceived(Number(event.target.value))
+                }
+              />
+            </label>
+          ) : null}
+          <button
+            className="primary-button"
+            disabled={
+              busy ||
+              !selected ||
+              (!quickStudent && !studentId) ||
+              (payNow && amountReceived <= 0)
+            }
+            type="submit"
+          >
+            {payNow ? (
+              <>
+                <Banknote size={15} />
+                Pay & enrol
+              </>
+            ) : (
+              <>
+                <Check size={15} />
+                Save, pay later
+              </>
+            )}
+          </button>
+        </footer>
+      </form>
+      {studentDialogOpen ? (
+        <QuickStudentDialog
+          initial={quickStudent}
+          onClose={() => setStudentDialogOpen(false)}
+          onSave={(draft) => {
+            setQuickStudent(draft);
+            setStudentId("");
+            setStudentDialogOpen(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }
 
-function QuickStudentDialog({ initial, onClose, onSave }: { initial: QuickStudentDraft | null; onClose: () => void; onSave: (draft: QuickStudentDraft) => void }) {
+function QuickStudentDialog({
+  initial,
+  onClose,
+  onSave,
+}: {
+  initial: QuickStudentDraft | null;
+  onClose: () => void;
+  onSave: (draft: QuickStudentDraft) => void;
+}) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    onSave({ name: String(values.name || ""), level: String(values.level || "Year 7"), phone: String(values.phone || ""), email: String(values.email || "") });
+    onSave({
+      name: String(values.name || ""),
+      level: String(values.level || "Year 7"),
+      phone: String(values.phone || ""),
+      email: String(values.email || ""),
+    });
   }
-  return <div className="dialog-backdrop nested-dialog" role="presentation" onMouseDown={onClose}><form className="payment-dialog quick-student-dialog" role="dialog" aria-modal="true" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><header><div><span>NEW STUDENT</span><h3>Quick add student</h3><p>Fill the learner details first. Enrolment and payment happen after you confirm the main form.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="payment-form-grid"><FormField label="Student name" name="name" defaultValue={initial?.name ?? ""} required /><FormField label="Level" name="level" defaultValue={initial?.level ?? "Year 7"} required /><FormField label="Guardian phone" name="phone" defaultValue={initial?.phone ?? ""} /><FormField label="Family email" name="email" type="email" defaultValue={initial?.email ?? ""} /></div><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" type="submit"><Check size={15} />Use this student</button></footer></form></div>;
+  return (
+    <div
+      className="dialog-backdrop nested-dialog"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <form
+        className="payment-dialog quick-student-dialog"
+        role="dialog"
+        aria-modal="true"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>NEW STUDENT</span>
+            <h3>Quick add student</h3>
+            <p>
+              Fill the learner details first. Enrolment and payment happen after
+              you confirm the main form.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="payment-form-grid">
+          <FormField
+            label="Student name"
+            name="name"
+            defaultValue={initial?.name ?? ""}
+            required
+          />
+          <FormField
+            label="Level"
+            name="level"
+            defaultValue={initial?.level ?? "Year 7"}
+            required
+          />
+          <FormField
+            label="Guardian phone"
+            name="phone"
+            defaultValue={initial?.phone ?? ""}
+          />
+          <FormField
+            label="Family email"
+            name="email"
+            type="email"
+            defaultValue={initial?.email ?? ""}
+          />
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" type="submit">
+            <Check size={15} />
+            Use this student
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function PaymentWorkspace({ data, run, busy }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) {
+function PaymentWorkspace({
+  data,
+  run,
+  busy,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+}) {
   const [statementOpen, setStatementOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("all");
   const [paymentQuery, setPaymentQuery] = useState("");
   const [paymentFrom, setPaymentFrom] = useState("");
   const [paymentTo, setPaymentTo] = useState("");
-  const invoiced = data.invoices.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
-  const received = data.invoices.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
+  const invoiced = data.invoices.reduce(
+    (sum, item) => sum + Number(item.total_amount || 0),
+    0,
+  );
+  const received = data.invoices.reduce(
+    (sum, item) => sum + Number(item.paid_amount || 0),
+    0,
+  );
   const outstanding = Math.max(0, invoiced - received);
   const allInvoices = data.invoices
-    .map((item) => ({ ...item, balance: Math.max(0, Number(item.total_amount || 0) - Number(item.paid_amount || 0)) }) as Row)
-    .sort((left, right) => Number(right.balance || 0) - Number(left.balance || 0));
-  const openInvoices = allInvoices.filter((item) => Number(item.balance || 0) > 0);
+    .map(
+      (item) =>
+        ({
+          ...item,
+          balance: Math.max(
+            0,
+            Number(item.total_amount || 0) - Number(item.paid_amount || 0),
+          ),
+        }) as Row,
+    )
+    .sort(
+      (left, right) => Number(right.balance || 0) - Number(left.balance || 0),
+    );
+  const openInvoices = allInvoices.filter(
+    (item) => Number(item.balance || 0) > 0,
+  );
   const paymentRows = allInvoices.filter((invoice) => {
     const balance = Number(invoice.balance || 0);
     const status = get(invoice, "status");
-    const issued = datePart(invoice.issued_at || invoice.created_at || invoice.received_at || invoice.updated_at);
-    const statusMatches = paymentStatus === "all"
-      || (paymentStatus === "unpaid" ? balance > 0 : paymentStatus === "paid" ? balance <= 0 || status === "paid" : status === paymentStatus);
-    const dateMatches = (!paymentFrom || !issued || issued >= paymentFrom) && (!paymentTo || !issued || issued <= paymentTo);
-    const queryMatches = !paymentQuery || Object.values(invoice).join(" ").toLowerCase().includes(paymentQuery.toLowerCase());
+    const issued = datePart(
+      invoice.issued_at ||
+        invoice.created_at ||
+        invoice.received_at ||
+        invoice.updated_at,
+    );
+    const statusMatches =
+      paymentStatus === "all" ||
+      (paymentStatus === "unpaid"
+        ? balance > 0
+        : paymentStatus === "paid"
+          ? balance <= 0 || status === "paid"
+          : status === paymentStatus);
+    const dateMatches =
+      (!paymentFrom || !issued || issued >= paymentFrom) &&
+      (!paymentTo || !issued || issued <= paymentTo);
+    const queryMatches =
+      !paymentQuery ||
+      Object.values(invoice)
+        .join(" ")
+        .toLowerCase()
+        .includes(paymentQuery.toLowerCase());
     return statusMatches && dateMatches && queryMatches;
   });
-  return <section className="operation-stack"><div className="view-intro"><div><h2>Payments</h2><p>Review paid and unpaid invoices, collect balances and preview statements.</p></div><button className="primary-button" type="button" onClick={() => setStatementOpen(true)}><Download size={15} />Statement PDF</button></div><div className="admin-metric-grid payment-workspace-metrics"><DashboardMetric icon={<ReceiptText size={19} />} label="Invoiced" value={amount(invoiced)} note="Course contracts" tone="blue" /><DashboardMetric icon={<Banknote size={19} />} label="Received" value={amount(received)} note="Payments recorded" tone="teal" /><DashboardMetric icon={<Clock3 size={19} />} label="Outstanding" value={amount(outstanding)} note={`${openInvoices.length} families to follow up`} tone="amber" /><DashboardMetric icon={<Check size={19} />} label="Paid invoices" value={String(data.invoices.filter((item) => get(item, "status") === "paid").length)} note="Fully settled" tone="purple" /></div><section className="management-panel payment-ledger-panel"><div className="panel-row"><div><h3>Payment records</h3><p className="panel-hint">Filter paid and unpaid invoices, then record received amounts.</p></div><span className="record-count">{paymentRows.length}</span></div><div className="payment-record-toolbar"><label className="payment-search"><Search size={15} /><input value={paymentQuery} onChange={(event) => setPaymentQuery(event.target.value)} placeholder="Search invoice, student or course" /></label><label><span>Status</span><select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}><option value="all">All payments</option><option value="unpaid">Unpaid</option><option value="partly_paid">Partly paid</option><option value="paid">Paid</option></select></label><label><span>From</span><input type="date" value={paymentFrom} onChange={(event) => setPaymentFrom(event.target.value)} /></label><label><span>To</span><input type="date" value={paymentTo} onChange={(event) => setPaymentTo(event.target.value)} /></label><button className="quiet-button" type="button" onClick={() => { setPaymentQuery(""); setPaymentStatus("all"); setPaymentFrom(""); setPaymentTo(""); }}>Clear</button></div><InvoiceTable rows={paymentRows} run={run} busy={busy} /></section><section className="management-panel"><div className="panel-row"><h3>Recent payment activity</h3><span className="record-count">{data.payments.length}</span></div><Table columns={[["received_at", "Received"], ["student_name", "Student"], ["course_title", "Course"], ["method", "Method"], ["amount", "Amount"], ["proof_reference", "Proof"], ["status", "Status"]]} rows={data.payments} moneyKeys={["amount"]} empty="No payments recorded yet." /></section>{statementOpen ? <CollectionStatementDialog openInvoices={openInvoices} payments={data.payments} totals={{ invoiced, received, outstanding }} onClose={() => setStatementOpen(false)} /> : null}</section>;
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>Payments</h2>
+          <p>
+            Review paid and unpaid invoices, collect balances and preview
+            statements.
+          </p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setStatementOpen(true)}
+        >
+          <Download size={15} />
+          Statement PDF
+        </button>
+      </div>
+      <div className="admin-metric-grid payment-workspace-metrics">
+        <DashboardMetric
+          icon={<ReceiptText size={19} />}
+          label="Invoiced"
+          value={amount(invoiced)}
+          note="Course contracts"
+          tone="blue"
+        />
+        <DashboardMetric
+          icon={<Banknote size={19} />}
+          label="Received"
+          value={amount(received)}
+          note="Payments recorded"
+          tone="teal"
+        />
+        <DashboardMetric
+          icon={<Clock3 size={19} />}
+          label="Outstanding"
+          value={amount(outstanding)}
+          note={`${openInvoices.length} families to follow up`}
+          tone="amber"
+        />
+        <DashboardMetric
+          icon={<Check size={19} />}
+          label="Paid invoices"
+          value={String(
+            data.invoices.filter((item) => get(item, "status") === "paid")
+              .length,
+          )}
+          note="Fully settled"
+          tone="purple"
+        />
+      </div>
+      <section className="management-panel payment-ledger-panel">
+        <div className="panel-row">
+          <div>
+            <h3>Payment records</h3>
+            <p className="panel-hint">
+              Filter paid and unpaid invoices, then record received amounts.
+            </p>
+          </div>
+          <span className="record-count">{paymentRows.length}</span>
+        </div>
+        <div className="payment-record-toolbar">
+          <label className="payment-search">
+            <Search size={15} />
+            <input
+              value={paymentQuery}
+              onChange={(event) => setPaymentQuery(event.target.value)}
+              placeholder="Search invoice, student or course"
+            />
+          </label>
+          <label>
+            <span>Status</span>
+            <select
+              value={paymentStatus}
+              onChange={(event) => setPaymentStatus(event.target.value)}
+            >
+              <option value="all">All payments</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="partly_paid">Partly paid</option>
+              <option value="paid">Paid</option>
+            </select>
+          </label>
+          <label>
+            <span>From</span>
+            <input
+              type="date"
+              value={paymentFrom}
+              onChange={(event) => setPaymentFrom(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <input
+              type="date"
+              value={paymentTo}
+              onChange={(event) => setPaymentTo(event.target.value)}
+            />
+          </label>
+          <button
+            className="quiet-button"
+            type="button"
+            onClick={() => {
+              setPaymentQuery("");
+              setPaymentStatus("all");
+              setPaymentFrom("");
+              setPaymentTo("");
+            }}
+          >
+            Clear
+          </button>
+        </div>
+        <InvoiceTable rows={paymentRows} run={run} busy={busy} />
+      </section>
+      <section className="management-panel">
+        <div className="panel-row">
+          <h3>Recent payment activity</h3>
+          <span className="record-count">{data.payments.length}</span>
+        </div>
+        <Table
+          columns={[
+            ["received_at", "Received"],
+            ["student_name", "Student"],
+            ["course_title", "Course"],
+            ["method", "Method"],
+            ["amount", "Amount"],
+            ["proof_reference", "Proof"],
+            ["status", "Status"],
+          ]}
+          rows={data.payments}
+          moneyKeys={["amount"]}
+          empty="No payments recorded yet."
+        />
+      </section>
+      {statementOpen ? (
+        <CollectionStatementDialog
+          openInvoices={openInvoices}
+          payments={data.payments}
+          totals={{ invoiced, received, outstanding }}
+          onClose={() => setStatementOpen(false)}
+        />
+      ) : null}
+    </section>
+  );
 }
 
-function CollectionStatementDialog({ openInvoices, payments, totals, onClose }: { openInvoices: Row[]; payments: Row[]; totals: { invoiced: number; received: number; outstanding: number }; onClose: () => void }) {
+function CollectionStatementDialog({
+  openInvoices,
+  payments,
+  totals,
+  onClose,
+}: {
+  openInvoices: Row[];
+  payments: Row[];
+  totals: { invoiced: number; received: number; outstanding: number };
+  onClose: () => void;
+}) {
   const [sent, setSent] = useState(false);
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="payment-dialog statement-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>PAYMENT STATEMENT</span><h3>Statement preview</h3><p>Review the balances before downloading or emailing the statement.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="statement-preview"><div className="statement-metrics"><div><span>Invoiced</span><strong>{amount(totals.invoiced)}</strong></div><div><span>Received</span><strong>{amount(totals.received)}</strong></div><div><span>Outstanding</span><strong>{amount(totals.outstanding)}</strong></div></div><h4>Open balances</h4><div className="statement-table">{openInvoices.slice(0, 8).map((invoice) => <article key={get(invoice, "id")}><div><strong>{get(invoice, "invoice_no")}</strong><span>{get(invoice, "student_name")}</span></div><div><span>{get(invoice, "course_title")}</span><b>{amount(Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0)))}</b></div></article>)}{!openInvoices.length ? <Empty text="No outstanding balances." /> : null}</div><h4>Recent received payments</h4><div className="statement-table compact">{payments.slice(0, 5).map((payment) => <article key={get(payment, "id")}><div><strong>{get(payment, "student_name")}</strong><span>{get(payment, "method").replace(/_/g, " ")}</span></div><div><span>{get(payment, "received_at")}</span><b>{amount(payment.amount)}</b></div></article>)}{!payments.length ? <Empty text="No payment received yet." /> : null}</div>{sent ? <p className="statement-sent-note"><Check size={14} />Email draft prepared for outstanding families.</p> : null}</div><footer><button className="quiet-button" type="button" onClick={onClose}>Close</button><button className="quiet-button" type="button" onClick={() => setSent(true)}><Mail size={15} />Send email</button><button className="primary-button" type="button" onClick={() => printCollectionStatement(openInvoices, payments, totals)}><Download size={15} />Download PDF</button></footer></section></div>;
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="payment-dialog statement-dialog"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>PAYMENT STATEMENT</span>
+            <h3>Statement preview</h3>
+            <p>
+              Review the balances before downloading or emailing the statement.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="statement-preview">
+          <div className="statement-metrics">
+            <div>
+              <span>Invoiced</span>
+              <strong>{amount(totals.invoiced)}</strong>
+            </div>
+            <div>
+              <span>Received</span>
+              <strong>{amount(totals.received)}</strong>
+            </div>
+            <div>
+              <span>Outstanding</span>
+              <strong>{amount(totals.outstanding)}</strong>
+            </div>
+          </div>
+          <h4>Open balances</h4>
+          <div className="statement-table">
+            {openInvoices.slice(0, 8).map((invoice) => (
+              <article key={get(invoice, "id")}>
+                <div>
+                  <strong>{get(invoice, "invoice_no")}</strong>
+                  <span>{get(invoice, "student_name")}</span>
+                </div>
+                <div>
+                  <span>{get(invoice, "course_title")}</span>
+                  <b>
+                    {amount(
+                      Math.max(
+                        0,
+                        Number(invoice.total_amount || 0) -
+                          Number(invoice.paid_amount || 0),
+                      ),
+                    )}
+                  </b>
+                </div>
+              </article>
+            ))}
+            {!openInvoices.length ? (
+              <Empty text="No outstanding balances." />
+            ) : null}
+          </div>
+          <h4>Recent received payments</h4>
+          <div className="statement-table compact">
+            {payments.slice(0, 5).map((payment) => (
+              <article key={get(payment, "id")}>
+                <div>
+                  <strong>{get(payment, "student_name")}</strong>
+                  <span>{get(payment, "method").replace(/_/g, " ")}</span>
+                </div>
+                <div>
+                  <span>{get(payment, "received_at")}</span>
+                  <b>{amount(payment.amount)}</b>
+                </div>
+              </article>
+            ))}
+            {!payments.length ? (
+              <Empty text="No payment received yet." />
+            ) : null}
+          </div>
+          {sent ? (
+            <p className="statement-sent-note">
+              <Check size={14} />
+              Email draft prepared for outstanding families.
+            </p>
+          ) : null}
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Close
+          </button>
+          <button
+            className="quiet-button"
+            type="button"
+            onClick={() => setSent(true)}
+          >
+            <Mail size={15} />
+            Send email
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() =>
+              printCollectionStatement(openInvoices, payments, totals)
+            }
+          >
+            <Download size={15} />
+            Download PDF
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
-function printCollectionStatement(openInvoices: Row[], payments: Row[], totals: { invoiced: number; received: number; outstanding: number }) {
+function printCollectionStatement(
+  openInvoices: Row[],
+  payments: Row[],
+  totals: { invoiced: number; received: number; outstanding: number },
+) {
   const popup = window.open("", "_blank", "width=900,height=720");
   if (!popup) return;
-  const invoiceRows = openInvoices.map((invoice) => `<tr><td>${get(invoice, "invoice_no")}</td><td>${get(invoice, "student_name")}</td><td>${get(invoice, "course_title")}</td><td>${amount(Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0)))}</td></tr>`).join("");
-  const paymentRows = payments.slice(0, 12).map((payment) => `<tr><td>${get(payment, "received_at")}</td><td>${get(payment, "student_name")}</td><td>${get(payment, "method").replace(/_/g, " ")}</td><td>${amount(payment.amount)}</td></tr>`).join("");
-  popup.document.write(`<!doctype html><html><head><title>Payment statement</title><style>body{font-family:Arial,sans-serif;color:#153946;padding:32px}h1{margin:0 0 6px}p{color:#5d7780}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.metrics div{border:1px solid #cfe1e6;border-radius:8px;padding:14px}.metrics span{display:block;color:#66828b;font-size:12px;font-weight:700}.metrics strong{font-size:20px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border-bottom:1px solid #dfeaec;padding:10px;text-align:left;font-size:13px}th{background:#eef8fa;color:#315966}</style></head><body><h1>Payment statement</h1><p>Generated for payment follow-up.</p><div class="metrics"><div><span>Invoiced</span><strong>${amount(totals.invoiced)}</strong></div><div><span>Received</span><strong>${amount(totals.received)}</strong></div><div><span>Outstanding</span><strong>${amount(totals.outstanding)}</strong></div></div><h2>Open balances</h2><table><thead><tr><th>Invoice</th><th>Student</th><th>Course</th><th>Balance</th></tr></thead><tbody>${invoiceRows || "<tr><td colspan=4>No outstanding balances.</td></tr>"}</tbody></table><h2>Recent received payments</h2><table><thead><tr><th>Received</th><th>Student</th><th>Method</th><th>Amount</th></tr></thead><tbody>${paymentRows || "<tr><td colspan=4>No payment received yet.</td></tr>"}</tbody></table></body></html>`);
+  const invoiceRows = openInvoices
+    .map(
+      (invoice) =>
+        `<tr><td>${get(invoice, "invoice_no")}</td><td>${get(invoice, "student_name")}</td><td>${get(invoice, "course_title")}</td><td>${amount(Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0)))}</td></tr>`,
+    )
+    .join("");
+  const paymentRows = payments
+    .slice(0, 12)
+    .map(
+      (payment) =>
+        `<tr><td>${get(payment, "received_at")}</td><td>${get(payment, "student_name")}</td><td>${get(payment, "method").replace(/_/g, " ")}</td><td>${amount(payment.amount)}</td></tr>`,
+    )
+    .join("");
+  popup.document.write(
+    `<!doctype html><html><head><title>Payment statement</title><style>body{font-family:Arial,sans-serif;color:#153946;padding:32px}h1{margin:0 0 6px}p{color:#5d7780}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.metrics div{border:1px solid #cfe1e6;border-radius:8px;padding:14px}.metrics span{display:block;color:#66828b;font-size:12px;font-weight:700}.metrics strong{font-size:20px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border-bottom:1px solid #dfeaec;padding:10px;text-align:left;font-size:13px}th{background:#eef8fa;color:#315966}</style></head><body><h1>Payment statement</h1><p>Generated for payment follow-up.</p><div class="metrics"><div><span>Invoiced</span><strong>${amount(totals.invoiced)}</strong></div><div><span>Received</span><strong>${amount(totals.received)}</strong></div><div><span>Outstanding</span><strong>${amount(totals.outstanding)}</strong></div></div><h2>Open balances</h2><table><thead><tr><th>Invoice</th><th>Student</th><th>Course</th><th>Balance</th></tr></thead><tbody>${invoiceRows || "<tr><td colspan=4>No outstanding balances.</td></tr>"}</tbody></table><h2>Recent received payments</h2><table><thead><tr><th>Received</th><th>Student</th><th>Method</th><th>Amount</th></tr></thead><tbody>${paymentRows || "<tr><td colspan=4>No payment received yet.</td></tr>"}</tbody></table></body></html>`,
+  );
   popup.document.close();
   popup.focus();
   window.setTimeout(() => popup.print(), 250);
 }
 
-type ReportColumn = { key: string; label: string; money?: boolean; status?: boolean };
-type ReportMetric = { label: string; value: string | number; note: string; tone: "blue" | "teal" | "purple" | "amber" | "rose"; icon: ReactNode };
-type ReportDefinition = { title: string; hint: string; icon: ReactNode; metrics: ReportMetric[]; bars: { label: string; value: number; total: number; tone: string }[]; columns: ReportColumn[]; rows: Row[] };
+type ReportColumn = {
+  key: string;
+  label: string;
+  money?: boolean;
+  status?: boolean;
+};
+type ReportMetric = {
+  label: string;
+  value: string | number;
+  note: string;
+  tone: "blue" | "teal" | "purple" | "amber" | "rose";
+  icon: ReactNode;
+};
+type ReportDefinition = {
+  title: string;
+  hint: string;
+  icon: ReactNode;
+  metrics: ReportMetric[];
+  bars: { label: string; value: number; total: number; tone: string }[];
+  columns: ReportColumn[];
+  rows: Row[];
+};
 
 function ReportView({ data, t }: { data: PortalData; t: typeof copy.en }) {
-  const [category, setCategory] = useState<"overview" | "students" | "teaching" | "finance" | "resources">("overview");
+  const [category, setCategory] = useState<
+    "overview" | "students" | "teaching" | "finance" | "resources"
+  >("overview");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const reports = useMemo(() => buildReports(data), [data]);
   const report = reports[category];
-  const statuses = Array.from(new Set(report.rows.map((row) => get(row, "status")).filter(Boolean)));
+  const statuses = Array.from(
+    new Set(report.rows.map((row) => get(row, "status")).filter(Boolean)),
+  );
   const rows = report.rows.filter((row) => {
-    const matchesSearch = Object.values(row).join(" ").toLowerCase().includes(query.toLowerCase());
+    const matchesSearch = Object.values(row)
+      .join(" ")
+      .toLowerCase()
+      .includes(query.toLowerCase());
     return matchesSearch && (status === "all" || get(row, "status") === status);
   });
-  function exportCurrent() { exportReportExcel(`teaching-${category}-report.xls`, report.title, report.columns, rows); }
+  function exportCurrent() {
+    exportReportExcel(
+      `teaching-${category}-report.xls`,
+      report.title,
+      report.columns,
+      rows,
+    );
+  }
   const categories = [
     ["overview", "Overview", "Campus health", <LayoutGrid size={18} />],
     ["students", "Students", "Enrolment & progress", <UsersRound size={18} />],
-    ["teaching", "Teaching", "Lessons & attendance", <ClipboardCheck size={18} />],
+    [
+      "teaching",
+      "Teaching",
+      "Lessons & attendance",
+      <ClipboardCheck size={18} />,
+    ],
     ["finance", "Finance", "Payments & balances", <ReceiptText size={18} />],
     ["resources", "Resources", "Rooms & capacity", <DoorOpen size={18} />],
   ] as const;
-  return <section className="operation-stack report-workspace">
-    <div className="view-intro"><div><h2>{t.reports}</h2><p>Choose an area, review its live operating picture, then export the detail you need.</p></div></div>
-    <nav className="report-categories" aria-label="Report categories">{categories.map(([id, label, note, icon]) => <button key={id} type="button" className={category === id ? "active" : ""} onClick={() => { setCategory(id); setQuery(""); setStatus("all"); }}><span>{icon}</span><strong>{label}</strong><small>{note}</small></button>)}</nav>
-    <section className="report-dashboard">
-      <header><div><span>LIVE REPORT</span><h3>{report.title}</h3><p>{report.hint}</p></div><div className="report-dashboard-icon">{report.icon}</div></header>
-      <div className="report-grid">{report.metrics.map((metric) => <ReportCard key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} note={metric.note} tone={metric.tone} />)}</div>
-      <div className="report-breakdown">{report.bars.map((bar) => <div key={bar.label}><div><span>{bar.label}</span><b>{bar.value}</b></div><i><em style={{ width: `${Math.min(100, Math.round((bar.value / Math.max(1, bar.total)) * 100))}%`, background: bar.tone }} /></i><small>{bar.total ? `${Math.min(100, Math.round((bar.value / bar.total) * 100))}% of total` : "No records"}</small></div>)}</div>
+  return (
+    <section className="operation-stack report-workspace">
+      <div className="view-intro">
+        <div>
+          <h2>{t.reports}</h2>
+          <p>
+            Choose an area, review its live operating picture, then export the
+            detail you need.
+          </p>
+        </div>
+      </div>
+      <nav className="report-categories" aria-label="Report categories">
+        {categories.map(([id, label, note, icon]) => (
+          <button
+            key={id}
+            type="button"
+            className={category === id ? "active" : ""}
+            onClick={() => {
+              setCategory(id);
+              setQuery("");
+              setStatus("all");
+            }}
+          >
+            <span>{icon}</span>
+            <strong>{label}</strong>
+            <small>{note}</small>
+          </button>
+        ))}
+      </nav>
+      <section className="report-dashboard">
+        <header>
+          <div>
+            <span>LIVE REPORT</span>
+            <h3>{report.title}</h3>
+            <p>{report.hint}</p>
+          </div>
+          <div className="report-dashboard-icon">{report.icon}</div>
+        </header>
+        <div className="report-grid">
+          {report.metrics.map((metric) => (
+            <ReportCard
+              key={metric.label}
+              icon={metric.icon}
+              label={metric.label}
+              value={metric.value}
+              note={metric.note}
+              tone={metric.tone}
+            />
+          ))}
+        </div>
+        <div className="report-breakdown">
+          {report.bars.map((bar) => (
+            <div key={bar.label}>
+              <div>
+                <span>{bar.label}</span>
+                <b>{bar.value}</b>
+              </div>
+              <i>
+                <em
+                  style={{
+                    width: `${Math.min(100, Math.round((bar.value / Math.max(1, bar.total)) * 100))}%`,
+                    background: bar.tone,
+                  }}
+                />
+              </i>
+              <small>
+                {bar.total
+                  ? `${Math.min(100, Math.round((bar.value / bar.total) * 100))}% of total`
+                  : "No records"}
+              </small>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="report-table-panel">
+        <header>
+          <div>
+            <span>DETAIL</span>
+            <h3>{report.title} records</h3>
+            <p>
+              {rows.length} of {report.rows.length} records shown
+            </p>
+          </div>
+          <button
+            className="report-export"
+            type="button"
+            onClick={exportCurrent}
+          >
+            <Download size={16} />
+            Export Excel
+          </button>
+        </header>
+        <div className="report-toolbar">
+          <label>
+            <Search size={15} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search this report"
+            />
+          </label>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="all">All status</option>
+            {statuses.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <span>{rows.length} records</span>
+        </div>
+        <ReportTable
+          columns={report.columns}
+          rows={rows}
+          empty="No records match these filters."
+        />
+      </section>
     </section>
-    <section className="report-table-panel">
-      <header><div><span>DETAIL</span><h3>{report.title} records</h3><p>{rows.length} of {report.rows.length} records shown</p></div><button className="report-export" type="button" onClick={exportCurrent}><Download size={16} />Export Excel</button></header>
-      <div className="report-toolbar"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this report" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All status</option>{statuses.map((item) => <option key={item} value={item}>{item}</option>)}</select><span>{rows.length} records</span></div>
-      <ReportTable columns={report.columns} rows={rows} empty="No records match these filters." />
-    </section>
-  </section>;
+  );
 }
 
-function buildReports(data: PortalData): Record<"overview" | "students" | "teaching" | "finance" | "resources", ReportDefinition> {
-  const activeStudents = data.students.filter((student) => get(student, "status") === "active").length;
-  const totalInvoiced = data.invoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
-  const totalReceived = data.invoices.reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0);
+function buildReports(
+  data: PortalData,
+): Record<
+  "overview" | "students" | "teaching" | "finance" | "resources",
+  ReportDefinition
+> {
+  const activeStudents = data.students.filter(
+    (student) => get(student, "status") === "active",
+  ).length;
+  const totalInvoiced = data.invoices.reduce(
+    (sum, invoice) => sum + Number(invoice.total_amount || 0),
+    0,
+  );
+  const totalReceived = data.invoices.reduce(
+    (sum, invoice) => sum + Number(invoice.paid_amount || 0),
+    0,
+  );
   const outstanding = Math.max(0, totalInvoiced - totalReceived);
-  const attendanceTaken = data.attendance.filter((item) => get(item, "status") !== "pending");
-  const present = data.attendance.filter((item) => ["present", "late"].includes(get(item, "status"))).length;
+  const attendanceTaken = data.attendance.filter(
+    (item) => get(item, "status") !== "pending",
+  );
+  const present = data.attendance.filter((item) =>
+    ["present", "late"].includes(get(item, "status")),
+  ).length;
   const openRuns = data.runs.filter((item) => get(item, "status") === "open");
-  const overviewRows = data.runs.map((run) => ({ ...run, students: get(run, "student_count"), lessons: get(run, "session_count"), capacity: get(run, "capacity") }));
+  const overviewRows = data.runs.map((run) => ({
+    ...run,
+    students: get(run, "student_count"),
+    lessons: get(run, "session_count"),
+    capacity: get(run, "capacity"),
+  }));
   const studentRows = data.students.map((student) => {
     const studentId = get(student, "id");
-    const enrolled = data.enrollments.filter((item) => get(item, "student_id") === studentId && get(item, "status") === "enrolled");
-    const records = data.attendance.filter((item) => get(item, "student_id") === studentId);
-    const attended = records.filter((item) => ["present", "late"].includes(get(item, "status"))).length;
-    const balance = data.invoices.filter((item) => get(item, "student_id") === studentId).reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0)), 0);
-    return { ...student, courses: enrolled.length, attended, outstanding: balance };
+    const enrolled = data.enrollments.filter(
+      (item) =>
+        get(item, "student_id") === studentId &&
+        get(item, "status") === "enrolled",
+    );
+    const records = data.attendance.filter(
+      (item) => get(item, "student_id") === studentId,
+    );
+    const attended = records.filter((item) =>
+      ["present", "late"].includes(get(item, "status")),
+    ).length;
+    const balance = data.invoices
+      .filter((item) => get(item, "student_id") === studentId)
+      .reduce(
+        (sum, invoice) =>
+          sum +
+          Math.max(
+            0,
+            Number(invoice.total_amount || 0) -
+              Number(invoice.paid_amount || 0),
+          ),
+        0,
+      );
+    return {
+      ...student,
+      courses: enrolled.length,
+      attended,
+      outstanding: balance,
+    };
   });
   const teachingRows = data.sessions.map((session) => {
-    const records = data.attendance.filter((item) => get(item, "class_session_id") === get(session, "id"));
-    return { ...session, registered: records.length, attended: records.filter((item) => ["present", "late"].includes(get(item, "status"))).length, pending: records.filter((item) => get(item, "status") === "pending").length };
+    const records = data.attendance.filter(
+      (item) => get(item, "class_session_id") === get(session, "id"),
+    );
+    return {
+      ...session,
+      registered: records.length,
+      attended: records.filter((item) =>
+        ["present", "late"].includes(get(item, "status")),
+      ).length,
+      pending: records.filter((item) => get(item, "status") === "pending")
+        .length,
+    };
   });
-  const financeRows = data.invoices.map((invoice) => ({ ...invoice, balance: Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0)) }));
+  const financeRows = data.invoices.map((invoice) => ({
+    ...invoice,
+    balance: Math.max(
+      0,
+      Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0),
+    ),
+  }));
   const resourceRows = data.classrooms.map((room) => {
-    const sessions = data.sessions.filter((item) => get(item, "classroom_name") === get(room, "name"));
-    const upcoming = sessions.find((item) => new Date(get(item, "starts_at").replace(" ", "T")).getTime() >= Date.now());
-    return { ...room, lessons: sessions.length, next_lesson: upcoming ? `${get(upcoming, "course_title")} · ${get(upcoming, "starts_at")}` : "No lesson booked" };
+    const sessions = data.sessions.filter(
+      (item) => get(item, "classroom_name") === get(room, "name"),
+    );
+    const upcoming = sessions.find(
+      (item) =>
+        new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
+        Date.now(),
+    );
+    return {
+      ...room,
+      lessons: sessions.length,
+      next_lesson: upcoming
+        ? `${get(upcoming, "course_title")} · ${get(upcoming, "starts_at")}`
+        : "No lesson booked",
+    };
   });
   return {
-    overview: { title: "Campus overview", hint: "A quick operational reading across active classes, learner load, income and booking risks.", icon: <LayoutGrid size={25} />, metrics: [{ label: "Open classes", value: openRuns.length, note: "Classes accepting students", tone: "blue", icon: <BookOpen size={19} /> }, { label: "Active learners", value: activeStudents, note: "Across all courses", tone: "teal", icon: <UsersRound size={19} /> }, { label: "Outstanding", value: amount(outstanding), note: "Still to collect", tone: "amber", icon: <Banknote size={19} /> }, { label: "Booking conflicts", value: data.conflicts.length, note: data.conflicts.length ? "Needs review" : "All clear", tone: "rose", icon: <Settings2 size={19} /> }], bars: [{ label: "Classes open", value: openRuns.length, total: Math.max(1, data.runs.length), tone: "#3182ce" }, { label: "Fees received", value: totalReceived, total: Math.max(1, totalInvoiced), tone: "#18a786" }, { label: "Attendance completed", value: attendanceTaken.length, total: Math.max(1, data.attendance.length), tone: "#8a63ce" }], columns: [{ key: "course_title", label: "Course" }, { key: "name", label: "Class" }, { key: "students", label: "Students" }, { key: "capacity", label: "Capacity" }, { key: "lessons", label: "Lessons" }, { key: "status", label: "Status", status: true }], rows: overviewRows },
-    students: { title: "Students & enrolment", hint: "See active learners, their course load, participation and balances in one place.", icon: <UsersRound size={25} />, metrics: [{ label: "Active learners", value: activeStudents, note: "Current student records", tone: "blue", icon: <UsersRound size={19} /> }, { label: "Course enrolments", value: data.enrollments.filter((item) => get(item, "status") === "enrolled").length, note: "Active course bookings", tone: "teal", icon: <BookOpen size={19} /> }, { label: "Lessons attended", value: present, note: "Present or late", tone: "purple", icon: <ClipboardCheck size={19} /> }, { label: "Balances due", value: amount(outstanding), note: "Across student invoices", tone: "amber", icon: <Banknote size={19} /> }], bars: [{ label: "Students with courses", value: studentRows.filter((row) => Number(row.courses) > 0).length, total: Math.max(1, studentRows.length), tone: "#3182ce" }, { label: "Students with balance", value: studentRows.filter((row) => Number(row.outstanding) > 0).length, total: Math.max(1, studentRows.length), tone: "#e0a22e" }, { label: "Attendance recorded", value: studentRows.filter((row) => Number(row.attended) > 0).length, total: Math.max(1, studentRows.length), tone: "#16a085" }], columns: [{ key: "name", label: "Student" }, { key: "level", label: "Level" }, { key: "courses", label: "Active courses" }, { key: "attended", label: "Lessons attended" }, { key: "outstanding", label: "Outstanding", money: true }, { key: "status", label: "Status", status: true }], rows: studentRows },
-    teaching: { title: "Teaching & attendance", hint: "Monitor every planned lesson, class size and attendance progress before issues grow.", icon: <ClipboardCheck size={25} />, metrics: [{ label: "Scheduled lessons", value: teachingRows.length, note: "Across all class runs", tone: "blue", icon: <CalendarDays size={19} /> }, { label: "Attendance marked", value: attendanceTaken.length, note: "Records completed", tone: "teal", icon: <ClipboardCheck size={19} /> }, { label: "Attendance pending", value: data.attendance.filter((item) => get(item, "status") === "pending").length, note: "Needs teacher action", tone: "amber", icon: <Clock3 size={19} /> }, { label: "Absent / leave", value: data.attendance.filter((item) => ["absent", "leave"].includes(get(item, "status"))).length, note: "Follow up if needed", tone: "rose", icon: <UsersRound size={19} /> }], bars: [{ label: "Attendance marked", value: attendanceTaken.length, total: Math.max(1, data.attendance.length), tone: "#18a786" }, { label: "Present or late", value: present, total: Math.max(1, data.attendance.length), tone: "#3182ce" }, { label: "Lessons with a register", value: teachingRows.filter((row) => Number(row.registered) > 0).length, total: Math.max(1, teachingRows.length), tone: "#8a63ce" }], columns: [{ key: "starts_at", label: "Start" }, { key: "course_title", label: "Course" }, { key: "topic", label: "Lesson" }, { key: "teacher_name", label: "Teacher" }, { key: "classroom_name", label: "Room" }, { key: "registered", label: "Students" }, { key: "attended", label: "Attended" }, { key: "status", label: "Status", status: true }], rows: teachingRows },
-    finance: { title: "Finance & payments", hint: "Track what was billed, received and still outstanding by learner and class.", icon: <ReceiptText size={25} />, metrics: [{ label: "Invoiced", value: amount(totalInvoiced), note: "Course contracts", tone: "blue", icon: <ReceiptText size={19} /> }, { label: "Received", value: amount(totalReceived), note: "Payments recorded", tone: "teal", icon: <Banknote size={19} /> }, { label: "Outstanding", value: amount(outstanding), note: "Open balances", tone: "amber", icon: <Clock3 size={19} /> }, { label: "Paid invoices", value: data.invoices.filter((item) => get(item, "status") === "paid").length, note: "Fully settled", tone: "purple", icon: <Check size={19} /> }], bars: [{ label: "Cash collected", value: totalReceived, total: Math.max(1, totalInvoiced), tone: "#18a786" }, { label: "Invoices settled", value: data.invoices.filter((item) => get(item, "status") === "paid").length, total: Math.max(1, data.invoices.length), tone: "#3182ce" }, { label: "Invoices with balance", value: financeRows.filter((row) => Number(row.balance) > 0).length, total: Math.max(1, financeRows.length), tone: "#e0a22e" }], columns: [{ key: "invoice_no", label: "Invoice" }, { key: "student_name", label: "Student" }, { key: "course_title", label: "Course" }, { key: "total_amount", label: "Original price", money: true }, { key: "paid_amount", label: "Received", money: true }, { key: "balance", label: "Balance", money: true }, { key: "status", label: "Status", status: true }], rows: financeRows },
-    resources: { title: "Rooms & capacity", hint: "Review teaching spaces, their capacity and how much scheduled use each room carries.", icon: <DoorOpen size={25} />, metrics: [{ label: "Active rooms", value: data.classrooms.filter((item) => get(item, "status") === "active").length, note: "Ready for use", tone: "blue", icon: <DoorOpen size={19} /> }, { label: "Total capacity", value: data.classrooms.reduce((sum, item) => sum + Number(item.capacity || 0), 0), note: "Seats across rooms", tone: "teal", icon: <UsersRound size={19} /> }, { label: "Room bookings", value: data.resourceBookings.length, note: "Lesson resource holds", tone: "purple", icon: <CalendarDays size={19} /> }, { label: "Conflicts", value: data.conflicts.filter((item) => get(item, "kind") === "Classroom").length, note: "Room booking clashes", tone: "rose", icon: <Settings2 size={19} /> }], bars: [{ label: "Rooms scheduled", value: resourceRows.filter((row) => Number(row.lessons) > 0).length, total: Math.max(1, resourceRows.length), tone: "#3182ce" }, { label: "Active rooms", value: resourceRows.filter((row) => get(row, "status") === "active").length, total: Math.max(1, resourceRows.length), tone: "#18a786" }, { label: "Conflicts", value: data.conflicts.filter((item) => get(item, "kind") === "Classroom").length, total: Math.max(1, data.resourceBookings.length), tone: "#de6b5d" }], columns: [{ key: "name", label: "Classroom" }, { key: "campus_name", label: "Campus" }, { key: "room_type", label: "Type" }, { key: "capacity", label: "Capacity" }, { key: "lessons", label: "Scheduled lessons" }, { key: "next_lesson", label: "Next lesson" }, { key: "status", label: "Status", status: true }], rows: resourceRows },
+    overview: {
+      title: "Campus overview",
+      hint: "A quick operational reading across active classes, learner load, income and booking risks.",
+      icon: <LayoutGrid size={25} />,
+      metrics: [
+        {
+          label: "Open classes",
+          value: openRuns.length,
+          note: "Classes accepting students",
+          tone: "blue",
+          icon: <BookOpen size={19} />,
+        },
+        {
+          label: "Active learners",
+          value: activeStudents,
+          note: "Across all courses",
+          tone: "teal",
+          icon: <UsersRound size={19} />,
+        },
+        {
+          label: "Outstanding",
+          value: amount(outstanding),
+          note: "Still to collect",
+          tone: "amber",
+          icon: <Banknote size={19} />,
+        },
+        {
+          label: "Booking conflicts",
+          value: data.conflicts.length,
+          note: data.conflicts.length ? "Needs review" : "All clear",
+          tone: "rose",
+          icon: <Settings2 size={19} />,
+        },
+      ],
+      bars: [
+        {
+          label: "Classes open",
+          value: openRuns.length,
+          total: Math.max(1, data.runs.length),
+          tone: "#3182ce",
+        },
+        {
+          label: "Fees received",
+          value: totalReceived,
+          total: Math.max(1, totalInvoiced),
+          tone: "#18a786",
+        },
+        {
+          label: "Attendance completed",
+          value: attendanceTaken.length,
+          total: Math.max(1, data.attendance.length),
+          tone: "#8a63ce",
+        },
+      ],
+      columns: [
+        { key: "course_title", label: "Course" },
+        { key: "name", label: "Class" },
+        { key: "students", label: "Students" },
+        { key: "capacity", label: "Capacity" },
+        { key: "lessons", label: "Lessons" },
+        { key: "status", label: "Status", status: true },
+      ],
+      rows: overviewRows,
+    },
+    students: {
+      title: "Students & enrolment",
+      hint: "See active learners, their course load, participation and balances in one place.",
+      icon: <UsersRound size={25} />,
+      metrics: [
+        {
+          label: "Active learners",
+          value: activeStudents,
+          note: "Current student records",
+          tone: "blue",
+          icon: <UsersRound size={19} />,
+        },
+        {
+          label: "Course enrolments",
+          value: data.enrollments.filter(
+            (item) => get(item, "status") === "enrolled",
+          ).length,
+          note: "Active course bookings",
+          tone: "teal",
+          icon: <BookOpen size={19} />,
+        },
+        {
+          label: "Lessons attended",
+          value: present,
+          note: "Present or late",
+          tone: "purple",
+          icon: <ClipboardCheck size={19} />,
+        },
+        {
+          label: "Balances due",
+          value: amount(outstanding),
+          note: "Across student invoices",
+          tone: "amber",
+          icon: <Banknote size={19} />,
+        },
+      ],
+      bars: [
+        {
+          label: "Students with courses",
+          value: studentRows.filter((row) => Number(row.courses) > 0).length,
+          total: Math.max(1, studentRows.length),
+          tone: "#3182ce",
+        },
+        {
+          label: "Students with balance",
+          value: studentRows.filter((row) => Number(row.outstanding) > 0)
+            .length,
+          total: Math.max(1, studentRows.length),
+          tone: "#e0a22e",
+        },
+        {
+          label: "Attendance recorded",
+          value: studentRows.filter((row) => Number(row.attended) > 0).length,
+          total: Math.max(1, studentRows.length),
+          tone: "#16a085",
+        },
+      ],
+      columns: [
+        { key: "name", label: "Student" },
+        { key: "level", label: "Level" },
+        { key: "courses", label: "Active courses" },
+        { key: "attended", label: "Lessons attended" },
+        { key: "outstanding", label: "Outstanding", money: true },
+        { key: "status", label: "Status", status: true },
+      ],
+      rows: studentRows,
+    },
+    teaching: {
+      title: "Teaching & attendance",
+      hint: "Monitor every planned lesson, class size and attendance progress before issues grow.",
+      icon: <ClipboardCheck size={25} />,
+      metrics: [
+        {
+          label: "Scheduled lessons",
+          value: teachingRows.length,
+          note: "Across all class runs",
+          tone: "blue",
+          icon: <CalendarDays size={19} />,
+        },
+        {
+          label: "Attendance marked",
+          value: attendanceTaken.length,
+          note: "Records completed",
+          tone: "teal",
+          icon: <ClipboardCheck size={19} />,
+        },
+        {
+          label: "Attendance pending",
+          value: data.attendance.filter(
+            (item) => get(item, "status") === "pending",
+          ).length,
+          note: "Needs teacher action",
+          tone: "amber",
+          icon: <Clock3 size={19} />,
+        },
+        {
+          label: "Absent / leave",
+          value: data.attendance.filter((item) =>
+            ["absent", "leave"].includes(get(item, "status")),
+          ).length,
+          note: "Follow up if needed",
+          tone: "rose",
+          icon: <UsersRound size={19} />,
+        },
+      ],
+      bars: [
+        {
+          label: "Attendance marked",
+          value: attendanceTaken.length,
+          total: Math.max(1, data.attendance.length),
+          tone: "#18a786",
+        },
+        {
+          label: "Present or late",
+          value: present,
+          total: Math.max(1, data.attendance.length),
+          tone: "#3182ce",
+        },
+        {
+          label: "Lessons with a register",
+          value: teachingRows.filter((row) => Number(row.registered) > 0)
+            .length,
+          total: Math.max(1, teachingRows.length),
+          tone: "#8a63ce",
+        },
+      ],
+      columns: [
+        { key: "starts_at", label: "Start" },
+        { key: "course_title", label: "Course" },
+        { key: "topic", label: "Lesson" },
+        { key: "teacher_name", label: "Teacher" },
+        { key: "classroom_name", label: "Room" },
+        { key: "registered", label: "Students" },
+        { key: "attended", label: "Attended" },
+        { key: "status", label: "Status", status: true },
+      ],
+      rows: teachingRows,
+    },
+    finance: {
+      title: "Finance & payments",
+      hint: "Track what was billed, received and still outstanding by learner and class.",
+      icon: <ReceiptText size={25} />,
+      metrics: [
+        {
+          label: "Invoiced",
+          value: amount(totalInvoiced),
+          note: "Course contracts",
+          tone: "blue",
+          icon: <ReceiptText size={19} />,
+        },
+        {
+          label: "Received",
+          value: amount(totalReceived),
+          note: "Payments recorded",
+          tone: "teal",
+          icon: <Banknote size={19} />,
+        },
+        {
+          label: "Outstanding",
+          value: amount(outstanding),
+          note: "Open balances",
+          tone: "amber",
+          icon: <Clock3 size={19} />,
+        },
+        {
+          label: "Paid invoices",
+          value: data.invoices.filter((item) => get(item, "status") === "paid")
+            .length,
+          note: "Fully settled",
+          tone: "purple",
+          icon: <Check size={19} />,
+        },
+      ],
+      bars: [
+        {
+          label: "Cash collected",
+          value: totalReceived,
+          total: Math.max(1, totalInvoiced),
+          tone: "#18a786",
+        },
+        {
+          label: "Invoices settled",
+          value: data.invoices.filter((item) => get(item, "status") === "paid")
+            .length,
+          total: Math.max(1, data.invoices.length),
+          tone: "#3182ce",
+        },
+        {
+          label: "Invoices with balance",
+          value: financeRows.filter((row) => Number(row.balance) > 0).length,
+          total: Math.max(1, financeRows.length),
+          tone: "#e0a22e",
+        },
+      ],
+      columns: [
+        { key: "invoice_no", label: "Invoice" },
+        { key: "student_name", label: "Student" },
+        { key: "course_title", label: "Course" },
+        { key: "total_amount", label: "Original price", money: true },
+        { key: "paid_amount", label: "Received", money: true },
+        { key: "balance", label: "Balance", money: true },
+        { key: "status", label: "Status", status: true },
+      ],
+      rows: financeRows,
+    },
+    resources: {
+      title: "Rooms & capacity",
+      hint: "Review teaching spaces, their capacity and how much scheduled use each room carries.",
+      icon: <DoorOpen size={25} />,
+      metrics: [
+        {
+          label: "Active rooms",
+          value: data.classrooms.filter(
+            (item) => get(item, "status") === "active",
+          ).length,
+          note: "Ready for use",
+          tone: "blue",
+          icon: <DoorOpen size={19} />,
+        },
+        {
+          label: "Total capacity",
+          value: data.classrooms.reduce(
+            (sum, item) => sum + Number(item.capacity || 0),
+            0,
+          ),
+          note: "Seats across rooms",
+          tone: "teal",
+          icon: <UsersRound size={19} />,
+        },
+        {
+          label: "Room bookings",
+          value: data.resourceBookings.length,
+          note: "Lesson resource holds",
+          tone: "purple",
+          icon: <CalendarDays size={19} />,
+        },
+        {
+          label: "Conflicts",
+          value: data.conflicts.filter(
+            (item) => get(item, "kind") === "Classroom",
+          ).length,
+          note: "Room booking clashes",
+          tone: "rose",
+          icon: <Settings2 size={19} />,
+        },
+      ],
+      bars: [
+        {
+          label: "Rooms scheduled",
+          value: resourceRows.filter((row) => Number(row.lessons) > 0).length,
+          total: Math.max(1, resourceRows.length),
+          tone: "#3182ce",
+        },
+        {
+          label: "Active rooms",
+          value: resourceRows.filter((row) => get(row, "status") === "active")
+            .length,
+          total: Math.max(1, resourceRows.length),
+          tone: "#18a786",
+        },
+        {
+          label: "Conflicts",
+          value: data.conflicts.filter(
+            (item) => get(item, "kind") === "Classroom",
+          ).length,
+          total: Math.max(1, data.resourceBookings.length),
+          tone: "#de6b5d",
+        },
+      ],
+      columns: [
+        { key: "name", label: "Classroom" },
+        { key: "campus_name", label: "Campus" },
+        { key: "room_type", label: "Type" },
+        { key: "capacity", label: "Capacity" },
+        { key: "lessons", label: "Scheduled lessons" },
+        { key: "next_lesson", label: "Next lesson" },
+        { key: "status", label: "Status", status: true },
+      ],
+      rows: resourceRows,
+    },
   };
 }
 
-function ReportTable({ columns, rows, empty }: { columns: ReportColumn[]; rows: Row[]; empty: string }) {
-  return <ResizableDataTable columns={columns} rows={rows} empty={empty} renderCell={(row, column) => column.status ? <Status value={get(row, column.key)} /> : column.money ? amount(row[column.key]) : get(row, column.key) || "-"} />;
+function ReportTable({
+  columns,
+  rows,
+  empty,
+}: {
+  columns: ReportColumn[];
+  rows: Row[];
+  empty: string;
+}) {
+  return (
+    <ResizableDataTable
+      columns={columns}
+      rows={rows}
+      empty={empty}
+      renderCell={(row, column) =>
+        column.status ? (
+          <Status value={get(row, column.key)} />
+        ) : column.money ? (
+          amount(row[column.key])
+        ) : (
+          get(row, column.key) || "-"
+        )
+      }
+    />
+  );
 }
 
-function exportReportExcel(filename: string, title: string, columns: ReportColumn[], rows: Row[]) {
-  const escape = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-  const cell = (value: unknown) => `<Cell><Data ss:Type="String">${escape(value)}</Data></Cell>`;
+function exportReportExcel(
+  filename: string,
+  title: string,
+  columns: ReportColumn[],
+  rows: Row[],
+) {
+  const escape = (value: unknown) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;");
+  const cell = (value: unknown) =>
+    `<Cell><Data ss:Type="String">${escape(value)}</Data></Cell>`;
   const header = `<Row>${columns.map((column) => cell(column.label)).join("")}</Row>`;
-  const body = rows.map((row) => `<Row>${columns.map((column) => cell(column.money ? amount(row[column.key]) : get(row, column.key))).join("")}</Row>`).join("");
+  const body = rows
+    .map(
+      (row) =>
+        `<Row>${columns.map((column) => cell(column.money ? amount(row[column.key]) : get(row, column.key))).join("")}</Row>`,
+    )
+    .join("");
   const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="${escape(title).slice(0, 31)}"><Table>${header}${body}</Table></Worksheet></Workbook>`;
-  const url = URL.createObjectURL(new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" }));
-  const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(
+    new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
-function SettingsView({ data, run, busy }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) {
+function SettingsView({
+  data,
+  run,
+  busy,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+}) {
   const [start, setStart] = useState(data.settings.businessHours.start);
   const [end, setEnd] = useState(data.settings.businessHours.end);
   const [days, setDays] = useState<number[]>(data.settings.businessHours.days);
   const configured = data.settings.businessHours.source === "configured";
-  const weekdays = [[1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"], [0, "Sun"]] as const;
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void run("updateBusinessHours", { businessStart: start, businessEnd: end, businessDays: JSON.stringify(days) }); }
-  return <section className="operation-stack"><div className="view-intro"><div><h2>Business rules</h2><p>Set the operating days and hours used by calendar timelines.</p></div></div><section className="management-panel settings-panel"><header><SlidersHorizontal size={18} /><div><h3>Operating hours</h3><p>{configured ? "This schedule is configured for the campus." : "Using the earliest and latest booked lesson until you save a schedule."}</p></div></header><form className="inline-form compact business-hours-form" onSubmit={submit}><label className="form-field"><span>Start time</span><input type="time" value={start} onChange={(event) => setStart(event.target.value)} required /></label><label className="form-field"><span>End time</span><input type="time" value={end} onChange={(event) => setEnd(event.target.value)} required /></label><div className="business-day-picker" aria-label="Operating days">{weekdays.map(([day, label]) => <button type="button" className={days.includes(day) ? "active" : ""} onClick={() => setDays((current) => current.includes(day) ? current.filter((entry) => entry !== day) : [...current, day])} key={day}>{label}</button>)}</div><button type="submit" className="primary-button" disabled={busy || !days.length}><Check size={16} />Save business rules</button></form></section></section>;
+  const weekdays = [
+    [1, "Mon"],
+    [2, "Tue"],
+    [3, "Wed"],
+    [4, "Thu"],
+    [5, "Fri"],
+    [6, "Sat"],
+    [0, "Sun"],
+  ] as const;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run("updateBusinessHours", {
+      businessStart: start,
+      businessEnd: end,
+      businessDays: JSON.stringify(days),
+    });
+  }
+  return (
+    <section className="operation-stack">
+      <div className="view-intro">
+        <div>
+          <h2>Business rules</h2>
+          <p>Set the operating days and hours used by calendar timelines.</p>
+        </div>
+      </div>
+      <section className="management-panel settings-panel">
+        <header>
+          <SlidersHorizontal size={18} />
+          <div>
+            <h3>Operating hours</h3>
+            <p>
+              {configured
+                ? "This schedule is configured for the campus."
+                : "Using the earliest and latest booked lesson until you save a schedule."}
+            </p>
+          </div>
+        </header>
+        <form
+          className="inline-form compact business-hours-form"
+          onSubmit={submit}
+        >
+          <label className="form-field">
+            <span>Start time</span>
+            <input
+              type="time"
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+              required
+            />
+          </label>
+          <label className="form-field">
+            <span>End time</span>
+            <input
+              type="time"
+              value={end}
+              onChange={(event) => setEnd(event.target.value)}
+              required
+            />
+          </label>
+          <div className="business-day-picker" aria-label="Operating days">
+            {weekdays.map(([day, label]) => (
+              <button
+                type="button"
+                className={days.includes(day) ? "active" : ""}
+                onClick={() =>
+                  setDays((current) =>
+                    current.includes(day)
+                      ? current.filter((entry) => entry !== day)
+                      : [...current, day],
+                  )
+                }
+                key={day}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={busy || !days.length}
+          >
+            <Check size={16} />
+            Save business rules
+          </button>
+        </form>
+      </section>
+    </section>
+  );
 }
-function EmailSettings({ data, run, busy }: { data: PortalData; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) { const mail = data.settings.mail; function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void run("updateMailSettings", Object.fromEntries(new FormData(event.currentTarget))); } return <section className="operation-stack"><section className="management-panel settings-panel"><header><Mail size={18} /><div><h3>Email connection</h3><p>Set the inbox and outgoing server used by student communication.</p></div></header><form className="inline-form compact mail-settings-form" onSubmit={submit}><FormField name="sender" label="Sender email" defaultValue={mail.sender} placeholder="admin@school.edu.my" /><label className="form-field"><span>Inbox protocol</span><select name="inboundProtocol" defaultValue={mail.inboundProtocol}><option>IMAP</option><option>POP3</option></select></label><FormField name="inboundHost" label="Inbox server" defaultValue={mail.inboundHost} placeholder="imap.example.com" /><FormField name="inboundPort" label="Inbox port" defaultValue={mail.inboundPort} /><FormField name="smtpHost" label="SMTP server" defaultValue={mail.smtpHost} placeholder="smtp.example.com" /><FormField name="smtpPort" label="SMTP port" defaultValue={mail.smtpPort} /><button type="submit" className="primary-button" disabled={busy}><Check size={16} />Save email settings</button></form></section></section>; }
-function MetricPills({ data, t }: { data: PortalData; t: typeof copy.en }) { return <div className="metric-pills"><span><b>{data.metrics.openRuns}</b> {t.classes}</span><span><b>{data.metrics.activeStudents}</b> {t.students}</span><span><b>{amount(data.metrics.outstanding)}</b> {t.due}</span></div>; }
-function ReportCard({ icon, label, value, note, tone = "blue" }: { icon: ReactNode; label: string; value: string | number; note: string; tone?: string }) { return <article className={`report-card ${tone}`}><span>{icon}</span><p>{label}</p><strong>{value}</strong><small>{note}</small></article>; }
+function EmailSettings({
+  data,
+  run,
+  busy,
+}: {
+  data: PortalData;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+}) {
+  const mail = data.settings.mail;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run(
+      "updateMailSettings",
+      Object.fromEntries(new FormData(event.currentTarget)),
+    );
+  }
+  return (
+    <section className="operation-stack">
+      <section className="management-panel settings-panel">
+        <header>
+          <Mail size={18} />
+          <div>
+            <h3>Email connection</h3>
+            <p>
+              Set the inbox and outgoing server used by student communication.
+            </p>
+          </div>
+        </header>
+        <form
+          className="inline-form compact mail-settings-form"
+          onSubmit={submit}
+        >
+          <FormField
+            name="sender"
+            label="Sender email"
+            defaultValue={mail.sender}
+            placeholder="admin@school.edu.my"
+          />
+          <label className="form-field">
+            <span>Inbox protocol</span>
+            <select name="inboundProtocol" defaultValue={mail.inboundProtocol}>
+              <option>IMAP</option>
+              <option>POP3</option>
+            </select>
+          </label>
+          <FormField
+            name="inboundHost"
+            label="Inbox server"
+            defaultValue={mail.inboundHost}
+            placeholder="imap.example.com"
+          />
+          <FormField
+            name="inboundPort"
+            label="Inbox port"
+            defaultValue={mail.inboundPort}
+          />
+          <FormField
+            name="smtpHost"
+            label="SMTP server"
+            defaultValue={mail.smtpHost}
+            placeholder="smtp.example.com"
+          />
+          <FormField
+            name="smtpPort"
+            label="SMTP port"
+            defaultValue={mail.smtpPort}
+          />
+          <button type="submit" className="primary-button" disabled={busy}>
+            <Check size={16} />
+            Save email settings
+          </button>
+        </form>
+      </section>
+    </section>
+  );
+}
+function MetricPills({ data, t }: { data: PortalData; t: typeof copy.en }) {
+  return (
+    <div className="metric-pills">
+      <span>
+        <b>{data.metrics.openRuns}</b> {t.classes}
+      </span>
+      <span>
+        <b>{data.metrics.activeStudents}</b> {t.students}
+      </span>
+      <span>
+        <b>{amount(data.metrics.outstanding)}</b> {t.due}
+      </span>
+    </div>
+  );
+}
+function ReportCard({
+  icon,
+  label,
+  value,
+  note,
+  tone = "blue",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  note: string;
+  tone?: string;
+}) {
+  return (
+    <article className={`report-card ${tone}`}>
+      <span>{icon}</span>
+      <p>{label}</p>
+      <strong>{value}</strong>
+      <small>{note}</small>
+    </article>
+  );
+}
 
-function LegacyDetailSheet({ detail, data, t, busy, run, close }: { detail: Exclude<Detail, null>; data: PortalData; t: typeof copy.en; busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void }) {
-  const item = detail.kind === "session" ? data.sessions.find((row) => get(row, "id") === detail.id) : detail.kind === "student" ? data.students.find((row) => get(row, "id") === detail.id) : detail.kind === "teacher" ? data.teachers.find((row) => get(row, "id") === detail.id) : detail.kind === "course" ? data.runs.find((row) => get(row, "id") === detail.id) : data.classrooms.find((row) => get(row, "id") === detail.id);
+function LegacyDetailSheet({
+  detail,
+  data,
+  t,
+  busy,
+  run,
+  close,
+}: {
+  detail: Exclude<Detail, null>;
+  data: PortalData;
+  t: typeof copy.en;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  close: () => void;
+}) {
+  const item =
+    detail.kind === "session"
+      ? data.sessions.find((row) => get(row, "id") === detail.id)
+      : detail.kind === "student"
+        ? data.students.find((row) => get(row, "id") === detail.id)
+        : detail.kind === "teacher"
+          ? data.teachers.find((row) => get(row, "id") === detail.id)
+          : detail.kind === "course"
+            ? data.runs.find((row) => get(row, "id") === detail.id)
+            : data.classrooms.find((row) => get(row, "id") === detail.id);
   const [enrollStudentId, setEnrollStudentId] = useState("");
   if (!item) return null;
-  const sessionRoster = detail.kind === "session" ? data.attendance.filter((row) => get(row, "class_session_id") === detail.id) : [];
-  const studentEnrollments = detail.kind === "student" ? data.enrollments.filter((row) => get(row, "student_id") === detail.id) : [];
-  const teacherLessons = detail.kind === "teacher" ? data.teacherBookings.filter((row) => get(row, "teacher_id") === detail.id) : [];
-  const roomLessons = detail.kind === "room" ? data.sessions.filter((row) => get(row, "classroom_name") === get(item, "name")) : [];
-  const runLessons = detail.kind === "course" ? data.sessions.filter((row) => get(row, "class_run_id") === detail.id) : [];
-  const runStudents = detail.kind === "course" ? data.enrollments.filter((row) => get(row, "class_run_id") === detail.id) : [];
-  const title = detail.kind === "session" || detail.kind === "course" ? get(item, "course_title") : get(item, "name");
-  const subtitle = detail.kind === "session" ? `${get(item, "topic")} · ${get(item, "starts_at")}` : detail.kind === "student" ? get(item, "level") : detail.kind === "teacher" ? get(item, "subject") : `${get(item, "location")} · ${get(item, "capacity")} seats`;
-  return <div className="sheet-backdrop" role="presentation" onMouseDown={close}><aside className="detail-sheet" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span className="sheet-eyebrow">{detail.kind === "session" ? t.lesson : detail.kind === "student" ? t.students : detail.kind === "teacher" ? t.teachers : t.classroom}</span><h2>{title}</h2><p>{subtitle}</p></div><button className="header-icon" type="button" onClick={close} title={t.cancel}><X size={18} /></button></header>{detail.kind === "session" ? <><section className="sheet-overview"><Info label={t.classRun} value={get(item, "run_name")} /><Info label={t.teacher} value={get(item, "teacher_name")} /><Info label={t.classroom} value={get(item, "classroom_name")} /><Info label="Lesson #" value={get(item, "session_no")} /></section><section className="sheet-section"><div className="sheet-section-title"><h3>{t.roster}</h3><span>{sessionRoster.length}</span></div>{sessionRoster.map((row) => <div className="sheet-roster" key={get(row, "id")}><div><strong>{get(row, "student_name")}</strong><small>{amount(row.allocated_fee)}</small></div><Status value={get(row, "status")} /><div className="attendance-buttons">{[["present", t.present], ["late", t.late], ["leave", t.leave], ["absent", t.absent]].map(([status, label]) => <button type="button" key={status} disabled={busy} className={get(row, "status") === status ? "selected" : ""} onClick={() => void run("setAttendance", { studentBookingId: get(row, "student_booking_id"), attendanceStatus: status })}>{label}</button>)}</div></div>)}</section><section className="sheet-section"><div className="sheet-section-title"><h3>{t.enroll}</h3></div><div className="sheet-enroll"><select value={enrollStudentId} onChange={(event) => setEnrollStudentId(event.target.value)}><option value="">{t.select} {t.students}</option>{data.students.filter((student) => !sessionRoster.some((row) => get(row, "student_id") === get(student, "id"))).map((student) => <option key={get(student, "id")} value={get(student, "id")}>{get(student, "name")}</option>)}</select><button className="primary-button" disabled={busy || !enrollStudentId} type="button" onClick={() => void run("enrollStudent", { runId: get(item, "class_run_id"), studentId: enrollStudentId })}><Plus size={15} />{t.enroll}</button></div></section></> : null}{detail.kind === "student" ? <ListSection title={t.enrollment} rows={studentEnrollments} fields={[["course_title", t.courses], ["run_name", t.classRun], ["contracted_fee", "Contract"], ["invoice_status", "Invoice"]]} moneyKeys={["contracted_fee"]} /> : null}{detail.kind === "teacher" ? <ListSection title="Teaching schedule" rows={teacherLessons} fields={[["course_title", t.courses], ["run_name", t.classRun], ["topic", t.lesson], ["starts_at", t.start], ["pay_amount", t.pay], ["pay_status", t.status]]} moneyKeys={["pay_amount"]} /> : null}{detail.kind === "room" ? <ListSection title="Room schedule" rows={roomLessons} fields={[["course_title", t.courses], ["run_name", t.classRun], ["topic", t.lesson], ["starts_at", t.start], ["teacher_name", t.teacher]]} /> : null}</aside></div>;
+  const sessionRoster =
+    detail.kind === "session"
+      ? data.attendance.filter(
+          (row) => get(row, "class_session_id") === detail.id,
+        )
+      : [];
+  const studentEnrollments =
+    detail.kind === "student"
+      ? data.enrollments.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const teacherLessons =
+    detail.kind === "teacher"
+      ? data.teacherBookings.filter(
+          (row) => get(row, "teacher_id") === detail.id,
+        )
+      : [];
+  const roomLessons =
+    detail.kind === "room"
+      ? data.sessions.filter(
+          (row) => get(row, "classroom_name") === get(item, "name"),
+        )
+      : [];
+  const runLessons =
+    detail.kind === "course"
+      ? data.sessions.filter((row) => get(row, "class_run_id") === detail.id)
+      : [];
+  const runStudents =
+    detail.kind === "course"
+      ? data.enrollments.filter((row) => get(row, "class_run_id") === detail.id)
+      : [];
+  const title =
+    detail.kind === "session" || detail.kind === "course"
+      ? get(item, "course_title")
+      : get(item, "name");
+  const subtitle =
+    detail.kind === "session"
+      ? `${get(item, "topic")} · ${get(item, "starts_at")}`
+      : detail.kind === "student"
+        ? get(item, "level")
+        : detail.kind === "teacher"
+          ? get(item, "subject")
+          : `${get(item, "location")} · ${get(item, "capacity")} seats`;
+  return (
+    <div className="sheet-backdrop" role="presentation" onMouseDown={close}>
+      <aside
+        className="detail-sheet"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="sheet-eyebrow">
+              {detail.kind === "session"
+                ? t.lesson
+                : detail.kind === "student"
+                  ? t.students
+                  : detail.kind === "teacher"
+                    ? t.teachers
+                    : t.classroom}
+            </span>
+            <h2>{title}</h2>
+            <p>{subtitle}</p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={close}
+            title={t.cancel}
+          >
+            <X size={18} />
+          </button>
+        </header>
+        {detail.kind === "session" ? (
+          <>
+            <section className="sheet-overview">
+              <Info label={t.classRun} value={get(item, "run_name")} />
+              <Info label={t.teacher} value={get(item, "teacher_name")} />
+              <Info label={t.classroom} value={get(item, "classroom_name")} />
+              <Info label="Lesson #" value={get(item, "session_no")} />
+            </section>
+            <section className="sheet-section">
+              <div className="sheet-section-title">
+                <h3>{t.roster}</h3>
+                <span>{sessionRoster.length}</span>
+              </div>
+              {sessionRoster.map((row) => (
+                <div className="sheet-roster" key={get(row, "id")}>
+                  <div>
+                    <strong>{get(row, "student_name")}</strong>
+                    <small>{amount(row.allocated_fee)}</small>
+                  </div>
+                  <Status value={get(row, "status")} />
+                  <div className="attendance-buttons">
+                    {[
+                      ["present", t.present],
+                      ["late", t.late],
+                      ["leave", t.leave],
+                      ["absent", t.absent],
+                    ].map(([status, label]) => (
+                      <button
+                        type="button"
+                        key={status}
+                        disabled={busy}
+                        className={
+                          get(row, "status") === status ? "selected" : ""
+                        }
+                        onClick={() =>
+                          void run("setAttendance", {
+                            studentBookingId: get(row, "student_booking_id"),
+                            attendanceStatus: status,
+                          })
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+            <section className="sheet-section">
+              <div className="sheet-section-title">
+                <h3>{t.enroll}</h3>
+              </div>
+              <div className="sheet-enroll">
+                <select
+                  value={enrollStudentId}
+                  onChange={(event) => setEnrollStudentId(event.target.value)}
+                >
+                  <option value="">
+                    {t.select} {t.students}
+                  </option>
+                  {data.students
+                    .filter(
+                      (student) =>
+                        !sessionRoster.some(
+                          (row) =>
+                            get(row, "student_id") === get(student, "id"),
+                        ),
+                    )
+                    .map((student) => (
+                      <option
+                        key={get(student, "id")}
+                        value={get(student, "id")}
+                      >
+                        {get(student, "name")}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  className="primary-button"
+                  disabled={busy || !enrollStudentId}
+                  type="button"
+                  onClick={() =>
+                    void run("enrollStudent", {
+                      runId: get(item, "class_run_id"),
+                      studentId: enrollStudentId,
+                    })
+                  }
+                >
+                  <Plus size={15} />
+                  {t.enroll}
+                </button>
+              </div>
+            </section>
+          </>
+        ) : null}
+        {detail.kind === "student" ? (
+          <ListSection
+            title={t.enrollment}
+            rows={studentEnrollments}
+            fields={[
+              ["course_title", t.courses],
+              ["run_name", t.classRun],
+              ["contracted_fee", "Contract"],
+              ["invoice_status", "Invoice"],
+            ]}
+            moneyKeys={["contracted_fee"]}
+          />
+        ) : null}
+        {detail.kind === "teacher" ? (
+          <ListSection
+            title="Teaching schedule"
+            rows={teacherLessons}
+            fields={[
+              ["course_title", t.courses],
+              ["run_name", t.classRun],
+              ["topic", t.lesson],
+              ["starts_at", t.start],
+              ["pay_amount", t.pay],
+              ["pay_status", t.status],
+            ]}
+            moneyKeys={["pay_amount"]}
+          />
+        ) : null}
+        {detail.kind === "room" ? (
+          <ListSection
+            title="Room schedule"
+            rows={roomLessons}
+            fields={[
+              ["course_title", t.courses],
+              ["run_name", t.classRun],
+              ["topic", t.lesson],
+              ["starts_at", t.start],
+              ["teacher_name", t.teacher],
+            ]}
+          />
+        ) : null}
+      </aside>
+    </div>
+  );
 }
 
-function CourseCatalogueDrawer({ detail, data, busy, run, close, closeAll, openDetail }: { detail: Exclude<Detail, null>; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void; closeAll: () => void; openDetail: (detail: Exclude<Detail, null>) => void }) {
+function CourseCatalogueDrawer({
+  detail,
+  data,
+  busy,
+  run,
+  close,
+  closeAll,
+  openDetail,
+}: {
+  detail: Exclude<Detail, null>;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  close: () => void;
+  closeAll: () => void;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
   const course = data.courses.find((item) => get(item, "id") === detail.id);
-  const [selectedRunId, setSelectedRunId] = useState(detail.selectedRunId || "all");
+  const [selectedRunId, setSelectedRunId] = useState(
+    detail.selectedRunId || "all",
+  );
   const [tab, setTab] = useState("summary");
   const [editingCourse, setEditingCourse] = useState(false);
   if (!course) return null;
-  const intakes = data.runs.filter((item) => get(item, "course_id") === detail.id);
-  const lessons = data.sessions.filter((item) => intakes.some((intake) => get(intake, "id") === get(item, "class_run_id")));
-  const enrolled = data.enrollments.filter((item) => intakes.some((intake) => get(intake, "id") === get(item, "class_run_id")) && get(item, "status") === "enrolled");
-  const lessonTemplates = data.courseLessons.filter((lesson) => get(lesson, "course_id") === detail.id);
+  const intakes = data.runs.filter(
+    (item) => get(item, "course_id") === detail.id,
+  );
+  const lessons = data.sessions.filter((item) =>
+    intakes.some((intake) => get(intake, "id") === get(item, "class_run_id")),
+  );
+  const enrolled = data.enrollments.filter(
+    (item) =>
+      intakes.some(
+        (intake) => get(intake, "id") === get(item, "class_run_id"),
+      ) && get(item, "status") === "enrolled",
+  );
+  const lessonTemplates = data.courseLessons.filter(
+    (lesson) => get(lesson, "course_id") === detail.id,
+  );
   const selectedRun = intakes.find((item) => get(item, "id") === selectedRunId);
-  const selectedLessons = selectedRun ? lessons.filter((item) => get(item, "class_run_id") === get(selectedRun, "id")) : lessons;
-  const selectedEnrollments = selectedRun ? enrolled.filter((item) => get(item, "class_run_id") === get(selectedRun, "id")) : enrolled;
-  function chooseRun(id: string) { setSelectedRunId(id); setTab("summary"); }
-  return <div className="sheet-backdrop course-detail-backdrop" role="presentation" onMouseDown={closeAll}><aside className="detail-sheet detail-course course-detail-modal" style={eventStyle(course)} role="dialog" aria-modal="true" aria-label={`${get(course, "title")} course details`} onMouseDown={(event) => event.stopPropagation()}><div className="course-detail-layout"><CourseDetailSidebar course={course} intakes={intakes} selectedRunId={selectedRunId} data={data} onSelect={chooseRun} /><main className="course-detail-main"><header className="course-detail-header"><div><span className="sheet-eyebrow">{selectedRun ? `${get(course, "title")} / 班次` : "课程详情"}</span><h2>{selectedRun ? get(selectedRun, "name") : `${get(course, "title")} · 所有 ${intakes.length} 个班次`}</h2>{selectedRun ? <CourseRunHeaderMeta runItem={selectedRun} data={data} openDetail={openDetail} /> : <p>{get(course, "subject")} · {get(course, "level")} · {enrolled.length} 名学生</p>}</div><div className="entity-header-actions"><button className="quiet-button" type="button" onClick={() => setEditingCourse(true)}>课程设置</button><button className="header-icon" type="button" onClick={close} title="关闭"><X size={18} /></button></div></header><nav className="course-detail-tabs" aria-label="课程详情分区"><button type="button" className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>概览</button><button type="button" className={tab === "schedule" ? "active" : ""} onClick={() => setTab("schedule")}>课程安排 <b>{selectedLessons.length}</b></button><button type="button" className={tab === "students" ? "active" : ""} onClick={() => setTab("students")}>学生 <b>{selectedEnrollments.length}</b></button></nav><div className="course-detail-content">{selectedRun ? <CourseRunDetailWorkspace tab={tab} course={course} runItem={selectedRun} lessons={selectedLessons} students={selectedEnrollments} lessonTemplates={lessonTemplates} data={data} busy={busy} run={run} openDetail={openDetail} /> : <CourseAllDetailWorkspace tab={tab} course={course} intakes={intakes} lessons={lessons} students={enrolled} data={data} openDetail={openDetail} onSelectRun={chooseRun} />}</div></main></div></aside>{editingCourse ? <CourseEditDialog course={course} busy={busy} run={run} onClose={() => setEditingCourse(false)} /> : null}</div>;
+  const selectedLessons = selectedRun
+    ? lessons.filter(
+        (item) => get(item, "class_run_id") === get(selectedRun, "id"),
+      )
+    : lessons;
+  const selectedEnrollments = selectedRun
+    ? enrolled.filter(
+        (item) => get(item, "class_run_id") === get(selectedRun, "id"),
+      )
+    : enrolled;
+  function chooseRun(id: string) {
+    setSelectedRunId(id);
+    setTab("summary");
+  }
+  return (
+    <div
+      className="sheet-backdrop course-detail-backdrop"
+      role="presentation"
+      onMouseDown={closeAll}
+    >
+      <aside
+        className="detail-sheet detail-course course-detail-modal"
+        style={eventStyle(course)}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${get(course, "title")} course details`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="course-detail-layout">
+          <CourseDetailSidebar
+            course={course}
+            intakes={intakes}
+            selectedRunId={selectedRunId}
+            data={data}
+            onSelect={chooseRun}
+          />
+          <main className="course-detail-main">
+            <header className="course-detail-header">
+              <div>
+                <span className="sheet-eyebrow">
+                  {selectedRun ? `${get(course, "title")} / 班次` : "课程详情"}
+                </span>
+                <h2>
+                  {selectedRun
+                    ? get(selectedRun, "name")
+                    : `${get(course, "title")} · 所有 ${intakes.length} 个班次`}
+                </h2>
+                {selectedRun ? (
+                  <CourseRunHeaderMeta
+                    runItem={selectedRun}
+                    data={data}
+                    openDetail={openDetail}
+                  />
+                ) : (
+                  <p>
+                    {get(course, "subject")} · {get(course, "level")} ·{" "}
+                    {enrolled.length} 名学生
+                  </p>
+                )}
+              </div>
+              <div className="entity-header-actions">
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={() => setEditingCourse(true)}
+                >
+                  课程设置
+                </button>
+                <button
+                  className="header-icon"
+                  type="button"
+                  onClick={close}
+                  title="关闭"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+            <nav className="course-detail-tabs" aria-label="课程详情分区">
+              <button
+                type="button"
+                className={tab === "summary" ? "active" : ""}
+                onClick={() => setTab("summary")}
+              >
+                概览
+              </button>
+              <button
+                type="button"
+                className={tab === "schedule" ? "active" : ""}
+                onClick={() => setTab("schedule")}
+              >
+                课程安排 <b>{selectedLessons.length}</b>
+              </button>
+              <button
+                type="button"
+                className={tab === "students" ? "active" : ""}
+                onClick={() => setTab("students")}
+              >
+                学生 <b>{selectedEnrollments.length}</b>
+              </button>
+            </nav>
+            <div className="course-detail-content">
+              {selectedRun ? (
+                <CourseRunDetailWorkspace
+                  tab={tab}
+                  course={course}
+                  runItem={selectedRun}
+                  lessons={selectedLessons}
+                  students={selectedEnrollments}
+                  lessonTemplates={lessonTemplates}
+                  data={data}
+                  busy={busy}
+                  run={run}
+                  openDetail={openDetail}
+                />
+              ) : (
+                <CourseAllDetailWorkspace
+                  tab={tab}
+                  course={course}
+                  intakes={intakes}
+                  lessons={lessons}
+                  students={enrolled}
+                  data={data}
+                  openDetail={openDetail}
+                  onSelectRun={chooseRun}
+                />
+              )}
+            </div>
+          </main>
+        </div>
+      </aside>
+      {editingCourse ? (
+        <CourseEditDialog
+          course={course}
+          busy={busy}
+          run={run}
+          onClose={() => setEditingCourse(false)}
+        />
+      ) : null}
+    </div>
+  );
 }
 
-function CourseDetailSidebar({ course, intakes, selectedRunId, data, onSelect }: { course: Row; intakes: Row[]; selectedRunId: string; data: PortalData; onSelect: (id: string) => void }) {
-  return <aside className="course-detail-sidebar"><div className="course-sidebar-heading"><CourseVisual course={course} /><div><span>课程</span><h2>{get(course, "title")}</h2><p>{get(course, "code")} · {get(course, "level")}</p><Status value={get(course, "status")} /></div></div><div className="course-sidebar-divider" /><div className="course-sidebar-section"><span>班次</span><button type="button" className={selectedRunId === "all" ? "course-run-nav-card all active" : "course-run-nav-card all"} onClick={() => onSelect("all")}><div><strong>全部班次</strong><small>查看 {intakes.length} 个班次的完整情况</small></div><b>{intakes.length}</b></button>{intakes.map((intake) => <CourseRunNavCard key={get(intake, "id")} runItem={intake} teacher={data.teachers.find((teacher) => get(teacher, "id") === get(intake, "teacher_id"))} active={selectedRunId === get(intake, "id")} onClick={() => onSelect(get(intake, "id"))} />)}</div><button type="button" className="course-sidebar-add"><Plus size={16} />新增班次</button></aside>;
+function CourseDetailSidebar({
+  course,
+  intakes,
+  selectedRunId,
+  data,
+  onSelect,
+}: {
+  course: Row;
+  intakes: Row[];
+  selectedRunId: string;
+  data: PortalData;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <aside className="course-detail-sidebar">
+      <div className="course-sidebar-heading">
+        <CourseVisual course={course} />
+        <div>
+          <span>课程</span>
+          <h2>{get(course, "title")}</h2>
+          <p>
+            {get(course, "code")} · {get(course, "level")}
+          </p>
+          <Status value={get(course, "status")} />
+        </div>
+      </div>
+      <div className="course-sidebar-divider" />
+      <div className="course-sidebar-section">
+        <span>班次</span>
+        <button
+          type="button"
+          className={
+            selectedRunId === "all"
+              ? "course-run-nav-card all active"
+              : "course-run-nav-card all"
+          }
+          onClick={() => onSelect("all")}
+        >
+          <div>
+            <strong>全部班次</strong>
+            <small>查看 {intakes.length} 个班次的完整情况</small>
+          </div>
+          <b>{intakes.length}</b>
+        </button>
+        {intakes.map((intake) => (
+          <CourseRunNavCard
+            key={get(intake, "id")}
+            runItem={intake}
+            teacher={data.teachers.find(
+              (teacher) => get(teacher, "id") === get(intake, "teacher_id"),
+            )}
+            active={selectedRunId === get(intake, "id")}
+            onClick={() => onSelect(get(intake, "id"))}
+          />
+        ))}
+      </div>
+      <button type="button" className="course-sidebar-add">
+        <Plus size={16} />
+        新增班次
+      </button>
+    </aside>
+  );
 }
 
-function CourseRunNavCard({ runItem, teacher, active, onClick }: { runItem: Row; teacher?: Row; active: boolean; onClick: () => void }) {
+function CourseRunNavCard({
+  runItem,
+  teacher,
+  active,
+  onClick,
+}: {
+  runItem: Row;
+  teacher?: Row;
+  active: boolean;
+  onClick: () => void;
+}) {
   const capacity = Number(runItem.capacity || 0);
   const count = Number(runItem.student_count || 0);
-  return <button type="button" className={active ? "course-run-nav-card active" : "course-run-nav-card"} style={eventStyle(runItem)} onClick={onClick}><div className="course-run-nav-title"><strong>{get(runItem, "name")}</strong><span className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}>{get(runItem, "language_name") || "待设置语言"}</span></div><div className="course-run-nav-teacher">{teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}<span>{get(runItem, "teacher_name") || "待安排老师"}</span>{active ? <ChevronRight className="course-run-nav-current" size={22} aria-label="正在查看" /> : null}</div><div className="course-run-nav-progress"><span>{count} / {capacity} 已报名</span><i><b style={{ width: `${Math.min(100, capacity ? count / capacity * 100 : 0)}%` }} /></i></div></button>;
+  return (
+    <button
+      type="button"
+      className={active ? "course-run-nav-card active" : "course-run-nav-card"}
+      style={eventStyle(runItem)}
+      onClick={onClick}
+    >
+      <div className="course-run-nav-title">
+        <strong>{get(runItem, "name")}</strong>
+        <span
+          className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
+        >
+          {get(runItem, "language_name") || "待设置语言"}
+        </span>
+      </div>
+      <div className="course-run-nav-teacher">
+        {teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}
+        <span>{get(runItem, "teacher_name") || "待安排老师"}</span>
+        {active ? (
+          <ChevronRight
+            className="course-run-nav-current"
+            size={22}
+            aria-label="正在查看"
+          />
+        ) : null}
+      </div>
+      <div className="course-run-nav-progress">
+        <span>
+          {count} / {capacity} 已报名
+        </span>
+        <i>
+          <b
+            style={{
+              width: `${Math.min(100, capacity ? (count / capacity) * 100 : 0)}%`,
+            }}
+          />
+        </i>
+      </div>
+    </button>
+  );
 }
 
 function languageTagTone(language: string) {
@@ -1162,299 +10107,4563 @@ function languageTagTone(language: string) {
   return "teal";
 }
 
-function deliveryModeLabel(runItem: Row) { return get(runItem, "delivery_mode") === "online" ? "网课" : "现场课"; }
-
-function CourseRunHeaderMeta({ runItem, data, openDetail }: { runItem: Row; data: PortalData; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const teacher = data.teachers.find((item) => get(item, "id") === get(runItem, "teacher_id"));
-  return <div className="course-run-header-meta"><span className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}>{get(runItem, "language_name") || "待设置语言"}</span><span className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}>{deliveryModeLabel(runItem)}</span>{teacher ? <button type="button" onClick={() => openDetail({ kind: "teacher", id: get(teacher, "id") })}><Avatar person={teacher} alt="" />{get(teacher, "name")}</button> : <span>待安排老师</span>}</div>;
+function deliveryModeLabel(runItem: Row) {
+  return get(runItem, "delivery_mode") === "online" ? "网课" : "现场课";
 }
 
-function CourseAllDetailWorkspace({ tab, course, intakes, lessons, students, data, openDetail, onSelectRun }: { tab: string; course: Row; intakes: Row[]; lessons: Row[]; students: Row[]; data: PortalData; openDetail: (detail: Exclude<Detail, null>) => void; onSelectRun: (id: string) => void }) {
-  const rooms = new Set(lessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean));
-  const teachers = new Set(intakes.map((intake) => get(intake, "teacher_name")).filter(Boolean));
-  const firstLesson = [...lessons].sort((left, right) => get(left, "starts_at").localeCompare(get(right, "starts_at")))[0];
-  const lastLesson = [...lessons].sort((left, right) => get(right, "ends_at").localeCompare(get(left, "ends_at")))[0];
-  const totalMinutes = Number(course.default_sessions || 0) * Number(course.default_minutes || 0);
-  const durationLabel = totalMinutes ? `${get(course, "default_sessions")} × ${get(course, "default_minutes")} min` : "未设置课时";
-  const spanLabel = firstLesson && lastLesson ? `${malaysiaDate(firstLesson.starts_at)} - ${malaysiaDate(lastLesson.ends_at || lastLesson.starts_at)}` : "未排课";
-  const teacherLabel = teachers.size === 1 ? Array.from(teachers)[0] : teachers.size > 1 ? "Multiple teachers" : "待安排";
-  const roomLabel = rooms.size === 1 ? Array.from(rooms)[0] : rooms.size > 1 ? "Multiple classrooms" : "待安排";
-  if (tab === "students") return <CourseStudentList title="所有班次的学生" students={students} data={data} openDetail={openDetail} />;
-  if (tab === "schedule") return <ClassScheduleBrowser lessons={lessons} data={data} openDetail={openDetail} allClasses />;
-  return <><CourseDashboardMetrics items={[{ label: "课程费用", value: amount(course.list_price), note: "标准课程费用", icon: <Banknote size={19} /> }, { label: "课程课时", value: durationLabel, note: totalMinutes ? `共 ${Math.round(totalMinutes / 60 * 10) / 10} 小时` : "", icon: <Clock3 size={19} /> }, { label: "总跨度", value: spanLabel, note: lessons.length ? `${lessons.length} 个已排课节` : "尚未开始排课", icon: <CalendarDays size={19} /> }, { label: "学生", value: String(students.length), note: "已报名", icon: <UsersRound size={19} /> }, { label: "老师", value: teacherLabel, note: teachers.size > 1 ? "多个班次老师" : "班次老师", icon: <UserRound size={19} /> }, { label: "教室", value: roomLabel, note: rooms.size > 1 ? "多个上课教室" : "上课教室", icon: <DoorOpen size={19} /> }]} /><section className="course-all-run-list"><div className="sheet-section-title"><div><h3>全部班次</h3><p className="panel-hint">选择一个班次，进入它的排课、学生与课堂管理。</p></div><span>{intakes.length}</span></div>{intakes.map((intake) => <CourseAllRunCard key={get(intake, "id")} runItem={intake} lessons={lessons.filter((lesson) => get(lesson, "class_run_id") === get(intake, "id"))} data={data} onOpen={() => onSelectRun(get(intake, "id"))} />)}</section></>;
+function CourseRunHeaderMeta({
+  runItem,
+  data,
+  openDetail,
+}: {
+  runItem: Row;
+  data: PortalData;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const teacher = data.teachers.find(
+    (item) => get(item, "id") === get(runItem, "teacher_id"),
+  );
+  return (
+    <div className="course-run-header-meta">
+      <span
+        className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
+      >
+        {get(runItem, "language_name") || "待设置语言"}
+      </span>
+      <span
+        className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}
+      >
+        {deliveryModeLabel(runItem)}
+      </span>
+      {teacher ? (
+        <button
+          type="button"
+          onClick={() =>
+            openDetail({ kind: "teacher", id: get(teacher, "id") })
+          }
+        >
+          <Avatar person={teacher} alt="" />
+          {get(teacher, "name")}
+        </button>
+      ) : (
+        <span>待安排老师</span>
+      )}
+    </div>
+  );
 }
 
-function CourseAllRunCard({ runItem, lessons, data, onOpen }: { runItem: Row; lessons: Row[]; data: PortalData; onOpen: () => void }) {
-  const teacher = data.teachers.find((item) => get(item, "id") === get(runItem, "teacher_id"));
-  return <button type="button" className="course-all-run-card" style={eventStyle(runItem)} onClick={onOpen}><div><strong>{get(runItem, "name")}</strong><span className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}>{get(runItem, "language_name") || "待设置语言"}</span><span className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}>{deliveryModeLabel(runItem)}</span></div><span className="course-all-run-teacher">{teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}{get(runItem, "teacher_name") || "待安排老师"}</span><span><UsersRound size={15} />{get(runItem, "student_count")}/{get(runItem, "capacity")} 已报名</span><span><CalendarDays size={15} />{lessons.length} 节课</span><ChevronRight className="course-all-run-arrow" size={21} strokeWidth={3} aria-hidden="true" /></button>;
+function CourseAllDetailWorkspace({
+  tab,
+  course,
+  intakes,
+  lessons,
+  students,
+  data,
+  openDetail,
+  onSelectRun,
+}: {
+  tab: string;
+  course: Row;
+  intakes: Row[];
+  lessons: Row[];
+  students: Row[];
+  data: PortalData;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+  onSelectRun: (id: string) => void;
+}) {
+  const rooms = new Set(
+    lessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean),
+  );
+  const teachers = new Set(
+    intakes.map((intake) => get(intake, "teacher_name")).filter(Boolean),
+  );
+  const firstLesson = [...lessons].sort((left, right) =>
+    get(left, "starts_at").localeCompare(get(right, "starts_at")),
+  )[0];
+  const lastLesson = [...lessons].sort((left, right) =>
+    get(right, "ends_at").localeCompare(get(left, "ends_at")),
+  )[0];
+  const totalMinutes =
+    Number(course.default_sessions || 0) * Number(course.default_minutes || 0);
+  const durationLabel = totalMinutes
+    ? `${get(course, "default_sessions")} × ${get(course, "default_minutes")} min`
+    : "未设置课时";
+  const spanLabel =
+    firstLesson && lastLesson
+      ? `${malaysiaDate(firstLesson.starts_at)} - ${malaysiaDate(lastLesson.ends_at || lastLesson.starts_at)}`
+      : "未排课";
+  const teacherLabel =
+    teachers.size === 1
+      ? Array.from(teachers)[0]
+      : teachers.size > 1
+        ? "Multiple teachers"
+        : "待安排";
+  const roomLabel =
+    rooms.size === 1
+      ? Array.from(rooms)[0]
+      : rooms.size > 1
+        ? "Multiple classrooms"
+        : "待安排";
+  if (tab === "students")
+    return (
+      <CourseStudentList
+        title="所有班次的学生"
+        students={students}
+        data={data}
+        openDetail={openDetail}
+      />
+    );
+  if (tab === "schedule")
+    return (
+      <ClassScheduleBrowser
+        lessons={lessons}
+        data={data}
+        openDetail={openDetail}
+        allClasses
+      />
+    );
+  return (
+    <>
+      <CourseDashboardMetrics
+        items={[
+          {
+            label: "课程费用",
+            value: amount(course.list_price),
+            note: "标准课程费用",
+            icon: <Banknote size={19} />,
+          },
+          {
+            label: "课程课时",
+            value: durationLabel,
+            note: totalMinutes
+              ? `共 ${Math.round((totalMinutes / 60) * 10) / 10} 小时`
+              : "",
+            icon: <Clock3 size={19} />,
+          },
+          {
+            label: "总跨度",
+            value: spanLabel,
+            note: lessons.length
+              ? `${lessons.length} 个已排课节`
+              : "尚未开始排课",
+            icon: <CalendarDays size={19} />,
+          },
+          {
+            label: "学生",
+            value: String(students.length),
+            note: "已报名",
+            icon: <UsersRound size={19} />,
+          },
+          {
+            label: "老师",
+            value: teacherLabel,
+            note: teachers.size > 1 ? "多个班次老师" : "班次老师",
+            icon: <UserRound size={19} />,
+          },
+          {
+            label: "教室",
+            value: roomLabel,
+            note: rooms.size > 1 ? "多个上课教室" : "上课教室",
+            icon: <DoorOpen size={19} />,
+          },
+        ]}
+      />
+      <section className="course-all-run-list">
+        <div className="sheet-section-title">
+          <div>
+            <h3>全部班次</h3>
+            <p className="panel-hint">
+              选择一个班次，进入它的排课、学生与课堂管理。
+            </p>
+          </div>
+          <span>{intakes.length}</span>
+        </div>
+        {intakes.map((intake) => (
+          <CourseAllRunCard
+            key={get(intake, "id")}
+            runItem={intake}
+            lessons={lessons.filter(
+              (lesson) => get(lesson, "class_run_id") === get(intake, "id"),
+            )}
+            data={data}
+            onOpen={() => onSelectRun(get(intake, "id"))}
+          />
+        ))}
+      </section>
+    </>
+  );
 }
 
-function CourseRunDetailWorkspace({ tab, course, runItem, lessons, students, lessonTemplates, data, busy, run, openDetail }: { tab: string; course: Row; runItem: Row; lessons: Row[]; students: Row[]; lessonTemplates: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const rooms = Array.from(new Set(lessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean)));
-  const teachers = Array.from(new Set([get(runItem, "teacher_name"), ...lessons.map((lesson) => get(lesson, "teacher_name"))].filter(Boolean)));
-  const expected = Math.max(lessons.length, Number(course.default_sessions || lessonTemplates.length || 0));
-  const completed = lessons.filter((lesson) => asTime(lesson.ends_at || lesson.starts_at) < Date.now()).length;
+function CourseAllRunCard({
+  runItem,
+  lessons,
+  data,
+  onOpen,
+}: {
+  runItem: Row;
+  lessons: Row[];
+  data: PortalData;
+  onOpen: () => void;
+}) {
+  const teacher = data.teachers.find(
+    (item) => get(item, "id") === get(runItem, "teacher_id"),
+  );
+  return (
+    <button
+      type="button"
+      className="course-all-run-card"
+      style={eventStyle(runItem)}
+      onClick={onOpen}
+    >
+      <div>
+        <strong>{get(runItem, "name")}</strong>
+        <span
+          className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
+        >
+          {get(runItem, "language_name") || "待设置语言"}
+        </span>
+        <span
+          className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}
+        >
+          {deliveryModeLabel(runItem)}
+        </span>
+      </div>
+      <span className="course-all-run-teacher">
+        {teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}
+        {get(runItem, "teacher_name") || "待安排老师"}
+      </span>
+      <span>
+        <UsersRound size={15} />
+        {get(runItem, "student_count")}/{get(runItem, "capacity")} 已报名
+      </span>
+      <span>
+        <CalendarDays size={15} />
+        {lessons.length} 节课
+      </span>
+      <ChevronRight
+        className="course-all-run-arrow"
+        size={21}
+        strokeWidth={3}
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+function CourseRunDetailWorkspace({
+  tab,
+  course,
+  runItem,
+  lessons,
+  students,
+  lessonTemplates,
+  data,
+  busy,
+  run,
+  openDetail,
+}: {
+  tab: string;
+  course: Row;
+  runItem: Row;
+  lessons: Row[];
+  students: Row[];
+  lessonTemplates: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const rooms = Array.from(
+    new Set(
+      lessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean),
+    ),
+  );
+  const teachers = Array.from(
+    new Set(
+      [
+        get(runItem, "teacher_name"),
+        ...lessons.map((lesson) => get(lesson, "teacher_name")),
+      ].filter(Boolean),
+    ),
+  );
+  const expected = Math.max(
+    lessons.length,
+    Number(course.default_sessions || lessonTemplates.length || 0),
+  );
+  const completed = lessons.filter(
+    (lesson) => asTime(lesson.ends_at || lesson.starts_at) < Date.now(),
+  ).length;
   const [adjustingLessons, setAdjustingLessons] = useState(false);
-  if (tab === "students") return <CourseStudentList title="班次学生" students={students} data={data} openDetail={openDetail} />;
-  if (tab === "schedule") return <ClassScheduleBrowser lessons={lessons} data={data} openDetail={openDetail} />;
-  return <><CourseDashboardMetrics items={[{ label: "剩余课程", value: `${Math.max(0, expected - completed)} / ${expected} 节`, note: completed ? `已完成 ${completed} 节` : "尚未完成课程", icon: <CalendarDays size={19} /> }, { label: "学生", value: String(students.length), note: `${get(runItem, "student_count") || students.length} / ${get(runItem, "capacity")} 已报名`, icon: <UsersRound size={19} /> }, { label: "老师", value: teachers.length === 1 ? teachers[0] : teachers.length > 1 ? "Multiple teachers" : "待安排", note: teachers.length > 1 ? "课节老师不同" : "班次老师", icon: <UserRound size={19} /> }, { label: "教室", value: rooms.length === 1 ? rooms[0] : rooms.length > 1 ? "Multiple classrooms" : "待安排", note: rooms.length > 1 ? "课节教室不同" : "上课教室", icon: <DoorOpen size={19} /> }]} /><section className="course-run-overview"><div className="sheet-section-title"><div><h3>课程日历</h3><p className="panel-hint">课节由排课日历自动判断。需要改动时，使用“调整课时”保留原有记录。</p></div><div className="action-group"><button className="quiet-button" type="button" onClick={() => setAdjustingLessons(true)}><Settings2 size={15} />调整课时</button><button className="quiet-button" type="button" onClick={() => openDetail({ kind: "teacher", id: get(runItem, "teacher_id") })}>查看老师</button></div></div><InteractiveLessonSequence title="" sessions={lessons.slice(0, 5)} expanded onOpen={(lesson) => openDetail({ kind: "session", id: get(lesson, "id") })} onSetCurrent={(lesson) => void run("setCurrentLesson", { sessionId: get(lesson, "id") })} /></section>{adjustingLessons ? <ClassLessonAdjustmentDialog runItem={runItem} lessons={lessons} data={data} busy={busy} run={run} onClose={() => setAdjustingLessons(false)} /> : null}</>;
+  if (tab === "students")
+    return (
+      <CourseStudentList
+        title="班次学生"
+        students={students}
+        data={data}
+        openDetail={openDetail}
+      />
+    );
+  if (tab === "schedule")
+    return (
+      <ClassScheduleBrowser
+        lessons={lessons}
+        data={data}
+        openDetail={openDetail}
+      />
+    );
+  return (
+    <>
+      <CourseDashboardMetrics
+        items={[
+          {
+            label: "剩余课程",
+            value: `${Math.max(0, expected - completed)} / ${expected} 节`,
+            note: completed ? `已完成 ${completed} 节` : "尚未完成课程",
+            icon: <CalendarDays size={19} />,
+          },
+          {
+            label: "学生",
+            value: String(students.length),
+            note: `${get(runItem, "student_count") || students.length} / ${get(runItem, "capacity")} 已报名`,
+            icon: <UsersRound size={19} />,
+          },
+          {
+            label: "老师",
+            value:
+              teachers.length === 1
+                ? teachers[0]
+                : teachers.length > 1
+                  ? "Multiple teachers"
+                  : "待安排",
+            note: teachers.length > 1 ? "课节老师不同" : "班次老师",
+            icon: <UserRound size={19} />,
+          },
+          {
+            label: "教室",
+            value:
+              rooms.length === 1
+                ? rooms[0]
+                : rooms.length > 1
+                  ? "Multiple classrooms"
+                  : "待安排",
+            note: rooms.length > 1 ? "课节教室不同" : "上课教室",
+            icon: <DoorOpen size={19} />,
+          },
+        ]}
+      />
+      <section className="course-run-overview">
+        <div className="sheet-section-title">
+          <div>
+            <h3>课程日历</h3>
+            <p className="panel-hint">
+              课节由排课日历自动判断。需要改动时，使用“调整课时”保留原有记录。
+            </p>
+          </div>
+          <div className="action-group">
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() => setAdjustingLessons(true)}
+            >
+              <Settings2 size={15} />
+              调整课时
+            </button>
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() =>
+                openDetail({ kind: "teacher", id: get(runItem, "teacher_id") })
+              }
+            >
+              查看老师
+            </button>
+          </div>
+        </div>
+        <InteractiveLessonSequence
+          title=""
+          sessions={lessons.slice(0, 5)}
+          expanded
+          onOpen={(lesson) =>
+            openDetail({ kind: "session", id: get(lesson, "id") })
+          }
+          onSetCurrent={(lesson) =>
+            void run("setCurrentLesson", { sessionId: get(lesson, "id") })
+          }
+        />
+      </section>
+      {adjustingLessons ? (
+        <ClassLessonAdjustmentDialog
+          runItem={runItem}
+          lessons={lessons}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setAdjustingLessons(false)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function CourseDashboardMetrics({ items }: { items: { label: string; value: string; note: string; icon: ReactNode }[] }) { return <section className="course-dashboard-metrics">{items.map((item) => <article key={item.label}><span>{item.icon}</span><div><small>{item.label}</small><strong>{item.value}</strong><p>{item.note}</p></div></article>)}</section>; }
+function CourseDashboardMetrics({
+  items,
+}: {
+  items: { label: string; value: string; note: string; icon: ReactNode }[];
+}) {
+  return (
+    <section className="course-dashboard-metrics">
+      {items.map((item) => (
+        <article key={item.label}>
+          <span>{item.icon}</span>
+          <div>
+            <small>{item.label}</small>
+            <strong>{item.value}</strong>
+            <p>{item.note}</p>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
 
-function CourseStudentList({ title, students, data, openDetail }: { title: string; students: Row[]; data: PortalData; openDetail: (detail: Exclude<Detail, null>) => void }) { return <section className="course-student-list"><div className="sheet-section-title"><h3>{title}</h3><span>{students.length}</span></div>{students.map((entry) => { const studentId = get(entry, "student_id"); const runId = get(entry, "class_run_id"); const student = data.students.find((item) => get(item, "id") === studentId); const bookings = data.attendance.filter((record) => get(record, "student_id") === studentId && get(record, "class_run_id") === runId); const planned = data.sessions.filter((lesson) => get(lesson, "class_run_id") === runId).length; const attended = bookings.filter((record) => ["present", "late"].includes(get(record, "status"))).length; const booked = bookings.length || planned; return <button type="button" key={get(entry, "id")} className="course-student-row" onClick={() => openDetail({ kind: "student", id: studentId })}><Avatar person={student ?? entry} /><div><strong>{get(entry, "student_name") || get(student, "name")}</strong><small>{get(student, "level") || "学生"}{get(entry, "run_name") ? ` · ${get(entry, "run_name")}` : ""}</small></div><span className="course-student-participation"><small>参与情况</small><b>{attended}/{booked}</b><em>attended/booked</em></span><Status value={get(entry, "status") || "enrolled"} /><ChevronRight className="course-student-next" size={19} strokeWidth={3} aria-hidden="true" /></button>; })}{!students.length ? <Empty text="暂无已报名学生" /> : null}</section>; }
+function CourseStudentList({
+  title,
+  students,
+  data,
+  openDetail,
+}: {
+  title: string;
+  students: Row[];
+  data: PortalData;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  return (
+    <section className="course-student-list">
+      <div className="sheet-section-title">
+        <h3>{title}</h3>
+        <span>{students.length}</span>
+      </div>
+      {students.map((entry) => {
+        const studentId = get(entry, "student_id");
+        const runId = get(entry, "class_run_id");
+        const student = data.students.find(
+          (item) => get(item, "id") === studentId,
+        );
+        const bookings = data.attendance.filter(
+          (record) =>
+            get(record, "student_id") === studentId &&
+            get(record, "class_run_id") === runId,
+        );
+        const planned = data.sessions.filter(
+          (lesson) => get(lesson, "class_run_id") === runId,
+        ).length;
+        const attended = bookings.filter((record) =>
+          ["present", "late"].includes(get(record, "status")),
+        ).length;
+        const booked = bookings.length || planned;
+        return (
+          <button
+            type="button"
+            key={get(entry, "id")}
+            className="course-student-row"
+            onClick={() => openDetail({ kind: "student", id: studentId })}
+          >
+            <Avatar person={student ?? entry} />
+            <div>
+              <strong>
+                {get(entry, "student_name") || get(student, "name")}
+              </strong>
+              <small>
+                {get(student, "level") || "学生"}
+                {get(entry, "run_name") ? ` · ${get(entry, "run_name")}` : ""}
+              </small>
+            </div>
+            <span className="course-student-participation">
+              <small>参与情况</small>
+              <b>
+                {attended}/{booked}
+              </b>
+              <em>attended/booked</em>
+            </span>
+            <Status value={get(entry, "status") || "enrolled"} />
+            <ChevronRight
+              className="course-student-next"
+              size={19}
+              strokeWidth={3}
+              aria-hidden="true"
+            />
+          </button>
+        );
+      })}
+      {!students.length ? <Empty text="暂无已报名学生" /> : null}
+    </section>
+  );
+}
 
-function ClassLessonAdjustmentDialog({ runItem, lessons, data, busy, run, onClose }: { runItem: Row; lessons: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void }) {
+function ClassLessonAdjustmentDialog({
+  runItem,
+  lessons,
+  data,
+  busy,
+  run,
+  onClose,
+}: {
+  runItem: Row;
+  lessons: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
   const [editing, setEditing] = useState<Row | null>(null);
-  const orderedLessons = [...lessons].sort((left, right) => Number(left.session_no) - Number(right.session_no));
-  const changeLabel = (change: Row) => get(change, "change_type") === "cancelled" ? "已取消" : get(change, "change_type") === "reordered" ? "已调整顺序" : "已更改";
-  return <><div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="course-edit-dialog class-lesson-adjust-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>ADJUST LESSONS</span><h3>{get(runItem, "name")}</h3><p>所有调整都会保留原课时记录。取消的课节不会从日历或学生记录中删除。</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="class-lesson-adjust-list">{orderedLessons.map((lesson, index) => { const changes = data.sessionChanges.filter((change) => get(change, "class_session_id") === get(lesson, "id")); const cancelled = get(lesson, "status") === "cancelled"; return <article className={cancelled ? "class-lesson-adjust-card cancelled" : "class-lesson-adjust-card"} key={get(lesson, "id")}><div className="class-lesson-adjust-main"><span>课时 {get(lesson, "session_no")}</span><strong>{get(lesson, "topic")}</strong><p>{malaysiaDate(lesson.starts_at)} · {timeRange(lesson)} · {get(lesson, "teacher_name") || "待安排老师"}{get(lesson, "classroom_name") ? ` · ${get(lesson, "classroom_name")}` : ""}</p></div><div className="class-lesson-adjust-actions">{index > 0 && !cancelled ? <button className="quiet-button" disabled={busy} type="button" onClick={() => void run("swapSessionOrder", { sessionId: get(lesson, "id"), targetSessionId: get(orderedLessons[index - 1], "id") })}>上移</button> : null}{index < orderedLessons.length - 1 && !cancelled ? <button className="quiet-button" disabled={busy} type="button" onClick={() => void run("swapSessionOrder", { sessionId: get(lesson, "id"), targetSessionId: get(orderedLessons[index + 1], "id") })}>下移</button> : null}{!cancelled ? <button className="quiet-button" disabled={busy} type="button" onClick={() => setEditing(lesson)}>编辑</button> : null}{!cancelled ? <button className="danger-button" disabled={busy} type="button" onClick={() => { if (window.confirm("取消后将保留该课节和所有原始记录。确认取消？")) void run("cancelSession", { sessionId: get(lesson, "id") }); }}>取消</button> : null}</div>{changes.map((change) => <div className="class-lesson-change" key={get(change, "id")}><b>{changeLabel(change)}</b><span>{get(change, "original_topic")} · {get(change, "original_starts_at")} → {get(change, "change_type") === "cancelled" ? "已取消" : `${get(change, "new_topic")} · ${get(change, "new_starts_at")}`}</span></div>)}</article>; })}{!orderedLessons.length ? <Empty text="这个班次还没有排课。" /> : null}</div><footer><button className="quiet-button" type="button" onClick={onClose}>完成</button></footer></section></div>{editing ? <LessonModifyDialog lesson={editing} data={data} busy={busy} run={run} onClose={() => setEditing(null)} /> : null}</>;
+  const orderedLessons = [...lessons].sort(
+    (left, right) => Number(left.session_no) - Number(right.session_no),
+  );
+  const changeLabel = (change: Row) =>
+    get(change, "change_type") === "cancelled"
+      ? "已取消"
+      : get(change, "change_type") === "reordered"
+        ? "已调整顺序"
+        : "已更改";
+  return (
+    <>
+      <div
+        className="dialog-backdrop"
+        role="presentation"
+        onMouseDown={onClose}
+      >
+        <section
+          className="course-edit-dialog class-lesson-adjust-dialog"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header>
+            <div>
+              <span>ADJUST LESSONS</span>
+              <h3>{get(runItem, "name")}</h3>
+              <p>
+                所有调整都会保留原课时记录。取消的课节不会从日历或学生记录中删除。
+              </p>
+            </div>
+            <button
+              className="header-icon"
+              type="button"
+              onClick={onClose}
+              title="Close"
+            >
+              <X size={17} />
+            </button>
+          </header>
+          <div className="class-lesson-adjust-list">
+            {orderedLessons.map((lesson, index) => {
+              const changes = data.sessionChanges.filter(
+                (change) =>
+                  get(change, "class_session_id") === get(lesson, "id"),
+              );
+              const cancelled = get(lesson, "status") === "cancelled";
+              return (
+                <article
+                  className={
+                    cancelled
+                      ? "class-lesson-adjust-card cancelled"
+                      : "class-lesson-adjust-card"
+                  }
+                  key={get(lesson, "id")}
+                >
+                  <div className="class-lesson-adjust-main">
+                    <span>课时 {get(lesson, "session_no")}</span>
+                    <strong>{get(lesson, "topic")}</strong>
+                    <p>
+                      {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)} ·{" "}
+                      {get(lesson, "teacher_name") || "待安排老师"}
+                      {get(lesson, "classroom_name")
+                        ? ` · ${get(lesson, "classroom_name")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="class-lesson-adjust-actions">
+                    {index > 0 && !cancelled ? (
+                      <button
+                        className="quiet-button"
+                        disabled={busy}
+                        type="button"
+                        onClick={() =>
+                          void run("swapSessionOrder", {
+                            sessionId: get(lesson, "id"),
+                            targetSessionId: get(
+                              orderedLessons[index - 1],
+                              "id",
+                            ),
+                          })
+                        }
+                      >
+                        上移
+                      </button>
+                    ) : null}
+                    {index < orderedLessons.length - 1 && !cancelled ? (
+                      <button
+                        className="quiet-button"
+                        disabled={busy}
+                        type="button"
+                        onClick={() =>
+                          void run("swapSessionOrder", {
+                            sessionId: get(lesson, "id"),
+                            targetSessionId: get(
+                              orderedLessons[index + 1],
+                              "id",
+                            ),
+                          })
+                        }
+                      >
+                        下移
+                      </button>
+                    ) : null}
+                    {!cancelled ? (
+                      <button
+                        className="quiet-button"
+                        disabled={busy}
+                        type="button"
+                        onClick={() => setEditing(lesson)}
+                      >
+                        编辑
+                      </button>
+                    ) : null}
+                    {!cancelled ? (
+                      <button
+                        className="danger-button"
+                        disabled={busy}
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "取消后将保留该课节和所有原始记录。确认取消？",
+                            )
+                          )
+                            void run("cancelSession", {
+                              sessionId: get(lesson, "id"),
+                            });
+                        }}
+                      >
+                        取消
+                      </button>
+                    ) : null}
+                  </div>
+                  {changes.map((change) => (
+                    <div
+                      className="class-lesson-change"
+                      key={get(change, "id")}
+                    >
+                      <b>{changeLabel(change)}</b>
+                      <span>
+                        {get(change, "original_topic")} ·{" "}
+                        {get(change, "original_starts_at")} →{" "}
+                        {get(change, "change_type") === "cancelled"
+                          ? "已取消"
+                          : `${get(change, "new_topic")} · ${get(change, "new_starts_at")}`}
+                      </span>
+                    </div>
+                  ))}
+                </article>
+              );
+            })}
+            {!orderedLessons.length ? (
+              <Empty text="这个班次还没有排课。" />
+            ) : null}
+          </div>
+          <footer>
+            <button className="quiet-button" type="button" onClick={onClose}>
+              完成
+            </button>
+          </footer>
+        </section>
+      </div>
+      {editing ? (
+        <LessonModifyDialog
+          lesson={editing}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function ClassScheduleBrowser({ lessons, data, openDetail, allClasses = false }: { lessons: Row[]; data: PortalData; openDetail: (detail: Exclude<Detail, null>) => void; allClasses?: boolean }) {
+function ClassScheduleBrowser({
+  lessons,
+  data,
+  openDetail,
+  allClasses = false,
+}: {
+  lessons: Row[];
+  data: PortalData;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+  allClasses?: boolean;
+}) {
   const [mode, setMode] = useState<"calendar" | "cards" | "list">("calendar");
   const [phase, setPhase] = useState<"all" | "active" | "finished">("all");
-  const [anchor, setAnchor] = useState(() => lessons[0] ? fromKey(datePart(lessons[0].starts_at)) : new Date());
-  const visible = [...lessons].filter((lesson) => phase === "all" || (phase === "finished" ? asTime(lesson.ends_at || lesson.starts_at) < Date.now() : asTime(lesson.ends_at || lesson.starts_at) >= Date.now())).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const sorted = [...lessons].sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  if (mode === "cards") return <section className="course-schedule-browser"><div className="sheet-section-title"><div><h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3><p className="panel-hint">按课程状态查看，并点击卡片进入课堂管理。</p></div><div className="course-schedule-controls"><div className="segmented-control"><button type="button" onClick={() => setMode("calendar")}><CalendarDays size={14} />日历</button><button className="active" type="button"><LayoutGrid size={14} />卡片</button><button type="button" onClick={() => setMode("list")}><List size={14} />列表</button></div></div></div><div className="course-phase-tabs"><button className={phase === "all" ? "active" : ""} type="button" onClick={() => setPhase("all")}>全部 <b>{lessons.length}</b></button><button className={phase === "active" ? "active" : ""} type="button" onClick={() => setPhase("active")}>未开始或进行中 <b>{lessons.filter((lesson) => asTime(lesson.ends_at || lesson.starts_at) >= Date.now()).length}</b></button><button className={phase === "finished" ? "active" : ""} type="button" onClick={() => setPhase("finished")}>已结束 <b>{lessons.filter((lesson) => asTime(lesson.ends_at || lesson.starts_at) < Date.now()).length}</b></button></div><div className="course-lesson-card-grid">{visible.map((lesson) => <button type="button" key={get(lesson, "id")} className="course-lesson-card" style={eventStyle(lesson)} onClick={() => openDetail({ kind: "session", id: get(lesson, "id") })}><div><span>第 {get(lesson, "session_no")} 节</span><strong>{get(lesson, "topic")}</strong><small>{malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}</small></div><Status value={asTime(lesson.ends_at || lesson.starts_at) < Date.now() ? "completed" : "scheduled"} /><ChevronRight size={20} /></button>)}</div>{!visible.length ? <Empty text="这个状态下暂无课程" /> : null}</section>;
-  return <section className="course-schedule-browser"><div className="sheet-section-title"><div><h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3><p className="panel-hint">点击课程可进入课堂管理。</p></div><div className="course-schedule-controls"><div className="segmented-control"><button className={mode === "calendar" ? "active" : ""} type="button" onClick={() => setMode("calendar")}><CalendarDays size={14} />日历</button><button className={mode === "cards" ? "active" : ""} type="button" onClick={() => setMode("cards")}><LayoutGrid size={14} />卡片</button><button className={mode === "list" ? "active" : ""} type="button" onClick={() => setMode("list")}><List size={14} />列表</button></div></div></div>{mode === "calendar" ? <><div className="room-month-navigation"><button type="button" className="header-icon" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1, 12))}><ChevronLeft size={16} /></button><strong>{anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" })}</strong><button type="button" className="header-icon" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1, 12))}><ChevronRight size={16} /></button></div><MonthCalendar anchor={anchor} events={sorted} c={calendarText.en} language="en" onOpen={(id) => openDetail({ kind: "session", id })} onSelectDate={() => undefined} /></> : mode === "cards" ? <InteractiveLessonSequence title="" sessions={sorted} expanded onOpen={(lesson) => openDetail({ kind: "session", id: get(lesson, "id") })} /> : <ClassLessonBrowseGrid lessons={sorted} openDetail={openDetail} />}</section>;
+  const [anchor, setAnchor] = useState(() =>
+    lessons[0] ? fromKey(datePart(lessons[0].starts_at)) : new Date(),
+  );
+  const visible = [...lessons]
+    .filter(
+      (lesson) =>
+        phase === "all" ||
+        (phase === "finished"
+          ? asTime(lesson.ends_at || lesson.starts_at) < Date.now()
+          : asTime(lesson.ends_at || lesson.starts_at) >= Date.now()),
+    )
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const sorted = [...lessons].sort(
+    (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+  );
+  if (mode === "cards")
+    return (
+      <section className="course-schedule-browser">
+        <div className="sheet-section-title">
+          <div>
+            <h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3>
+            <p className="panel-hint">
+              按课程状态查看，并点击卡片进入课堂管理。
+            </p>
+          </div>
+          <div className="course-schedule-controls">
+            <div className="segmented-control">
+              <button type="button" onClick={() => setMode("calendar")}>
+                <CalendarDays size={14} />
+                日历
+              </button>
+              <button className="active" type="button">
+                <LayoutGrid size={14} />
+                卡片
+              </button>
+              <button type="button" onClick={() => setMode("list")}>
+                <List size={14} />
+                列表
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="course-phase-tabs">
+          <button
+            className={phase === "all" ? "active" : ""}
+            type="button"
+            onClick={() => setPhase("all")}
+          >
+            全部 <b>{lessons.length}</b>
+          </button>
+          <button
+            className={phase === "active" ? "active" : ""}
+            type="button"
+            onClick={() => setPhase("active")}
+          >
+            未开始或进行中{" "}
+            <b>
+              {
+                lessons.filter(
+                  (lesson) =>
+                    asTime(lesson.ends_at || lesson.starts_at) >= Date.now(),
+                ).length
+              }
+            </b>
+          </button>
+          <button
+            className={phase === "finished" ? "active" : ""}
+            type="button"
+            onClick={() => setPhase("finished")}
+          >
+            已结束{" "}
+            <b>
+              {
+                lessons.filter(
+                  (lesson) =>
+                    asTime(lesson.ends_at || lesson.starts_at) < Date.now(),
+                ).length
+              }
+            </b>
+          </button>
+        </div>
+        <div className="course-lesson-card-grid">
+          {visible.map((lesson) => (
+            <button
+              type="button"
+              key={get(lesson, "id")}
+              className="course-lesson-card"
+              style={eventStyle(lesson)}
+              onClick={() =>
+                openDetail({ kind: "session", id: get(lesson, "id") })
+              }
+            >
+              <div>
+                <span>第 {get(lesson, "session_no")} 节</span>
+                <strong>{get(lesson, "topic")}</strong>
+                <small>
+                  {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}
+                </small>
+              </div>
+              <Status
+                value={
+                  asTime(lesson.ends_at || lesson.starts_at) < Date.now()
+                    ? "completed"
+                    : "scheduled"
+                }
+              />
+              <ChevronRight size={20} />
+            </button>
+          ))}
+        </div>
+        {!visible.length ? <Empty text="这个状态下暂无课程" /> : null}
+      </section>
+    );
+  return (
+    <section className="course-schedule-browser">
+      <div className="sheet-section-title">
+        <div>
+          <h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3>
+          <p className="panel-hint">点击课程可进入课堂管理。</p>
+        </div>
+        <div className="course-schedule-controls">
+          <div className="segmented-control">
+            <button
+              className={mode === "calendar" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("calendar")}
+            >
+              <CalendarDays size={14} />
+              日历
+            </button>
+            <button
+              className={mode === "cards" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("cards")}
+            >
+              <LayoutGrid size={14} />
+              卡片
+            </button>
+            <button
+              className={mode === "list" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("list")}
+            >
+              <List size={14} />
+              列表
+            </button>
+          </div>
+        </div>
+      </div>
+      {mode === "calendar" ? (
+        <>
+          <div className="room-month-navigation">
+            <button
+              type="button"
+              className="header-icon"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <strong>
+              {anchor.toLocaleDateString("en-MY", {
+                month: "long",
+                year: "numeric",
+              })}
+            </strong>
+            <button
+              type="button"
+              className="header-icon"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <MonthCalendar
+            anchor={anchor}
+            events={sorted}
+            c={calendarText.en}
+            language="en"
+            onOpen={(id) => openDetail({ kind: "session", id })}
+            onSelectDate={() => undefined}
+          />
+        </>
+      ) : mode === "cards" ? (
+        <InteractiveLessonSequence
+          title=""
+          sessions={sorted}
+          expanded
+          onOpen={(lesson) =>
+            openDetail({ kind: "session", id: get(lesson, "id") })
+          }
+        />
+      ) : (
+        <ClassLessonBrowseGrid lessons={sorted} openDetail={openDetail} />
+      )}
+    </section>
+  );
 }
 
-function CourseCatalogueContent({ tab, course, intakes, lessons, lessonTemplates, enrolled, data, busy, run, openDetail }: { tab: string; course: Row; intakes: Row[]; lessons: Row[]; lessonTemplates: Row[]; enrolled: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  if (tab === "course") return <CourseLessonPlan course={course} lessonTemplates={lessonTemplates} intakes={intakes} data={data} busy={busy} run={run} />;
-  if (tab === "intakes") return <CourseIntakeLibrary course={course} intakes={intakes} lessonTemplates={lessonTemplates} data={data} busy={busy} run={run} openDetail={openDetail} />;
-  const active = intakes.filter((intake) => cohortPhase(intake, data.sessions.filter((lesson) => get(lesson, "class_run_id") === get(intake, "id"))) === "in_progress").length;
-  const upcoming = intakes.filter((intake) => cohortPhase(intake, data.sessions.filter((lesson) => get(lesson, "class_run_id") === get(intake, "id"))) === "upcoming").length;
-  return <><section className="detail-metrics"><DetailMetric label="Classes" value={String(intakes.length)} /><DetailMetric label="In progress" value={String(active)} /><DetailMetric label="Upcoming" value={String(upcoming)} /></section><section className="sheet-section course-sku-overview"><div className="sheet-section-title"><h3>Course SKU</h3><Status value={get(course, "status")} /></div><div className="current-lesson-card" style={eventStyle(course)}><CourseVisual course={course} /><div><strong>{get(course, "default_sessions")} lessons per class</strong><p>{get(course, "default_minutes")} minutes each · Standard fee {amount(course.list_price)}</p><span><UsersRound size={14} />{enrolled.length} learner bookings across all classes</span></div></div></section><section className="sheet-section"><div className="sheet-section-title"><h3>Classes</h3><span>{intakes.length}</span></div><p className="panel-hint">Open the Classes tab to switch between named intakes and plan each class separately.</p></section></>;
+function CourseCatalogueContent({
+  tab,
+  course,
+  intakes,
+  lessons,
+  lessonTemplates,
+  enrolled,
+  data,
+  busy,
+  run,
+  openDetail,
+}: {
+  tab: string;
+  course: Row;
+  intakes: Row[];
+  lessons: Row[];
+  lessonTemplates: Row[];
+  enrolled: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  if (tab === "course")
+    return (
+      <CourseLessonPlan
+        course={course}
+        lessonTemplates={lessonTemplates}
+        intakes={intakes}
+        data={data}
+        busy={busy}
+        run={run}
+      />
+    );
+  if (tab === "intakes")
+    return (
+      <CourseIntakeLibrary
+        course={course}
+        intakes={intakes}
+        lessonTemplates={lessonTemplates}
+        data={data}
+        busy={busy}
+        run={run}
+        openDetail={openDetail}
+      />
+    );
+  const active = intakes.filter(
+    (intake) =>
+      cohortPhase(
+        intake,
+        data.sessions.filter(
+          (lesson) => get(lesson, "class_run_id") === get(intake, "id"),
+        ),
+      ) === "in_progress",
+  ).length;
+  const upcoming = intakes.filter(
+    (intake) =>
+      cohortPhase(
+        intake,
+        data.sessions.filter(
+          (lesson) => get(lesson, "class_run_id") === get(intake, "id"),
+        ),
+      ) === "upcoming",
+  ).length;
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric label="Classes" value={String(intakes.length)} />
+        <DetailMetric label="In progress" value={String(active)} />
+        <DetailMetric label="Upcoming" value={String(upcoming)} />
+      </section>
+      <section className="sheet-section course-sku-overview">
+        <div className="sheet-section-title">
+          <h3>Course SKU</h3>
+          <Status value={get(course, "status")} />
+        </div>
+        <div className="current-lesson-card" style={eventStyle(course)}>
+          <CourseVisual course={course} />
+          <div>
+            <strong>{get(course, "default_sessions")} lessons per class</strong>
+            <p>
+              {get(course, "default_minutes")} minutes each · Standard fee{" "}
+              {amount(course.list_price)}
+            </p>
+            <span>
+              <UsersRound size={14} />
+              {enrolled.length} learner bookings across all classes
+            </span>
+          </div>
+        </div>
+      </section>
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Classes</h3>
+          <span>{intakes.length}</span>
+        </div>
+        <p className="panel-hint">
+          Open the Classes tab to switch between named intakes and plan each
+          class separately.
+        </p>
+      </section>
+    </>
+  );
 }
 
 type CourseLessonDraft = { title: string; durationMinutes: number };
 
-function templateDrafts(lessonTemplates: Row[], fallbackDuration: number): CourseLessonDraft[] { return lessonTemplates.map((lesson) => ({ title: get(lesson, "title"), durationMinutes: Math.max(30, Number(lesson.default_duration_minutes || fallbackDuration)) })); }
+function templateDrafts(
+  lessonTemplates: Row[],
+  fallbackDuration: number,
+): CourseLessonDraft[] {
+  return lessonTemplates.map((lesson) => ({
+    title: get(lesson, "title"),
+    durationMinutes: Math.max(
+      30,
+      Number(lesson.default_duration_minutes || fallbackDuration),
+    ),
+  }));
+}
 
-function CourseLessonPlan({ course, lessonTemplates, intakes, data, busy, run }: { course: Row; lessonTemplates: Row[]; intakes: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void> }) {
+function CourseLessonPlan({
+  course,
+  lessonTemplates,
+  intakes,
+  data,
+  busy,
+  run,
+}: {
+  course: Row;
+  lessonTemplates: Row[];
+  intakes: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
   const [editing, setEditing] = useState(false);
-  const [drafts, setDrafts] = useState<CourseLessonDraft[]>(() => templateDrafts(lessonTemplates, Number(course.default_minutes || 90)));
-  const [bulkDuration, setBulkDuration] = useState(String(get(course, "default_minutes") || "90"));
+  const [drafts, setDrafts] = useState<CourseLessonDraft[]>(() =>
+    templateDrafts(lessonTemplates, Number(course.default_minutes || 90)),
+  );
+  const [bulkDuration, setBulkDuration] = useState(
+    String(get(course, "default_minutes") || "90"),
+  );
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [quickFill, setQuickFill] = useState(false);
-  useEffect(() => { if (!editing) setDrafts(templateDrafts(lessonTemplates, Number(course.default_minutes || 90))); }, [lessonTemplates, course, editing]);
-  function update(index: number, patch: Partial<CourseLessonDraft>) { setDrafts((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)); }
-  function applyAll() { if (!window.confirm("Apply this duration to every lesson in the Course plan?")) return; setDrafts((items) => items.map((item) => ({ ...item, durationMinutes: Math.max(30, Number(bulkDuration) || item.durationMinutes) }))); }
-  function save() { void run("saveCourseLessons", { courseId: get(course, "id"), lessonPlan: JSON.stringify(drafts) }).then(() => setEditing(false)); }
-  function toggle(index: number) { setSelectedIds((items) => items.includes(index) ? items.filter((item) => item !== index) : [...items, index]); }
-  function applySelectedDuration() { if (!selectedIds.length) return; const duration = Math.max(30, Number(bulkDuration) || 90); setDrafts((items) => items.map((item, index) => selectedIds.includes(index) ? { ...item, durationMinutes: duration } : item)); }
-  function removeSelected() { if (!selectedIds.length || drafts.length - selectedIds.length < 1) return; if (!window.confirm(`Delete ${selectedIds.length} selected lesson${selectedIds.length === 1 ? "" : "s"}?`)) return; setDrafts((items) => items.filter((_, index) => !selectedIds.includes(index))); setSelectedIds([]); }
-  function duplicateSelected() { if (!selectedIds.length) return; setDrafts((items) => refillDrafts(items.flatMap((item, index) => selectedIds.includes(index) ? [item, { ...item, title: `${item.title} copy` }] : [item]), quickFill)); setSelectedIds([]); }
-  function refillDrafts(items: CourseLessonDraft[], force = true) { return force ? items.map((item, index) => ({ ...item, title: `Lesson ${index + 1}` })) : items; }
+  useEffect(() => {
+    if (!editing)
+      setDrafts(
+        templateDrafts(lessonTemplates, Number(course.default_minutes || 90)),
+      );
+  }, [lessonTemplates, course, editing]);
+  function update(index: number, patch: Partial<CourseLessonDraft>) {
+    setDrafts((items) =>
+      items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+  function applyAll() {
+    if (
+      !window.confirm("Apply this duration to every lesson in the Course plan?")
+    )
+      return;
+    setDrafts((items) =>
+      items.map((item) => ({
+        ...item,
+        durationMinutes: Math.max(
+          30,
+          Number(bulkDuration) || item.durationMinutes,
+        ),
+      })),
+    );
+  }
+  function save() {
+    void run("saveCourseLessons", {
+      courseId: get(course, "id"),
+      lessonPlan: JSON.stringify(drafts),
+    }).then(() => setEditing(false));
+  }
+  function toggle(index: number) {
+    setSelectedIds((items) =>
+      items.includes(index)
+        ? items.filter((item) => item !== index)
+        : [...items, index],
+    );
+  }
+  function applySelectedDuration() {
+    if (!selectedIds.length) return;
+    const duration = Math.max(30, Number(bulkDuration) || 90);
+    setDrafts((items) =>
+      items.map((item, index) =>
+        selectedIds.includes(index)
+          ? { ...item, durationMinutes: duration }
+          : item,
+      ),
+    );
+  }
+  function removeSelected() {
+    if (!selectedIds.length || drafts.length - selectedIds.length < 1) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedIds.length} selected lesson${selectedIds.length === 1 ? "" : "s"}?`,
+      )
+    )
+      return;
+    setDrafts((items) =>
+      items.filter((_, index) => !selectedIds.includes(index)),
+    );
+    setSelectedIds([]);
+  }
+  function duplicateSelected() {
+    if (!selectedIds.length) return;
+    setDrafts((items) =>
+      refillDrafts(
+        items.flatMap((item, index) =>
+          selectedIds.includes(index)
+            ? [item, { ...item, title: `${item.title} copy` }]
+            : [item],
+        ),
+        quickFill,
+      ),
+    );
+    setSelectedIds([]);
+  }
+  function refillDrafts(items: CourseLessonDraft[], force = true) {
+    return force
+      ? items.map((item, index) => ({ ...item, title: `Lesson ${index + 1}` }))
+      : items;
+  }
   function enableQuickFill() {
-    const hasCustomNames = drafts.some((lesson, index) => lesson.title.trim() && lesson.title.trim() !== `Lesson ${index + 1}`);
-    if (hasCustomNames && !window.confirm("Quick fill will rename every lesson to Lesson 1, Lesson 2... Continue?")) return;
+    const hasCustomNames = drafts.some(
+      (lesson, index) =>
+        lesson.title.trim() && lesson.title.trim() !== `Lesson ${index + 1}`,
+    );
+    if (
+      hasCustomNames &&
+      !window.confirm(
+        "Quick fill will rename every lesson to Lesson 1, Lesson 2... Continue?",
+      )
+    )
+      return;
     setDrafts((items) => refillDrafts(items));
     setQuickFill(true);
   }
-  function moveLesson(target: number) { if (dragIndex === null || dragIndex === target) return; setDrafts((items) => { const next = [...items]; const [item] = next.splice(dragIndex, 1); next.splice(target, 0, item); return refillDrafts(next, quickFill); }); setSelectedIds([]); setDragIndex(null); }
-  if (editing) return <><section className="course-dashboard-strip"><div><span>COURSE BLUEPRINT</span><h3>{lessonTemplates.length} lessons available</h3><p>{intakes.length} class{intakes.length === 1 ? "" : "es"} use this plan. Content and duration are reusable; class resources are set separately.</p></div><div className="course-dashboard-facts"><span><Clock3 size={15} />{get(course, "default_minutes")} min default</span><span><Banknote size={15} />{amount(course.list_price)}</span></div></section><div className="dialog-backdrop" role="presentation" onMouseDown={() => setEditing(false)}><section className="course-edit-dialog course-plan-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>EDIT COURSE PLAN</span><h3>{get(course, "title")}</h3><p>Set the lesson sequence and duration. Teacher and classroom belong to each class.</p></div><button className="header-icon" type="button" onClick={() => setEditing(false)} title="Close"><X size={17} /></button></header><div className="course-plan-grid-toolbar"><label><span>Edit duration</span><input type="number" min="30" step="15" value={bulkDuration} onChange={(event) => setBulkDuration(event.target.value)} /></label><button className="quiet-button" type="button" disabled={!selectedIds.length} onClick={applySelectedDuration}>Apply</button><i /><button className={quickFill ? "quiet-button active" : "quiet-button"} type="button" onClick={enableQuickFill}><Sparkles size={15} />Quick fill</button><button className="quiet-button" type="button" disabled={!selectedIds.length || drafts.length - selectedIds.length < 1} onClick={removeSelected}><Minus size={15} />Delete</button><button className="quiet-button" type="button" disabled={!selectedIds.length} onClick={duplicateSelected}><Plus size={15} />Duplicate</button><button className="primary-button" type="button" onClick={() => setDrafts((items) => refillDrafts([...items, { title: `Lesson ${items.length + 1}`, durationMinutes: Math.max(30, Number(bulkDuration) || 90) }], quickFill))}><Plus size={15} />Add lesson</button></div><div className="course-plan-grid"><div className="course-plan-grid-head"><label><input type="checkbox" checked={drafts.length > 0 && selectedIds.length === drafts.length} onChange={() => setSelectedIds(selectedIds.length === drafts.length ? [] : drafts.map((_, index) => index))} /></label><span>Order</span><span>Lesson</span><span>Duration</span><span>Actions</span></div>{drafts.map((lesson, index) => <div className={selectedIds.includes(index) ? "course-plan-grid-row selected" : "course-plan-grid-row"} key={`${index}-${lesson.title}`} draggable onDragStart={() => setDragIndex(index)} onDragOver={(event) => event.preventDefault()} onDrop={() => moveLesson(index)}><label><input type="checkbox" checked={selectedIds.includes(index)} onChange={() => toggle(index)} /></label><span className="lesson-order"><GripVertical size={16} />{index + 1}</span><input value={lesson.title} aria-label={`Lesson ${index + 1} title`} onChange={(event) => update(index, { title: event.target.value })} /><input type="number" min="30" step="15" value={lesson.durationMinutes} aria-label={`Lesson ${index + 1} duration`} onChange={(event) => update(index, { durationMinutes: Number(event.target.value) })} /><button type="button" className="header-icon" title="Delete lesson" disabled={drafts.length <= 1} onClick={() => { setDrafts((items) => refillDrafts(items.filter((_, itemIndex) => itemIndex !== index), quickFill)); setSelectedIds([]); }}><Minus size={15} /></button></div>)}</div><p className="course-plan-grid-hint"><GripVertical size={14} />Drag a row to change the course order. Quick fill keeps names as Lesson 1, Lesson 2...</p><footer><button className="quiet-button" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" disabled={busy || !drafts.some((lesson) => lesson.title.trim())} type="button" onClick={save}><Check size={16} />Save course plan</button></footer></section></div></>;
-  return <><section className="course-dashboard-strip"><div><span>COURSE BLUEPRINT</span><h3>{lessonTemplates.length} lessons available</h3><p>{intakes.length} class{intakes.length === 1 ? "" : "es"} use this plan. Content and duration are reusable; class resources are set separately.</p></div><div className="course-dashboard-facts"><span><Clock3 size={15} />{get(course, "default_minutes")} min default</span><span><Banknote size={15} />{amount(course.list_price)}</span></div></section><section className="sheet-section course-plan-view"><div className="sheet-section-title"><div><h3>Course lesson plan</h3><p className="panel-hint">Every row is placed in order when a class is scheduled.</p></div><button className="primary-button" type="button" onClick={() => setEditing(true)}><Settings2 size={15} />Edit lesson plan</button></div><div className="course-plan-records">{lessonTemplates.map((lesson) => <article key={get(lesson, "id")} style={eventStyle(course)}><div><span>Lesson {get(lesson, "lesson_no")}</span><strong>{get(lesson, "title")}</strong></div><b><Clock3 size={14} />{get(lesson, "default_duration_minutes")} min</b></article>)}</div>{!lessonTemplates.length ? <Empty text="Add the first lesson to begin the Course plan." /> : null}</section>{editing ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setEditing(false)}><section className="course-edit-dialog course-plan-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>EDIT COURSE PLAN</span><h3>{get(course, "title")}</h3><p>Set the lesson sequence and duration. Teacher and classroom belong to each class.</p></div><button className="header-icon" type="button" onClick={() => setEditing(false)} title="Close"><X size={17} /></button></header><div className="course-plan-editor"><div className="sheet-section-title"><div><h3>Batch duration</h3><p className="panel-hint">Apply the duration to every lesson.</p></div><button className="quiet-button" type="button" onClick={applyAll}>Apply to all</button></div><div className="course-plan-bulk-grid"><label className="form-field"><span>Duration (min)</span><input type="number" min="30" step="15" value={bulkDuration} onChange={(event) => setBulkDuration(event.target.value)} /></label></div><div className="sheet-section-title course-plan-edit-heading"><h3>Lesson records</h3><button className="primary-button" type="button" onClick={() => setDrafts((items) => [...items, { title: `Lesson ${items.length + 1}`, durationMinutes: Math.max(30, Number(bulkDuration) || 90) }])}><Plus size={15} />Add lesson</button></div><div className="lesson-template-list">{drafts.map((lesson, index) => <div className="lesson-template-row expanded" key={`${index}-${lesson.title}`}><span>{index + 1}</span><div className="lesson-template-fields course-plan-fields"><input value={lesson.title} aria-label={`Lesson ${index + 1} title`} onChange={(event) => update(index, { title: event.target.value })} /><label><span>Duration</span><input type="number" min="30" step="15" value={lesson.durationMinutes} onChange={(event) => update(index, { durationMinutes: Number(event.target.value) })} /></label></div><button type="button" className="header-icon" title="Remove lesson" disabled={drafts.length <= 1} onClick={() => setDrafts((items) => items.filter((_, itemIndex) => itemIndex !== index))}><Minus size={15} /></button></div>)}</div></div><footer><button className="quiet-button" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" disabled={busy || !drafts.some((lesson) => lesson.title.trim())} type="button" onClick={save}><Check size={16} />Save course plan</button></footer></section></div> : null}</>;
+  function moveLesson(target: number) {
+    if (dragIndex === null || dragIndex === target) return;
+    setDrafts((items) => {
+      const next = [...items];
+      const [item] = next.splice(dragIndex, 1);
+      next.splice(target, 0, item);
+      return refillDrafts(next, quickFill);
+    });
+    setSelectedIds([]);
+    setDragIndex(null);
+  }
+  if (editing)
+    return (
+      <>
+        <section className="course-dashboard-strip">
+          <div>
+            <span>COURSE BLUEPRINT</span>
+            <h3>{lessonTemplates.length} lessons available</h3>
+            <p>
+              {intakes.length} class{intakes.length === 1 ? "" : "es"} use this
+              plan. Content and duration are reusable; class resources are set
+              separately.
+            </p>
+          </div>
+          <div className="course-dashboard-facts">
+            <span>
+              <Clock3 size={15} />
+              {get(course, "default_minutes")} min default
+            </span>
+            <span>
+              <Banknote size={15} />
+              {amount(course.list_price)}
+            </span>
+          </div>
+        </section>
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setEditing(false)}
+        >
+          <section
+            className="course-edit-dialog course-plan-dialog"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>EDIT COURSE PLAN</span>
+                <h3>{get(course, "title")}</h3>
+                <p>
+                  Set the lesson sequence and duration. Teacher and classroom
+                  belong to each class.
+                </p>
+              </div>
+              <button
+                className="header-icon"
+                type="button"
+                onClick={() => setEditing(false)}
+                title="Close"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <div className="course-plan-grid-toolbar">
+              <label>
+                <span>Edit duration</span>
+                <input
+                  type="number"
+                  min="30"
+                  step="15"
+                  value={bulkDuration}
+                  onChange={(event) => setBulkDuration(event.target.value)}
+                />
+              </label>
+              <button
+                className="quiet-button"
+                type="button"
+                disabled={!selectedIds.length}
+                onClick={applySelectedDuration}
+              >
+                Apply
+              </button>
+              <i />
+              <button
+                className={quickFill ? "quiet-button active" : "quiet-button"}
+                type="button"
+                onClick={enableQuickFill}
+              >
+                <Sparkles size={15} />
+                Quick fill
+              </button>
+              <button
+                className="quiet-button"
+                type="button"
+                disabled={
+                  !selectedIds.length || drafts.length - selectedIds.length < 1
+                }
+                onClick={removeSelected}
+              >
+                <Minus size={15} />
+                Delete
+              </button>
+              <button
+                className="quiet-button"
+                type="button"
+                disabled={!selectedIds.length}
+                onClick={duplicateSelected}
+              >
+                <Plus size={15} />
+                Duplicate
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() =>
+                  setDrafts((items) =>
+                    refillDrafts(
+                      [
+                        ...items,
+                        {
+                          title: `Lesson ${items.length + 1}`,
+                          durationMinutes: Math.max(
+                            30,
+                            Number(bulkDuration) || 90,
+                          ),
+                        },
+                      ],
+                      quickFill,
+                    ),
+                  )
+                }
+              >
+                <Plus size={15} />
+                Add lesson
+              </button>
+            </div>
+            <div className="course-plan-grid">
+              <div className="course-plan-grid-head">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={
+                      drafts.length > 0 && selectedIds.length === drafts.length
+                    }
+                    onChange={() =>
+                      setSelectedIds(
+                        selectedIds.length === drafts.length
+                          ? []
+                          : drafts.map((_, index) => index),
+                      )
+                    }
+                  />
+                </label>
+                <span>Order</span>
+                <span>Lesson</span>
+                <span>Duration</span>
+                <span>Actions</span>
+              </div>
+              {drafts.map((lesson, index) => (
+                <div
+                  className={
+                    selectedIds.includes(index)
+                      ? "course-plan-grid-row selected"
+                      : "course-plan-grid-row"
+                  }
+                  key={`${index}-${lesson.title}`}
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => moveLesson(index)}
+                >
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(index)}
+                      onChange={() => toggle(index)}
+                    />
+                  </label>
+                  <span className="lesson-order">
+                    <GripVertical size={16} />
+                    {index + 1}
+                  </span>
+                  <input
+                    value={lesson.title}
+                    aria-label={`Lesson ${index + 1} title`}
+                    onChange={(event) =>
+                      update(index, { title: event.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="30"
+                    step="15"
+                    value={lesson.durationMinutes}
+                    aria-label={`Lesson ${index + 1} duration`}
+                    onChange={(event) =>
+                      update(index, {
+                        durationMinutes: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="header-icon"
+                    title="Delete lesson"
+                    disabled={drafts.length <= 1}
+                    onClick={() => {
+                      setDrafts((items) =>
+                        refillDrafts(
+                          items.filter((_, itemIndex) => itemIndex !== index),
+                          quickFill,
+                        ),
+                      );
+                      setSelectedIds([]);
+                    }}
+                  >
+                    <Minus size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="course-plan-grid-hint">
+              <GripVertical size={14} />
+              Drag a row to change the course order. Quick fill keeps names as
+              Lesson 1, Lesson 2...
+            </p>
+            <footer>
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                disabled={busy || !drafts.some((lesson) => lesson.title.trim())}
+                type="button"
+                onClick={save}
+              >
+                <Check size={16} />
+                Save course plan
+              </button>
+            </footer>
+          </section>
+        </div>
+      </>
+    );
+  return (
+    <>
+      <section className="course-dashboard-strip">
+        <div>
+          <span>COURSE BLUEPRINT</span>
+          <h3>{lessonTemplates.length} lessons available</h3>
+          <p>
+            {intakes.length} class{intakes.length === 1 ? "" : "es"} use this
+            plan. Content and duration are reusable; class resources are set
+            separately.
+          </p>
+        </div>
+        <div className="course-dashboard-facts">
+          <span>
+            <Clock3 size={15} />
+            {get(course, "default_minutes")} min default
+          </span>
+          <span>
+            <Banknote size={15} />
+            {amount(course.list_price)}
+          </span>
+        </div>
+      </section>
+      <section className="sheet-section course-plan-view">
+        <div className="sheet-section-title">
+          <div>
+            <h3>Course lesson plan</h3>
+            <p className="panel-hint">
+              Every row is placed in order when a class is scheduled.
+            </p>
+          </div>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setEditing(true)}
+          >
+            <Settings2 size={15} />
+            Edit lesson plan
+          </button>
+        </div>
+        <div className="course-plan-records">
+          {lessonTemplates.map((lesson) => (
+            <article key={get(lesson, "id")} style={eventStyle(course)}>
+              <div>
+                <span>Lesson {get(lesson, "lesson_no")}</span>
+                <strong>{get(lesson, "title")}</strong>
+              </div>
+              <b>
+                <Clock3 size={14} />
+                {get(lesson, "default_duration_minutes")} min
+              </b>
+            </article>
+          ))}
+        </div>
+        {!lessonTemplates.length ? (
+          <Empty text="Add the first lesson to begin the Course plan." />
+        ) : null}
+      </section>
+      {editing ? (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setEditing(false)}
+        >
+          <section
+            className="course-edit-dialog course-plan-dialog"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>EDIT COURSE PLAN</span>
+                <h3>{get(course, "title")}</h3>
+                <p>
+                  Set the lesson sequence and duration. Teacher and classroom
+                  belong to each class.
+                </p>
+              </div>
+              <button
+                className="header-icon"
+                type="button"
+                onClick={() => setEditing(false)}
+                title="Close"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <div className="course-plan-editor">
+              <div className="sheet-section-title">
+                <div>
+                  <h3>Batch duration</h3>
+                  <p className="panel-hint">
+                    Apply the duration to every lesson.
+                  </p>
+                </div>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={applyAll}
+                >
+                  Apply to all
+                </button>
+              </div>
+              <div className="course-plan-bulk-grid">
+                <label className="form-field">
+                  <span>Duration (min)</span>
+                  <input
+                    type="number"
+                    min="30"
+                    step="15"
+                    value={bulkDuration}
+                    onChange={(event) => setBulkDuration(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="sheet-section-title course-plan-edit-heading">
+                <h3>Lesson records</h3>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() =>
+                    setDrafts((items) => [
+                      ...items,
+                      {
+                        title: `Lesson ${items.length + 1}`,
+                        durationMinutes: Math.max(
+                          30,
+                          Number(bulkDuration) || 90,
+                        ),
+                      },
+                    ])
+                  }
+                >
+                  <Plus size={15} />
+                  Add lesson
+                </button>
+              </div>
+              <div className="lesson-template-list">
+                {drafts.map((lesson, index) => (
+                  <div
+                    className="lesson-template-row expanded"
+                    key={`${index}-${lesson.title}`}
+                  >
+                    <span>{index + 1}</span>
+                    <div className="lesson-template-fields course-plan-fields">
+                      <input
+                        value={lesson.title}
+                        aria-label={`Lesson ${index + 1} title`}
+                        onChange={(event) =>
+                          update(index, { title: event.target.value })
+                        }
+                      />
+                      <label>
+                        <span>Duration</span>
+                        <input
+                          type="number"
+                          min="30"
+                          step="15"
+                          value={lesson.durationMinutes}
+                          onChange={(event) =>
+                            update(index, {
+                              durationMinutes: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="header-icon"
+                      title="Remove lesson"
+                      disabled={drafts.length <= 1}
+                      onClick={() =>
+                        setDrafts((items) =>
+                          items.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      <Minus size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <footer>
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                disabled={busy || !drafts.some((lesson) => lesson.title.trim())}
+                type="button"
+                onClick={save}
+              >
+                <Check size={16} />
+                Save course plan
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
-function CourseIntakeLibrary({ course, intakes, lessonTemplates, data, busy, run, openDetail }: { course: Row; intakes: Row[]; lessonTemplates: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; openDetail: (detail: Exclude<Detail, null>) => void }) {
+function CourseIntakeLibrary({
+  course,
+  intakes,
+  lessonTemplates,
+  data,
+  busy,
+  run,
+  openDetail,
+}: {
+  course: Row;
+  intakes: Row[];
+  lessonTemplates: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
-  const [selectedId, setSelectedId] = useState(get(intakes.find((item) => get(item, "status") !== "finished") ?? intakes[0], "id"));
-  const selected = intakes.find((item) => get(item, "id") === selectedId) ?? intakes[0];
-  const selectedLessons = selected ? data.sessions.filter((lesson) => get(lesson, "class_run_id") === get(selected, "id")) : [];
-  const missingLessonCount = selected ? Math.max(0, lessonTemplates.length - selectedLessons.length) : 0;
-  useEffect(() => { if (selected && get(selected, "id") !== selectedId) setSelectedId(get(selected, "id")); }, [selected, selectedId]);
-  const activeLibrary = <><section className="course-dashboard-strip classes"><div><span>CLASS INTAKES</span><h3>{intakes.length} named class{intakes.length === 1 ? "" : "es"}</h3><p>Create a named intake, then schedule its lessons, teacher and classroom.</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><Plus size={15} />Add class</button></section>{selected ? <section className="sheet-section course-class-workspace"><ClassIntakeTabs intakes={intakes} activeId={get(selected, "id")} onChange={setSelectedId} /><div className="class-workspace-head"><div><span>{get(selected, "code")}</span><h3>{get(selected, "name")}</h3><p>{get(selected, "student_count")}/{get(selected, "capacity")} students · {selectedLessons.length}/{lessonTemplates.length || selectedLessons.length} lessons scheduled</p></div><div><button className="quiet-button" type="button" onClick={() => setCalendarOpen(true)}><CalendarDays size={15} />Schedule class</button><button className="primary-button" type="button" onClick={() => setSettingsOpen(true)}><Settings2 size={15} />Class settings</button></div></div>{missingLessonCount ? <div className="class-sync-warning"><BookOpen size={16} /><span>{missingLessonCount}/{lessonTemplates.length} lessons not scheduled after the Course plan changed.</span><button className="table-button" disabled={busy} type="button" onClick={() => void run("syncClassLessons", { runId: get(selected, "id") })}>Update</button></div> : null}<ClassLessonBrowseGrid lessons={selectedLessons} openDetail={openDetail} /></section> : <Empty text="Create a class to plan its dates, teaching team and learner list." />}{adding ? <ClassCreateDialog course={course} data={data} busy={busy} run={run} onClose={() => setAdding(false)} /> : null}{settingsOpen && selected ? <ClassSettingsDialog runItem={selected} lessons={selectedLessons} data={data} busy={busy} run={run} openDetail={openDetail} onClose={() => setSettingsOpen(false)} /> : null}{calendarOpen && selected ? <ClassScheduleDialog runItem={selected} lessons={selectedLessons} missingCount={missingLessonCount} totalCount={lessonTemplates.length} busy={busy} run={run} onOpen={openDetail} onClose={() => setCalendarOpen(false)} onQuick={() => { setCalendarOpen(false); setQuickOpen(true); }} /> : null}{quickOpen && selected ? <QuickScheduleDialog runItem={selected} lessonCount={lessonTemplates.length || selectedLessons.length} defaultDuration={Number(lessonTemplates[0]?.default_duration_minutes || course.default_minutes || 90)} data={data} busy={busy} run={run} onClose={() => setQuickOpen(false)} /> : null}</>;
+  const [selectedId, setSelectedId] = useState(
+    get(
+      intakes.find((item) => get(item, "status") !== "finished") ?? intakes[0],
+      "id",
+    ),
+  );
+  const selected =
+    intakes.find((item) => get(item, "id") === selectedId) ?? intakes[0];
+  const selectedLessons = selected
+    ? data.sessions.filter(
+        (lesson) => get(lesson, "class_run_id") === get(selected, "id"),
+      )
+    : [];
+  const missingLessonCount = selected
+    ? Math.max(0, lessonTemplates.length - selectedLessons.length)
+    : 0;
+  useEffect(() => {
+    if (selected && get(selected, "id") !== selectedId)
+      setSelectedId(get(selected, "id"));
+  }, [selected, selectedId]);
+  const activeLibrary = (
+    <>
+      <section className="course-dashboard-strip classes">
+        <div>
+          <span>CLASS INTAKES</span>
+          <h3>
+            {intakes.length} named class{intakes.length === 1 ? "" : "es"}
+          </h3>
+          <p>
+            Create a named intake, then schedule its lessons, teacher and
+            classroom.
+          </p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setAdding(true)}
+        >
+          <Plus size={15} />
+          Add class
+        </button>
+      </section>
+      {selected ? (
+        <section className="sheet-section course-class-workspace">
+          <ClassIntakeTabs
+            intakes={intakes}
+            activeId={get(selected, "id")}
+            onChange={setSelectedId}
+          />
+          <div className="class-workspace-head">
+            <div>
+              <span>{get(selected, "code")}</span>
+              <h3>{get(selected, "name")}</h3>
+              <p>
+                {get(selected, "student_count")}/{get(selected, "capacity")}{" "}
+                students · {selectedLessons.length}/
+                {lessonTemplates.length || selectedLessons.length} lessons
+                scheduled
+              </p>
+            </div>
+            <div>
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => setCalendarOpen(true)}
+              >
+                <CalendarDays size={15} />
+                Schedule class
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings2 size={15} />
+                Class settings
+              </button>
+            </div>
+          </div>
+          {missingLessonCount ? (
+            <div className="class-sync-warning">
+              <BookOpen size={16} />
+              <span>
+                {missingLessonCount}/{lessonTemplates.length} lessons not
+                scheduled after the Course plan changed.
+              </span>
+              <button
+                className="table-button"
+                disabled={busy}
+                type="button"
+                onClick={() =>
+                  void run("syncClassLessons", { runId: get(selected, "id") })
+                }
+              >
+                Update
+              </button>
+            </div>
+          ) : null}
+          <ClassLessonBrowseGrid
+            lessons={selectedLessons}
+            openDetail={openDetail}
+          />
+        </section>
+      ) : (
+        <Empty text="Create a class to plan its dates, teaching team and learner list." />
+      )}
+      {adding ? (
+        <ClassCreateDialog
+          course={course}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
+      {settingsOpen && selected ? (
+        <ClassSettingsDialog
+          runItem={selected}
+          lessons={selectedLessons}
+          data={data}
+          busy={busy}
+          run={run}
+          openDetail={openDetail}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
+      {calendarOpen && selected ? (
+        <ClassScheduleDialog
+          runItem={selected}
+          lessons={selectedLessons}
+          missingCount={missingLessonCount}
+          totalCount={lessonTemplates.length}
+          busy={busy}
+          run={run}
+          onOpen={openDetail}
+          onClose={() => setCalendarOpen(false)}
+          onQuick={() => {
+            setCalendarOpen(false);
+            setQuickOpen(true);
+          }}
+        />
+      ) : null}
+      {quickOpen && selected ? (
+        <QuickScheduleDialog
+          runItem={selected}
+          lessonCount={lessonTemplates.length || selectedLessons.length}
+          defaultDuration={Number(
+            lessonTemplates[0]?.default_duration_minutes ||
+              course.default_minutes ||
+              90,
+          )}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setQuickOpen(false)}
+        />
+      ) : null}
+    </>
+  );
   return activeLibrary;
-  if (true) return <><section className="course-dashboard-strip classes"><div><span>CLASS INTAKES</span><h3>{intakes.length} named class{intakes.length === 1 ? "" : "es"}</h3><p>Create a named intake, then schedule its lessons, teacher and classroom.</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><Plus size={15} />Add class</button></section>{selected ? <section className="sheet-section course-class-workspace"><ClassIntakeTabs intakes={intakes} activeId={get(selected, "id")} onChange={setSelectedId} /><div className="class-workspace-head"><div><span>{get(selected, "code")}</span><h3>{get(selected, "name")}</h3><p>{get(selected, "student_count")}/{get(selected, "capacity")} students · {selectedLessons.length || lessonTemplates.length} lessons</p></div><div><button className="quiet-button" type="button" onClick={() => setCalendarOpen(true)}><CalendarDays size={15} />Schedule class</button><button className="primary-button" type="button" onClick={() => setSettingsOpen(true)}><Settings2 size={15} />Class settings</button></div></div><ClassLessonBrowseGrid lessons={selectedLessons} openDetail={openDetail} /></section> : <Empty text="Create a class to plan its dates, teaching team and learner list." />}{adding ? <ClassCreateDialog course={course} data={data} busy={busy} run={run} onClose={() => setAdding(false)} /> : null}{settingsOpen && selected ? <ClassSettingsDialog runItem={selected} lessons={selectedLessons} data={data} busy={busy} run={run} openDetail={openDetail} onClose={() => setSettingsOpen(false)} /> : null}{calendarOpen && selected ? <ClassScheduleDialog runItem={selected} lessons={selectedLessons} onOpen={openDetail} onClose={() => setCalendarOpen(false)} onQuick={() => { setCalendarOpen(false); setQuickOpen(true); }} /> : null}{quickOpen && selected ? <QuickScheduleDialog runItem={selected} lessonCount={selectedLessons.length || lessonTemplates.length} defaultDuration={Number(lessonTemplates[0]?.default_duration_minutes || course.default_minutes || 90)} data={data} busy={busy} run={run} onClose={() => setQuickOpen(false)} /> : null}</>;
-  return <><section className="course-dashboard-strip classes"><div><span>CLASS INTAKES</span><h3>{intakes.length} named class{intakes.length === 1 ? "" : "es"}</h3><p>Create a named intake, then schedule its lessons, teacher and classroom.</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><Plus size={15} />Add class</button></section>{selected ? <section className="sheet-section course-class-workspace"><ClassIntakeTabs intakes={intakes} activeId={get(selected, "id")} onChange={(id) => { setSelectedId(id); setSelectedLessonIds([]); }} /><div className="class-workspace-head"><div><span>{get(selected, "code")}</span><h3>{get(selected, "name")}</h3><p>{get(selected, "student_count")}/{get(selected, "capacity")} students · {selectedLessons.length || lessonTemplates.length} lessons</p></div><div><button className="quiet-button" type="button" onClick={() => setCalendarOpen(true)}><CalendarDays size={15} />Schedule class</button><button className="primary-button" type="button" onClick={() => setQuickOpen(true)}><Clock3 size={15} />Quick schedule</button></div></div><ClassAssignmentPanel runItem={selected} lessons={selectedLessons} selectedLessonIds={selectedLessonIds} data={data} busy={busy} run={run} /><ClassLessonGrid lessons={selectedLessons} selectedIds={selectedLessonIds} onSelect={setSelectedLessonIds} busy={busy} run={run} openDetail={openDetail} /></section> : <Empty text="Create a class to plan its dates, teaching team and learner list." />}{adding ? <ClassCreateDialog course={course} data={data} busy={busy} run={run} onClose={() => setAdding(false)} /> : null}{calendarOpen && selected ? <ClassScheduleDialog runItem={selected} lessons={selectedLessons} onOpen={openDetail} onClose={() => setCalendarOpen(false)} onQuick={() => { setCalendarOpen(false); setQuickOpen(true); }} /> : null}{quickOpen && selected ? <QuickScheduleDialog runItem={selected} lessonCount={selectedLessons.length || lessonTemplates.length} data={data} busy={busy} run={run} onClose={() => setQuickOpen(false)} /> : null}</>;
+  if (true)
+    return (
+      <>
+        <section className="course-dashboard-strip classes">
+          <div>
+            <span>CLASS INTAKES</span>
+            <h3>
+              {intakes.length} named class{intakes.length === 1 ? "" : "es"}
+            </h3>
+            <p>
+              Create a named intake, then schedule its lessons, teacher and
+              classroom.
+            </p>
+          </div>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setAdding(true)}
+          >
+            <Plus size={15} />
+            Add class
+          </button>
+        </section>
+        {selected ? (
+          <section className="sheet-section course-class-workspace">
+            <ClassIntakeTabs
+              intakes={intakes}
+              activeId={get(selected, "id")}
+              onChange={setSelectedId}
+            />
+            <div className="class-workspace-head">
+              <div>
+                <span>{get(selected, "code")}</span>
+                <h3>{get(selected, "name")}</h3>
+                <p>
+                  {get(selected, "student_count")}/{get(selected, "capacity")}{" "}
+                  students · {selectedLessons.length || lessonTemplates.length}{" "}
+                  lessons
+                </p>
+              </div>
+              <div>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={() => setCalendarOpen(true)}
+                >
+                  <CalendarDays size={15} />
+                  Schedule class
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <Settings2 size={15} />
+                  Class settings
+                </button>
+              </div>
+            </div>
+            <ClassLessonBrowseGrid
+              lessons={selectedLessons}
+              openDetail={openDetail}
+            />
+          </section>
+        ) : (
+          <Empty text="Create a class to plan its dates, teaching team and learner list." />
+        )}
+        {adding ? (
+          <ClassCreateDialog
+            course={course}
+            data={data}
+            busy={busy}
+            run={run}
+            onClose={() => setAdding(false)}
+          />
+        ) : null}
+        {settingsOpen && selected ? (
+          <ClassSettingsDialog
+            runItem={selected}
+            lessons={selectedLessons}
+            data={data}
+            busy={busy}
+            run={run}
+            openDetail={openDetail}
+            onClose={() => setSettingsOpen(false)}
+          />
+        ) : null}
+        {calendarOpen && selected ? (
+          <ClassScheduleDialog
+            runItem={selected}
+            lessons={selectedLessons}
+            onOpen={openDetail}
+            onClose={() => setCalendarOpen(false)}
+            onQuick={() => {
+              setCalendarOpen(false);
+              setQuickOpen(true);
+            }}
+          />
+        ) : null}
+        {quickOpen && selected ? (
+          <QuickScheduleDialog
+            runItem={selected}
+            lessonCount={selectedLessons.length || lessonTemplates.length}
+            defaultDuration={Number(
+              lessonTemplates[0]?.default_duration_minutes ||
+                course.default_minutes ||
+                90,
+            )}
+            data={data}
+            busy={busy}
+            run={run}
+            onClose={() => setQuickOpen(false)}
+          />
+        ) : null}
+      </>
+    );
+  return (
+    <>
+      <section className="course-dashboard-strip classes">
+        <div>
+          <span>CLASS INTAKES</span>
+          <h3>
+            {intakes.length} named class{intakes.length === 1 ? "" : "es"}
+          </h3>
+          <p>
+            Create a named intake, then schedule its lessons, teacher and
+            classroom.
+          </p>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setAdding(true)}
+        >
+          <Plus size={15} />
+          Add class
+        </button>
+      </section>
+      {selected ? (
+        <section className="sheet-section course-class-workspace">
+          <ClassIntakeTabs
+            intakes={intakes}
+            activeId={get(selected, "id")}
+            onChange={(id) => {
+              setSelectedId(id);
+              setSelectedLessonIds([]);
+            }}
+          />
+          <div className="class-workspace-head">
+            <div>
+              <span>{get(selected, "code")}</span>
+              <h3>{get(selected, "name")}</h3>
+              <p>
+                {get(selected, "student_count")}/{get(selected, "capacity")}{" "}
+                students · {selectedLessons.length || lessonTemplates.length}{" "}
+                lessons
+              </p>
+            </div>
+            <div>
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => setCalendarOpen(true)}
+              >
+                <CalendarDays size={15} />
+                Schedule class
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => setQuickOpen(true)}
+              >
+                <Clock3 size={15} />
+                Quick schedule
+              </button>
+            </div>
+          </div>
+          <ClassAssignmentPanel
+            runItem={selected}
+            lessons={selectedLessons}
+            selectedLessonIds={selectedLessonIds}
+            data={data}
+            busy={busy}
+            run={run}
+          />
+          <ClassLessonGrid
+            lessons={selectedLessons}
+            selectedIds={selectedLessonIds}
+            onSelect={setSelectedLessonIds}
+            busy={busy}
+            run={run}
+            openDetail={openDetail}
+          />
+        </section>
+      ) : (
+        <Empty text="Create a class to plan its dates, teaching team and learner list." />
+      )}
+      {adding ? (
+        <ClassCreateDialog
+          course={course}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
+      {calendarOpen && selected ? (
+        <ClassScheduleDialog
+          runItem={selected}
+          lessons={selectedLessons}
+          onOpen={openDetail}
+          onClose={() => setCalendarOpen(false)}
+          onQuick={() => {
+            setCalendarOpen(false);
+            setQuickOpen(true);
+          }}
+        />
+      ) : null}
+      {quickOpen && selected ? (
+        <QuickScheduleDialog
+          runItem={selected}
+          lessonCount={selectedLessons.length || lessonTemplates.length}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setQuickOpen(false)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function CourseEditDialog({ course, busy, run, onClose }: { course: Row; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void }) {
-  const [colour, setColour] = useState(get(course, "display_color") || defaultCourseColour);
-  function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateCourse", { ...values, courseId: get(course, "id"), color: colour }).then(onClose); }
-  function remove() { if (window.confirm("Delete this course? Courses with enrolled students cannot be deleted.")) void run("deleteCourse", { courseId: get(course, "id") }).then(onClose); }
-  if (true) return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog" onSubmit={save} onMouseDown={(event) => event.stopPropagation()}><header><div><span>COURSE SETTINGS</span><h3>Edit course</h3><p>Update this reusable course product. Lesson content is edited separately in the Course plan.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="course-edit-grid"><FormField name="title" label="Course name" defaultValue={get(course, "title")} required /><FormField name="subject" label="Subject" defaultValue={get(course, "subject")} required /><FormField name="level" label="Level" defaultValue={get(course, "level")} required /><FormField name="sessions" type="number" label="Planned lessons" defaultValue={get(course, "default_sessions")} min="1" required /><FormField name="minutes" type="number" label="Default duration" defaultValue={get(course, "default_minutes")} min="30" step="15" required /><FormField name="price" type="number" label="Standard fee (RM)" defaultValue={get(course, "list_price")} min="0" step="0.01" required /></div><CourseColourPicker value={colour} onChange={setColour} disabled={busy} /><footer className="course-edit-footer"><button className="danger-button" disabled={busy} type="button" onClick={remove}>Delete course</button><span>Courses with students cannot be deleted.</span><div><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save course</button></div></footer></form></div>;
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog" onSubmit={save} onMouseDown={(event) => event.stopPropagation()}><header><div><span>COURSE SETTINGS</span><h3>Edit course</h3><p>Update the reusable course product. Lesson details are edited in the Course tab.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="course-edit-grid"><FormField name="title" label="Course name" defaultValue={get(course, "title")} required /><FormField name="subject" label="Subject" defaultValue={get(course, "subject")} required /><FormField name="level" label="Level" defaultValue={get(course, "level")} required /><FormField name="sessions" type="number" label="Planned lessons" defaultValue={get(course, "default_sessions")} min="1" required /><FormField name="minutes" type="number" label="Default duration" defaultValue={get(course, "default_minutes")} min="30" step="15" required /><FormField name="price" type="number" label="Standard fee (RM)" defaultValue={get(course, "list_price")} min="0" step="0.01" required /></div><CourseColourPicker value={colour} onChange={setColour} disabled={busy} /><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save course</button></footer></form></div>;
+function CourseEditDialog({
+  course,
+  busy,
+  run,
+  onClose,
+}: {
+  course: Row;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [colour, setColour] = useState(
+    get(course, "display_color") || defaultCourseColour,
+  );
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("updateCourse", {
+      ...values,
+      courseId: get(course, "id"),
+      color: colour,
+    }).then(onClose);
+  }
+  function remove() {
+    if (
+      window.confirm(
+        "Delete this course? Courses with enrolled students cannot be deleted.",
+      )
+    )
+      void run("deleteCourse", { courseId: get(course, "id") }).then(onClose);
+  }
+  if (true)
+    return (
+      <div
+        className="dialog-backdrop"
+        role="presentation"
+        onMouseDown={onClose}
+      >
+        <form
+          className="course-edit-dialog"
+          onSubmit={save}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header>
+            <div>
+              <span>COURSE SETTINGS</span>
+              <h3>Edit course</h3>
+              <p>
+                Update this reusable course product. Lesson content is edited
+                separately in the Course plan.
+              </p>
+            </div>
+            <button
+              className="header-icon"
+              type="button"
+              onClick={onClose}
+              title="Close"
+            >
+              <X size={17} />
+            </button>
+          </header>
+          <div className="course-edit-grid">
+            <FormField
+              name="title"
+              label="Course name"
+              defaultValue={get(course, "title")}
+              required
+            />
+            <FormField
+              name="subject"
+              label="Subject"
+              defaultValue={get(course, "subject")}
+              required
+            />
+            <FormField
+              name="level"
+              label="Level"
+              defaultValue={get(course, "level")}
+              required
+            />
+            <FormField
+              name="sessions"
+              type="number"
+              label="Planned lessons"
+              defaultValue={get(course, "default_sessions")}
+              min="1"
+              required
+            />
+            <FormField
+              name="minutes"
+              type="number"
+              label="Default duration"
+              defaultValue={get(course, "default_minutes")}
+              min="30"
+              step="15"
+              required
+            />
+            <FormField
+              name="price"
+              type="number"
+              label="Standard fee (RM)"
+              defaultValue={get(course, "list_price")}
+              min="0"
+              step="0.01"
+              required
+            />
+          </div>
+          <CourseColourPicker
+            value={colour}
+            onChange={setColour}
+            disabled={busy}
+          />
+          <footer className="course-edit-footer">
+            <button
+              className="danger-button"
+              disabled={busy}
+              type="button"
+              onClick={remove}
+            >
+              Delete course
+            </button>
+            <span>Courses with students cannot be deleted.</span>
+            <div>
+              <button className="quiet-button" type="button" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="primary-button" disabled={busy} type="submit">
+                <Check size={16} />
+                Save course
+              </button>
+            </div>
+          </footer>
+        </form>
+      </div>
+    );
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="course-edit-dialog"
+        onSubmit={save}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>COURSE SETTINGS</span>
+            <h3>Edit course</h3>
+            <p>
+              Update the reusable course product. Lesson details are edited in
+              the Course tab.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="course-edit-grid">
+          <FormField
+            name="title"
+            label="Course name"
+            defaultValue={get(course, "title")}
+            required
+          />
+          <FormField
+            name="subject"
+            label="Subject"
+            defaultValue={get(course, "subject")}
+            required
+          />
+          <FormField
+            name="level"
+            label="Level"
+            defaultValue={get(course, "level")}
+            required
+          />
+          <FormField
+            name="sessions"
+            type="number"
+            label="Planned lessons"
+            defaultValue={get(course, "default_sessions")}
+            min="1"
+            required
+          />
+          <FormField
+            name="minutes"
+            type="number"
+            label="Default duration"
+            defaultValue={get(course, "default_minutes")}
+            min="30"
+            step="15"
+            required
+          />
+          <FormField
+            name="price"
+            type="number"
+            label="Standard fee (RM)"
+            defaultValue={get(course, "list_price")}
+            min="0"
+            step="0.01"
+            required
+          />
+        </div>
+        <CourseColourPicker
+          value={colour}
+          onChange={setColour}
+          disabled={busy}
+        />
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            Save course
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function ClassCreateDialog({ course, data, busy, run, onClose }: { course: Row; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void }) {
-  function create(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("createClassRun", { ...values, courseId: get(course, "id") }).then(onClose); }
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog class-create-dialog" onSubmit={create} onMouseDown={(event) => event.stopPropagation()}><header><div><span>NEW CLASS</span><h3>{get(course, "title")}</h3><p>A class has one teaching language, one class teacher and one teaching mode. Scheduling happens next.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="course-edit-grid"><label className="form-field"><span>Intake group</span><select name="termId" required defaultValue={get(data.terms[0], "id")}>{data.terms.map((term) => <option key={get(term, "id")} value={get(term, "id")}>{get(term, "name")}</option>)}</select></label><label className="form-field"><span>Teaching mode</span><select name="deliveryMode" defaultValue="onsite"><option value="onsite">On-site class</option><option value="online">Online class</option></select></label><label className="form-field"><span>Teaching language</span><select name="languageId" required>{data.languages.map((language) => <option key={get(language, "id")} value={get(language, "id")}>{get(language, "name")}</option>)}</select></label><label className="form-field"><span>Class teacher</span><select name="teacherId" required>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")} · {get(teacher, "language_names")}</option>)}</select></label><FormField name="name" label="Class name" placeholder="e.g. July 2026 - Tuesday PM" required /><FormField name="capacity" type="number" label="Capacity" defaultValue="16" min="1" required /><FormField name="price" type="number" label="Course fee (RM)" defaultValue={get(course, "list_price")} min="0" step="0.01" required /></div><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Create class</button></footer></form></div>;
+function ClassCreateDialog({
+  course,
+  data,
+  busy,
+  run,
+  onClose,
+}: {
+  course: Row;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
+  function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("createClassRun", { ...values, courseId: get(course, "id") }).then(
+      onClose,
+    );
+  }
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="course-edit-dialog class-create-dialog"
+        onSubmit={create}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>NEW CLASS</span>
+            <h3>{get(course, "title")}</h3>
+            <p>
+              A class has one teaching language, one class teacher and one
+              teaching mode. Scheduling happens next.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="course-edit-grid">
+          <label className="form-field">
+            <span>Intake group</span>
+            <select
+              name="termId"
+              required
+              defaultValue={get(data.terms[0], "id")}
+            >
+              {data.terms.map((term) => (
+                <option key={get(term, "id")} value={get(term, "id")}>
+                  {get(term, "name")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Teaching mode</span>
+            <select name="deliveryMode" defaultValue="onsite">
+              <option value="onsite">On-site class</option>
+              <option value="online">Online class</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Teaching language</span>
+            <select name="languageId" required>
+              {data.languages.map((language) => (
+                <option key={get(language, "id")} value={get(language, "id")}>
+                  {get(language, "name")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Class teacher</span>
+            <select name="teacherId" required>
+              {data.teachers.map((teacher) => (
+                <option key={get(teacher, "id")} value={get(teacher, "id")}>
+                  {get(teacher, "name")} · {get(teacher, "language_names")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <FormField
+            name="name"
+            label="Class name"
+            placeholder="e.g. July 2026 - Tuesday PM"
+            required
+          />
+          <FormField
+            name="capacity"
+            type="number"
+            label="Capacity"
+            defaultValue="16"
+            min="1"
+            required
+          />
+          <FormField
+            name="price"
+            type="number"
+            label="Course fee (RM)"
+            defaultValue={get(course, "list_price")}
+            min="0"
+            step="0.01"
+            required
+          />
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            Create class
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function ClassAssignmentPanel({ runItem, lessons, selectedLessonIds, data, busy, run }: { runItem: Row; lessons: Row[]; selectedLessonIds: string[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void> }) {
+function ClassAssignmentPanel({
+  runItem,
+  lessons,
+  selectedLessonIds,
+  data,
+  busy,
+  run,
+}: {
+  runItem: Row;
+  lessons: Row[];
+  selectedLessonIds: string[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
   const first = lessons[0];
-  const teacherBooking = data.teacherBookings.find((booking) => get(booking, "class_session_id") === get(first, "id"));
-  const roomBooking = data.resourceBookings.find((booking) => get(booking, "class_session_id") === get(first, "id"));
-  const duration = first ? Math.max(30, minutesOfDay(first.ends_at) - minutesOfDay(first.starts_at)) : 90;
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("applyClassAssignments", { ...values, runId: get(runItem, "id"), sessionIds: JSON.stringify(selectedLessonIds) }); }
-  if (!lessons.length) return <section className="class-assignment-panel empty"><div><span>RESOURCE ASSIGNMENT</span><h3>Schedule this class first</h3><p>Quick schedule will create the saved Course lessons, then you can set or refine their resources here.</p></div></section>;
-  return <section className="class-assignment-panel"><div className="sheet-section-title"><div><h3>Teacher & classroom</h3><p className="panel-hint">{selectedLessonIds.length ? `${selectedLessonIds.length} selected lesson${selectedLessonIds.length === 1 ? "" : "s"}` : "No selection: applies to every lesson"}</p></div></div><form className="class-assignment-form" onSubmit={submit}><label className="form-field"><span>Teacher</span><select name="teacherId" defaultValue={get(teacherBooking, "teacher_id")} required>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")}</option>)}</select></label><label className="form-field"><span>Classroom</span><select name="classroomId" defaultValue={get(roomBooking, "classroom_id")} required>{data.classrooms.map((room) => <option key={get(room, "id")} value={get(room, "id")}>{get(room, "name")}</option>)}</select></label><FormField name="durationMinutes" type="number" label="Duration (min)" defaultValue={String(duration)} min="30" step="15" required /><FormField name="payAmount" type="number" label="Teacher pay (RM)" defaultValue={get(teacherBooking, "pay_amount") || "0"} min="0" step="0.01" required /><button className="quiet-button" disabled={busy} type="submit"><Check size={15} />{selectedLessonIds.length ? "Apply selected" : "Apply to all"}</button></form></section>;
+  const teacherBooking = data.teacherBookings.find(
+    (booking) => get(booking, "class_session_id") === get(first, "id"),
+  );
+  const roomBooking = data.resourceBookings.find(
+    (booking) => get(booking, "class_session_id") === get(first, "id"),
+  );
+  const duration = first
+    ? Math.max(30, minutesOfDay(first.ends_at) - minutesOfDay(first.starts_at))
+    : 90;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("applyClassAssignments", {
+      ...values,
+      runId: get(runItem, "id"),
+      sessionIds: JSON.stringify(selectedLessonIds),
+    });
+  }
+  if (!lessons.length)
+    return (
+      <section className="class-assignment-panel empty">
+        <div>
+          <span>RESOURCE ASSIGNMENT</span>
+          <h3>Schedule this class first</h3>
+          <p>
+            Quick schedule will create the saved Course lessons, then you can
+            set or refine their resources here.
+          </p>
+        </div>
+      </section>
+    );
+  return (
+    <section className="class-assignment-panel">
+      <div className="sheet-section-title">
+        <div>
+          <h3>Teacher & classroom</h3>
+          <p className="panel-hint">
+            {selectedLessonIds.length
+              ? `${selectedLessonIds.length} selected lesson${selectedLessonIds.length === 1 ? "" : "s"}`
+              : "No selection: applies to every lesson"}
+          </p>
+        </div>
+      </div>
+      <form className="class-assignment-form" onSubmit={submit}>
+        <label className="form-field">
+          <span>Teacher</span>
+          <select
+            name="teacherId"
+            defaultValue={get(teacherBooking, "teacher_id")}
+            required
+          >
+            {data.teachers.map((teacher) => (
+              <option key={get(teacher, "id")} value={get(teacher, "id")}>
+                {get(teacher, "name")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Classroom</span>
+          <select
+            name="classroomId"
+            defaultValue={get(roomBooking, "classroom_id")}
+            required
+          >
+            {data.classrooms.map((room) => (
+              <option key={get(room, "id")} value={get(room, "id")}>
+                {get(room, "name")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <FormField
+          name="durationMinutes"
+          type="number"
+          label="Duration (min)"
+          defaultValue={String(duration)}
+          min="30"
+          step="15"
+          required
+        />
+        <FormField
+          name="payAmount"
+          type="number"
+          label="Teacher pay (RM)"
+          defaultValue={get(teacherBooking, "pay_amount") || "0"}
+          min="0"
+          step="0.01"
+          required
+        />
+        <button className="quiet-button" disabled={busy} type="submit">
+          <Check size={15} />
+          {selectedLessonIds.length ? "Apply selected" : "Apply to all"}
+        </button>
+      </form>
+    </section>
+  );
 }
 
-function ClassLessonGrid({ lessons, selectedIds, onSelect, data, busy, run }: { lessons: Row[]; selectedIds: string[]; onSelect: (ids: string[]) => void; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void> }) {
+function ClassLessonGrid({
+  lessons,
+  selectedIds,
+  onSelect,
+  data,
+  busy,
+  run,
+}: {
+  lessons: Row[];
+  selectedIds: string[];
+  onSelect: (ids: string[]) => void;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
   const [modifyLesson, setModifyLesson] = useState<Row | null>(null);
-  const ordered = [...lessons].sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const allSelected = ordered.length > 0 && ordered.every((lesson) => selectedIds.includes(get(lesson, "id")));
-  function toggle(id: string) { onSelect(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]); }
-  function resort() { if (window.confirm("Re-apply the Course lesson order to the current lesson dates?")) void run("resortClassLessons", { runId: get(ordered[0], "class_run_id") }); }
-  return <><section className="class-lesson-grid-section"><div className="sheet-section-title"><div><h3>Lessons</h3><p className="panel-hint">Select one or more lessons for a resource update. Modify opens a focused popup.</p></div><button className="quiet-button" disabled={busy || !ordered.length} type="button" onClick={resort}><BookOpen size={15} />Re-sort by course content</button></div>{ordered.length ? <div className="class-lesson-grid"><div className="class-lesson-grid-head"><label><input type="checkbox" checked={allSelected} onChange={() => onSelect(allSelected ? [] : ordered.map((lesson) => get(lesson, "id")))} />All</label><span>Lesson</span><span>Time</span><span>Teacher</span><span>Classroom</span><span>Action</span></div>{ordered.map((lesson) => <div className={selectedIds.includes(get(lesson, "id")) ? "class-lesson-grid-row selected" : "class-lesson-grid-row"} key={get(lesson, "id")} style={eventStyle(lesson)}><label><input type="checkbox" checked={selectedIds.includes(get(lesson, "id"))} onChange={() => toggle(get(lesson, "id"))} /></label><div><b>#{get(lesson, "session_no")}</b><strong>{get(lesson, "topic")}</strong></div><span>{malaysiaDate(lesson.starts_at)}<small>{timeRange(lesson)}</small></span><span>{get(lesson, "teacher_name") || "Unassigned"}</span><span>{get(lesson, "classroom_name") || "Unassigned"}</span><button className="table-button" type="button" onClick={() => setModifyLesson(lesson)}>Modify</button></div>)}</div> : <Empty text="No lessons are scheduled for this class yet." />}</section>{modifyLesson ? <LessonModifyDialog lesson={modifyLesson} data={data} busy={busy} run={run} onClose={() => setModifyLesson(null)} /> : null}</>;
+  const ordered = [...lessons].sort(
+    (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+  );
+  const allSelected =
+    ordered.length > 0 &&
+    ordered.every((lesson) => selectedIds.includes(get(lesson, "id")));
+  function toggle(id: string) {
+    onSelect(
+      selectedIds.includes(id)
+        ? selectedIds.filter((item) => item !== id)
+        : [...selectedIds, id],
+    );
+  }
+  function resort() {
+    if (
+      window.confirm(
+        "Re-apply the Course lesson order to the current lesson dates?",
+      )
+    )
+      void run("resortClassLessons", {
+        runId: get(ordered[0], "class_run_id"),
+      });
+  }
+  return (
+    <>
+      <section className="class-lesson-grid-section">
+        <div className="sheet-section-title">
+          <div>
+            <h3>Lessons</h3>
+            <p className="panel-hint">
+              Select one or more lessons for a resource update. Modify opens a
+              focused popup.
+            </p>
+          </div>
+          <button
+            className="quiet-button"
+            disabled={busy || !ordered.length}
+            type="button"
+            onClick={resort}
+          >
+            <BookOpen size={15} />
+            Re-sort by course content
+          </button>
+        </div>
+        {ordered.length ? (
+          <div className="class-lesson-grid">
+            <div className="class-lesson-grid-head">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() =>
+                    onSelect(
+                      allSelected
+                        ? []
+                        : ordered.map((lesson) => get(lesson, "id")),
+                    )
+                  }
+                />
+                All
+              </label>
+              <span>Lesson</span>
+              <span>Time</span>
+              <span>Teacher</span>
+              <span>Classroom</span>
+              <span>Action</span>
+            </div>
+            {ordered.map((lesson) => (
+              <div
+                className={
+                  selectedIds.includes(get(lesson, "id"))
+                    ? "class-lesson-grid-row selected"
+                    : "class-lesson-grid-row"
+                }
+                key={get(lesson, "id")}
+                style={eventStyle(lesson)}
+              >
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(get(lesson, "id"))}
+                    onChange={() => toggle(get(lesson, "id"))}
+                  />
+                </label>
+                <div>
+                  <b>#{get(lesson, "session_no")}</b>
+                  <strong>{get(lesson, "topic")}</strong>
+                </div>
+                <span>
+                  {malaysiaDate(lesson.starts_at)}
+                  <small>{timeRange(lesson)}</small>
+                </span>
+                <span>{get(lesson, "teacher_name") || "Unassigned"}</span>
+                <span>{get(lesson, "classroom_name") || "Unassigned"}</span>
+                <button
+                  className="table-button"
+                  type="button"
+                  onClick={() => setModifyLesson(lesson)}
+                >
+                  Modify
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty text="No lessons are scheduled for this class yet." />
+        )}
+      </section>
+      {modifyLesson ? (
+        <LessonModifyDialog
+          lesson={modifyLesson}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setModifyLesson(null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function ClassLessonBrowseGrid({ lessons, openDetail }: { lessons: Row[]; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const ordered = [...lessons].sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  if (!ordered.length) return <Empty text="No lessons are scheduled for this class yet. Choose Schedule class to place the course plan." />;
-  return <section className="class-lesson-grid-section class-browse-grid"><div className="sheet-section-title"><div><h3>Class lessons</h3><p className="panel-hint">Browse the live plan. Open a lesson for its attendance and details.</p></div><span>{ordered.length} lessons</span></div><div className="class-lesson-grid"><div className="class-lesson-grid-head browse"><span>Lesson</span><span>Time</span><span>Teacher</span><span>Classroom</span><span>View</span></div>{ordered.map((lesson) => <div className="class-lesson-grid-row browse" key={get(lesson, "id")} style={eventStyle(lesson)}><div><b>#{get(lesson, "session_no")}</b><strong>{get(lesson, "topic")}</strong></div><span>{malaysiaDate(lesson.starts_at)}<small>{timeRange(lesson)}</small></span><span>{get(lesson, "teacher_name") || "Unassigned"}</span><span>{get(lesson, "classroom_name") || "Unassigned"}</span><button className="table-button" type="button" onClick={() => openDetail({ kind: "session", id: get(lesson, "id") })}>Open</button></div>)}</div></section>;
+function ClassLessonBrowseGrid({
+  lessons,
+  openDetail,
+}: {
+  lessons: Row[];
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const ordered = [...lessons].sort(
+    (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+  );
+  if (!ordered.length)
+    return (
+      <Empty text="No lessons are scheduled for this class yet. Choose Schedule class to place the course plan." />
+    );
+  return (
+    <section className="class-lesson-grid-section class-browse-grid">
+      <div className="sheet-section-title">
+        <div>
+          <h3>Class lessons</h3>
+          <p className="panel-hint">
+            Browse the live plan. Open a lesson for its attendance and details.
+          </p>
+        </div>
+        <span>{ordered.length} lessons</span>
+      </div>
+      <div className="class-lesson-grid">
+        <div className="class-lesson-grid-head browse">
+          <span>Lesson</span>
+          <span>Time</span>
+          <span>Teacher</span>
+          <span>Classroom</span>
+          <span>View</span>
+        </div>
+        {ordered.map((lesson) => (
+          <div
+            className="class-lesson-grid-row browse"
+            key={get(lesson, "id")}
+            style={eventStyle(lesson)}
+          >
+            <div>
+              <b>#{get(lesson, "session_no")}</b>
+              <strong>{get(lesson, "topic")}</strong>
+            </div>
+            <span>
+              {malaysiaDate(lesson.starts_at)}
+              <small>{timeRange(lesson)}</small>
+            </span>
+            <span>{get(lesson, "teacher_name") || "Unassigned"}</span>
+            <span>{get(lesson, "classroom_name") || "Unassigned"}</span>
+            <button
+              className="table-button"
+              type="button"
+              onClick={() =>
+                openDetail({ kind: "session", id: get(lesson, "id") })
+              }
+            >
+              Open
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function LessonModifyDialog({ lesson, data, busy, run, onClose, draftStartsAt }: { lesson: Row; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void; draftStartsAt?: string }) {
+function LessonModifyDialog({
+  lesson,
+  data,
+  busy,
+  run,
+  onClose,
+  draftStartsAt,
+}: {
+  lesson: Row;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+  draftStartsAt?: string;
+}) {
   const [saveRequested, setSaveRequested] = useState(false);
   const signature = `${get(lesson, "starts_at")}|${get(lesson, "ends_at")}|${get(lesson, "teacher_id")}|${get(lesson, "classroom_id")}|${get(lesson, "topic")}`;
   const initialSignature = useRef(signature).current;
-  const startDefault = draftStartsAt || get(lesson, "starts_at").replace(" ", "T");
-  const duration = Math.max(15, minutesOfDay(lesson.ends_at) - minutesOfDay(lesson.starts_at));
-  const endDefault = draftStartsAt ? shiftDateTime(draftStartsAt, duration) : get(lesson, "ends_at").replace(" ", "T");
-  useEffect(() => { if (saveRequested && signature !== initialSignature) onClose(); }, [saveRequested, signature, initialSignature, onClose]);
+  const startDefault =
+    draftStartsAt || get(lesson, "starts_at").replace(" ", "T");
+  const duration = Math.max(
+    15,
+    minutesOfDay(lesson.ends_at) - minutesOfDay(lesson.starts_at),
+  );
+  const endDefault = draftStartsAt
+    ? shiftDateTime(draftStartsAt, duration)
+    : get(lesson, "ends_at").replace(" ", "T");
+  useEffect(() => {
+    if (saveRequested && signature !== initialSignature) onClose();
+  }, [saveRequested, signature, initialSignature, onClose]);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaveRequested(true);
     const values = Object.fromEntries(new FormData(event.currentTarget));
     void run("updateSession", { ...values, sessionId: get(lesson, "id") });
   }
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog lesson-modify-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><header><div><span>MODIFY LESSON</span><h3>{get(lesson, "topic")}</h3><p>{get(lesson, "course_title")} · {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="course-edit-grid"><FormField name="topic" label="Lesson topic" defaultValue={get(lesson, "topic")} required /><label className="form-field"><span>Date & start time</span><input name="startsAt" type="datetime-local" defaultValue={startDefault.slice(0, 16)} required /></label><label className="form-field"><span>End time</span><input name="endsAt" type="datetime-local" defaultValue={endDefault.slice(0, 16)} required /></label><label className="form-field"><span>Teacher</span><select name="teacherId" defaultValue={get(lesson, "teacher_id")} required>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")} · {get(teacher, "subject")}</option>)}</select></label><label className="form-field"><span>Classroom</span><select name="classroomId" defaultValue={get(lesson, "classroom_id")} required>{data.classrooms.map((room) => <option key={get(room, "id")} value={get(room, "id")}>{get(room, "name")} · {get(room, "capacity")} seats</option>)}</select></label></div><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Check size={16} />{saveRequested && busy ? "Saving..." : "Save changes"}</button></footer></form></div>;
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="course-edit-dialog lesson-modify-dialog"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>MODIFY LESSON</span>
+            <h3>{get(lesson, "topic")}</h3>
+            <p>
+              {get(lesson, "course_title")} · {malaysiaDate(lesson.starts_at)} ·{" "}
+              {timeRange(lesson)}
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="course-edit-grid">
+          <FormField
+            name="topic"
+            label="Lesson topic"
+            defaultValue={get(lesson, "topic")}
+            required
+          />
+          <label className="form-field">
+            <span>Date & start time</span>
+            <input
+              name="startsAt"
+              type="datetime-local"
+              defaultValue={startDefault.slice(0, 16)}
+              required
+            />
+          </label>
+          <label className="form-field">
+            <span>End time</span>
+            <input
+              name="endsAt"
+              type="datetime-local"
+              defaultValue={endDefault.slice(0, 16)}
+              required
+            />
+          </label>
+          <label className="form-field">
+            <span>Teacher</span>
+            <select
+              name="teacherId"
+              defaultValue={get(lesson, "teacher_id")}
+              required
+            >
+              {data.teachers.map((teacher) => (
+                <option key={get(teacher, "id")} value={get(teacher, "id")}>
+                  {get(teacher, "name")} · {get(teacher, "subject")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Classroom</span>
+            <select
+              name="classroomId"
+              defaultValue={get(lesson, "classroom_id")}
+              required
+            >
+              {data.classrooms.map((room) => (
+                <option key={get(room, "id")} value={get(room, "id")}>
+                  {get(room, "name")} · {get(room, "capacity")} seats
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            {saveRequested && busy ? "Saving..." : "Save changes"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function ClassSettingsDialog({ runItem, lessons, data, busy, run, openDetail, onClose }: { runItem: Row; lessons: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void }) {
+function ClassSettingsDialog({
+  runItem,
+  lessons,
+  data,
+  busy,
+  run,
+  openDetail,
+  onClose,
+}: {
+  runItem: Row;
+  lessons: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
   const [mode, setMode] = useState<"all" | "individual">("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="course-edit-dialog class-settings-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>CLASS SETTINGS</span><h3>{get(runItem, "name")}</h3><p>Assign teachers and classrooms to this named class. The course plan stays unchanged.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><form className="class-delivery-mode-control" onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateRunDeliveryMode", { ...values, runId: get(runItem, "id") }); }}><label><span>授课方式</span><select name="deliveryMode" defaultValue={get(runItem, "delivery_mode") || "onsite"}><option value="onsite">现场课</option><option value="online">网课</option></select></label><button className="quiet-button" disabled={busy} type="submit">保存方式</button></form><div className="class-settings-mode" role="tablist" aria-label="Class resource mode"><button type="button" className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}><Settings2 size={16} />Same for all lessons</button><button type="button" className={mode === "individual" ? "active" : ""} onClick={() => setMode("individual")}><SlidersHorizontal size={16} />Different teachers or rooms</button></div><div className="class-settings-body">{mode === "all" ? <ClassAssignmentPanel runItem={runItem} lessons={lessons} selectedLessonIds={[]} data={data} busy={busy} run={run} /> : <><ClassAssignmentPanel runItem={runItem} lessons={lessons} selectedLessonIds={selectedIds} data={data} busy={busy} run={run} /><ClassLessonGrid lessons={lessons} selectedIds={selectedIds} onSelect={setSelectedIds} data={data} busy={busy} run={run} /></>}</div><footer><button className="quiet-button" type="button" onClick={onClose}>Done</button></footer></section></div>;
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="course-edit-dialog class-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>CLASS SETTINGS</span>
+            <h3>{get(runItem, "name")}</h3>
+            <p>
+              Assign teachers and classrooms to this named class. The course
+              plan stays unchanged.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <form
+          className="class-delivery-mode-control"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
+            void run("updateRunDeliveryMode", {
+              ...values,
+              runId: get(runItem, "id"),
+            });
+          }}
+        >
+          <label>
+            <span>授课方式</span>
+            <select
+              name="deliveryMode"
+              defaultValue={get(runItem, "delivery_mode") || "onsite"}
+            >
+              <option value="onsite">现场课</option>
+              <option value="online">网课</option>
+            </select>
+          </label>
+          <button className="quiet-button" disabled={busy} type="submit">
+            保存方式
+          </button>
+        </form>
+        <div
+          className="class-settings-mode"
+          role="tablist"
+          aria-label="Class resource mode"
+        >
+          <button
+            type="button"
+            className={mode === "all" ? "active" : ""}
+            onClick={() => setMode("all")}
+          >
+            <Settings2 size={16} />
+            Same for all lessons
+          </button>
+          <button
+            type="button"
+            className={mode === "individual" ? "active" : ""}
+            onClick={() => setMode("individual")}
+          >
+            <SlidersHorizontal size={16} />
+            Different teachers or rooms
+          </button>
+        </div>
+        <div className="class-settings-body">
+          {mode === "all" ? (
+            <ClassAssignmentPanel
+              runItem={runItem}
+              lessons={lessons}
+              selectedLessonIds={[]}
+              data={data}
+              busy={busy}
+              run={run}
+            />
+          ) : (
+            <>
+              <ClassAssignmentPanel
+                runItem={runItem}
+                lessons={lessons}
+                selectedLessonIds={selectedIds}
+                data={data}
+                busy={busy}
+                run={run}
+              />
+              <ClassLessonGrid
+                lessons={lessons}
+                selectedIds={selectedIds}
+                onSelect={setSelectedIds}
+                data={data}
+                busy={busy}
+                run={run}
+              />
+            </>
+          )}
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Done
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
-function ClassScheduleDialog({ runItem, lessons, missingCount = 0, totalCount = lessons.length, busy = false, run, onOpen, onClose, onQuick }: { runItem: Row; lessons: Row[]; missingCount?: number; totalCount?: number; busy?: boolean; run?: (action: string, values?: Row) => Promise<void>; onOpen: (detail: Exclude<Detail, null>) => void; onClose: () => void; onQuick: () => void }) {
-  const [anchor, setAnchor] = useState(() => lessons[0] ? new Date(`${datePart(lessons[0].starts_at)}T12:00`) : new Date());
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="class-schedule-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>CLASS CALENDAR</span><h3>{get(runItem, "name")}</h3><p>Open a lesson to modify its time, teacher or classroom.</p></div><div>{missingCount ? <button className="primary-button" disabled={busy || !run} type="button" onClick={() => void run?.("syncClassLessons", { runId: get(runItem, "id") })}><Check size={15} />Update</button> : null}<button className="quiet-button" type="button" onClick={onQuick}><Clock3 size={15} />Quick schedule</button><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></div></header>{missingCount ? <div className="class-sync-warning schedule"><BookOpen size={16} /><span>{missingCount}/{totalCount} lessons not scheduled. Update will add the missing lessons using the latest saved pattern.</span></div> : null}<div className="room-schedule-toolbar"><div className="room-month-navigation"><button type="button" className="header-icon" title="Previous month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1, 12))}><ChevronLeft size={16} /></button><strong>{anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" })}</strong><button type="button" className="header-icon" title="Next month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1, 12))}><ChevronRight size={16} /></button></div></div><div className="class-schedule-calendar">{lessons.length ? <MonthCalendar anchor={anchor} events={lessons} c={calendarText.en} language="en" onOpen={(id) => onOpen({ kind: "session", id, edit: true })} onSelectDate={() => undefined} /> : <Empty text="This class has no scheduled lessons. Choose Quick schedule to generate them." />}</div></section></div>;
+function ClassScheduleDialog({
+  runItem,
+  lessons,
+  missingCount = 0,
+  totalCount = lessons.length,
+  busy = false,
+  run,
+  onOpen,
+  onClose,
+  onQuick,
+}: {
+  runItem: Row;
+  lessons: Row[];
+  missingCount?: number;
+  totalCount?: number;
+  busy?: boolean;
+  run?: (action: string, values?: Row) => Promise<void>;
+  onOpen: (detail: Exclude<Detail, null>) => void;
+  onClose: () => void;
+  onQuick: () => void;
+}) {
+  const [anchor, setAnchor] = useState(() =>
+    lessons[0]
+      ? new Date(`${datePart(lessons[0].starts_at)}T12:00`)
+      : new Date(),
+  );
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="class-schedule-dialog"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>CLASS CALENDAR</span>
+            <h3>{get(runItem, "name")}</h3>
+            <p>Open a lesson to modify its time, teacher or classroom.</p>
+          </div>
+          <div>
+            {missingCount ? (
+              <button
+                className="primary-button"
+                disabled={busy || !run}
+                type="button"
+                onClick={() =>
+                  void run?.("syncClassLessons", { runId: get(runItem, "id") })
+                }
+              >
+                <Check size={15} />
+                Update
+              </button>
+            ) : null}
+            <button className="quiet-button" type="button" onClick={onQuick}>
+              <Clock3 size={15} />
+              Quick schedule
+            </button>
+            <button
+              className="header-icon"
+              type="button"
+              onClick={onClose}
+              title="Close"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        </header>
+        {missingCount ? (
+          <div className="class-sync-warning schedule">
+            <BookOpen size={16} />
+            <span>
+              {missingCount}/{totalCount} lessons not scheduled. Update will add
+              the missing lessons using the latest saved pattern.
+            </span>
+          </div>
+        ) : null}
+        <div className="room-schedule-toolbar">
+          <div className="room-month-navigation">
+            <button
+              type="button"
+              className="header-icon"
+              title="Previous month"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <strong>
+              {anchor.toLocaleDateString("en-MY", {
+                month: "long",
+                year: "numeric",
+              })}
+            </strong>
+            <button
+              type="button"
+              className="header-icon"
+              title="Next month"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="class-schedule-calendar">
+          {lessons.length ? (
+            <MonthCalendar
+              anchor={anchor}
+              events={lessons}
+              c={calendarText.en}
+              language="en"
+              onOpen={(id) => onOpen({ kind: "session", id, edit: true })}
+              onSelectDate={() => undefined}
+            />
+          ) : (
+            <Empty text="This class has no scheduled lessons. Choose Quick schedule to generate them." />
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
-function QuickScheduleDialog({ runItem, lessonCount, defaultDuration = 90, data, busy, run, onClose }: { runItem: Row; lessonCount: number; defaultDuration?: number; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; onClose: () => void }) {
+function QuickScheduleDialog({
+  runItem,
+  lessonCount,
+  defaultDuration = 90,
+  data,
+  busy,
+  run,
+  onClose,
+}: {
+  runItem: Row;
+  lessonCount: number;
+  defaultDuration?: number;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  onClose: () => void;
+}) {
   const [enabled, setEnabled] = useState(false);
-  const [slots, setSlots] = useState(() => [{ anchorDate: new Date().toISOString().slice(0, 10), weekday: "2", startTime: "16:00", endTime: endFromDuration("16:00"), teacherId: get(data.teachers[0], "id"), classroomId: get(data.classrooms[0], "id") }]);
-  function patchSlot(index: number, patch: Row) { setSlots((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)); }
-  function endFromDuration(start: string) { const total = minutesForTime(start) + Math.max(30, defaultDuration); return `${String(Math.floor((total % 1440) / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
-  const initialSchedule = useRef(data.sessions.filter((session) => get(session, "class_run_id") === get(runItem, "id")).map((session) => `${get(session, "id")}:${get(session, "starts_at")}:${get(session, "ends_at")}`).join("|")).current;
+  const [slots, setSlots] = useState(() => [
+    {
+      anchorDate: new Date().toISOString().slice(0, 10),
+      weekday: "2",
+      startTime: "16:00",
+      endTime: endFromDuration("16:00"),
+      teacherId: get(data.teachers[0], "id"),
+      classroomId: get(data.classrooms[0], "id"),
+    },
+  ]);
+  function patchSlot(index: number, patch: Row) {
+    setSlots((items) =>
+      items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+  function endFromDuration(start: string) {
+    const total = minutesForTime(start) + Math.max(30, defaultDuration);
+    return `${String(Math.floor((total % 1440) / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
+  const initialSchedule = useRef(
+    data.sessions
+      .filter((session) => get(session, "class_run_id") === get(runItem, "id"))
+      .map(
+        (session) =>
+          `${get(session, "id")}:${get(session, "starts_at")}:${get(session, "ends_at")}`,
+      )
+      .join("|"),
+  ).current;
   const [saveRequested, setSaveRequested] = useState(false);
-  const currentSchedule = data.sessions.filter((session) => get(session, "class_run_id") === get(runItem, "id")).map((session) => `${get(session, "id")}:${get(session, "starts_at")}:${get(session, "ends_at")}`).join("|");
-  useEffect(() => { if (saveRequested && currentSchedule !== initialSchedule) onClose(); }, [saveRequested, currentSchedule, initialSchedule, onClose]);
-  function saveSlots() { setSaveRequested(true); void run("configureClassRun", { runId: get(runItem, "id"), weeklySlots: JSON.stringify(slots) }); }
-  if (true) return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><section className="course-edit-dialog quick-schedule-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header><div><span>QUICK SCHEDULE</span><h3>{lessonCount} lessons</h3><p>Add one or more weekly times. Lessons will be placed in date order across every saved time.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="quick-slot-list">{slots.map((slot, index) => <article key={`${slot.anchorDate}-${index}`}><div className="quick-slot-head"><strong>Weekly time {index + 1}</strong><button className="header-icon" type="button" title="Remove time" disabled={slots.length === 1} onClick={() => setSlots((items) => items.filter((_, itemIndex) => itemIndex !== index))}><Minus size={15} /></button></div><div className="course-edit-grid quick-schedule-fields"><label className="form-field"><span>From date</span><input type="date" value={slot.anchorDate} onChange={(event) => patchSlot(index, { anchorDate: event.target.value })} required /></label><label className="form-field"><span>Weekday</span><select value={slot.weekday} onChange={(event) => patchSlot(index, { weekday: event.target.value })}><option value="0">Sun</option><option value="1">Mon</option><option value="2">Tue</option><option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option></select></label><label className="form-field"><span>Start</span><input type="time" value={slot.startTime} onChange={(event) => patchSlot(index, { startTime: event.target.value, endTime: endFromDuration(event.target.value) })} required /></label><label className="form-field"><span>End</span><input type="time" value={slot.endTime} onChange={(event) => patchSlot(index, { endTime: event.target.value })} required /></label><label className="form-field"><span>Teacher</span><select value={slot.teacherId} onChange={(event) => patchSlot(index, { teacherId: event.target.value })}>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")}</option>)}</select></label><label className="form-field"><span>Classroom</span><select value={slot.classroomId} onChange={(event) => patchSlot(index, { classroomId: event.target.value })}>{data.classrooms.map((room) => <option key={get(room, "id")} value={get(room, "id")}>{get(room, "name")}</option>)}</select></label></div></article>)}</div><button type="button" className="quick-time-toggle enabled" onClick={() => setSlots((items) => [...items, { ...items[items.length - 1], anchorDate: new Date().toISOString().slice(0, 10) }])}><Plus size={17} />Add weekly time</button><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !lessonCount} type="button" onClick={saveSlots}><CalendarDays size={16} />{saveRequested && busy ? "Saving schedule..." : "Schedule class"}</button></footer></section></div>;
-  function dateForWeekday(date: string, weekday: number) { const next = new Date(`${date}T12:00`); while (next.getDay() !== weekday) next.setDate(next.getDate() + 1); return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`; }
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); const start = String(values.startTime); const end = String(values.endTime); const duration = Math.max(30, minutesForTime(end) - minutesForTime(start)); void run("configureClassRun", { ...values, runId: get(runItem, "id"), startDate: dateForWeekday(String(values.anchorDate), Number(values.weekday)), startTime: start, durationMinutes: duration }).then(onClose); }
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="course-edit-dialog quick-schedule-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><header><div><span>QUICK SCHEDULE</span><h3>{lessonCount} lessons</h3><p>Add one weekly time and the full Course plan will be placed automatically.</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><button type="button" className={enabled ? "quick-time-toggle enabled" : "quick-time-toggle"} onClick={() => setEnabled((value) => !value)}><Plus size={17} />{enabled ? "Weekly time added" : "Add weekly time"}</button>{enabled ? <div className="course-edit-grid quick-schedule-fields"><label className="form-field"><span>From date</span><input name="anchorDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label><label className="form-field"><span>Weekday</span><select name="weekday" defaultValue="2"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></label><label className="form-field"><span>Start</span><input name="startTime" type="time" defaultValue="16:00" required /></label><label className="form-field"><span>End</span><input name="endTime" type="time" defaultValue="18:00" required /></label><label className="form-field"><span>Teacher</span><select name="teacherId" required>{data.teachers.map((teacher) => <option key={get(teacher, "id")} value={get(teacher, "id")}>{get(teacher, "name")}</option>)}</select></label><label className="form-field"><span>Classroom</span><select name="classroomId" required>{data.classrooms.map((room) => <option key={get(room, "id")} value={get(room, "id")}>{get(room, "name")}</option>)}</select></label><FormField name="payAmount" type="number" label="Teacher pay per lesson (RM)" defaultValue="0" min="0" step="0.01" required /></div> : null}<footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !enabled || !lessonCount} type="submit"><CalendarDays size={16} />Schedule every week</button></footer></form></div>;
+  const currentSchedule = data.sessions
+    .filter((session) => get(session, "class_run_id") === get(runItem, "id"))
+    .map(
+      (session) =>
+        `${get(session, "id")}:${get(session, "starts_at")}:${get(session, "ends_at")}`,
+    )
+    .join("|");
+  useEffect(() => {
+    if (saveRequested && currentSchedule !== initialSchedule) onClose();
+  }, [saveRequested, currentSchedule, initialSchedule, onClose]);
+  function saveSlots() {
+    setSaveRequested(true);
+    void run("configureClassRun", {
+      runId: get(runItem, "id"),
+      weeklySlots: JSON.stringify(slots),
+    });
+  }
+  if (true)
+    return (
+      <div
+        className="dialog-backdrop"
+        role="presentation"
+        onMouseDown={onClose}
+      >
+        <section
+          className="course-edit-dialog quick-schedule-dialog"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header>
+            <div>
+              <span>QUICK SCHEDULE</span>
+              <h3>{lessonCount} lessons</h3>
+              <p>
+                Add one or more weekly times. Lessons will be placed in date
+                order across every saved time.
+              </p>
+            </div>
+            <button
+              className="header-icon"
+              type="button"
+              onClick={onClose}
+              title="Close"
+            >
+              <X size={17} />
+            </button>
+          </header>
+          <div className="quick-slot-list">
+            {slots.map((slot, index) => (
+              <article key={`${slot.anchorDate}-${index}`}>
+                <div className="quick-slot-head">
+                  <strong>Weekly time {index + 1}</strong>
+                  <button
+                    className="header-icon"
+                    type="button"
+                    title="Remove time"
+                    disabled={slots.length === 1}
+                    onClick={() =>
+                      setSlots((items) =>
+                        items.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                  >
+                    <Minus size={15} />
+                  </button>
+                </div>
+                <div className="course-edit-grid quick-schedule-fields">
+                  <label className="form-field">
+                    <span>From date</span>
+                    <input
+                      type="date"
+                      value={slot.anchorDate}
+                      onChange={(event) =>
+                        patchSlot(index, { anchorDate: event.target.value })
+                      }
+                      required
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Weekday</span>
+                    <select
+                      value={slot.weekday}
+                      onChange={(event) =>
+                        patchSlot(index, { weekday: event.target.value })
+                      }
+                    >
+                      <option value="0">Sun</option>
+                      <option value="1">Mon</option>
+                      <option value="2">Tue</option>
+                      <option value="3">Wed</option>
+                      <option value="4">Thu</option>
+                      <option value="5">Fri</option>
+                      <option value="6">Sat</option>
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Start</span>
+                    <input
+                      type="time"
+                      value={slot.startTime}
+                      onChange={(event) =>
+                        patchSlot(index, {
+                          startTime: event.target.value,
+                          endTime: endFromDuration(event.target.value),
+                        })
+                      }
+                      required
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>End</span>
+                    <input
+                      type="time"
+                      value={slot.endTime}
+                      onChange={(event) =>
+                        patchSlot(index, { endTime: event.target.value })
+                      }
+                      required
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Teacher</span>
+                    <select
+                      value={slot.teacherId}
+                      onChange={(event) =>
+                        patchSlot(index, { teacherId: event.target.value })
+                      }
+                    >
+                      {data.teachers.map((teacher) => (
+                        <option
+                          key={get(teacher, "id")}
+                          value={get(teacher, "id")}
+                        >
+                          {get(teacher, "name")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Classroom</span>
+                    <select
+                      value={slot.classroomId}
+                      onChange={(event) =>
+                        patchSlot(index, { classroomId: event.target.value })
+                      }
+                    >
+                      {data.classrooms.map((room) => (
+                        <option key={get(room, "id")} value={get(room, "id")}>
+                          {get(room, "name")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </article>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="quick-time-toggle enabled"
+            onClick={() =>
+              setSlots((items) => [
+                ...items,
+                {
+                  ...items[items.length - 1],
+                  anchorDate: new Date().toISOString().slice(0, 10),
+                },
+              ])
+            }
+          >
+            <Plus size={17} />
+            Add weekly time
+          </button>
+          <footer>
+            <button className="quiet-button" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy || !lessonCount}
+              type="button"
+              onClick={saveSlots}
+            >
+              <CalendarDays size={16} />
+              {saveRequested && busy ? "Saving schedule..." : "Schedule class"}
+            </button>
+          </footer>
+        </section>
+      </div>
+    );
+  function dateForWeekday(date: string, weekday: number) {
+    const next = new Date(`${date}T12:00`);
+    while (next.getDay() !== weekday) next.setDate(next.getDate() + 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  }
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const start = String(values.startTime);
+    const end = String(values.endTime);
+    const duration = Math.max(30, minutesForTime(end) - minutesForTime(start));
+    void run("configureClassRun", {
+      ...values,
+      runId: get(runItem, "id"),
+      startDate: dateForWeekday(
+        String(values.anchorDate),
+        Number(values.weekday),
+      ),
+      startTime: start,
+      durationMinutes: duration,
+    }).then(onClose);
+  }
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="course-edit-dialog quick-schedule-dialog"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>QUICK SCHEDULE</span>
+            <h3>{lessonCount} lessons</h3>
+            <p>
+              Add one weekly time and the full Course plan will be placed
+              automatically.
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <button
+          type="button"
+          className={
+            enabled ? "quick-time-toggle enabled" : "quick-time-toggle"
+          }
+          onClick={() => setEnabled((value) => !value)}
+        >
+          <Plus size={17} />
+          {enabled ? "Weekly time added" : "Add weekly time"}
+        </button>
+        {enabled ? (
+          <div className="course-edit-grid quick-schedule-fields">
+            <label className="form-field">
+              <span>From date</span>
+              <input
+                name="anchorDate"
+                type="date"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+                required
+              />
+            </label>
+            <label className="form-field">
+              <span>Weekday</span>
+              <select name="weekday" defaultValue="2">
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Start</span>
+              <input
+                name="startTime"
+                type="time"
+                defaultValue="16:00"
+                required
+              />
+            </label>
+            <label className="form-field">
+              <span>End</span>
+              <input name="endTime" type="time" defaultValue="18:00" required />
+            </label>
+            <label className="form-field">
+              <span>Teacher</span>
+              <select name="teacherId" required>
+                {data.teachers.map((teacher) => (
+                  <option key={get(teacher, "id")} value={get(teacher, "id")}>
+                    {get(teacher, "name")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Classroom</span>
+              <select name="classroomId" required>
+                {data.classrooms.map((room) => (
+                  <option key={get(room, "id")} value={get(room, "id")}>
+                    {get(room, "name")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FormField
+              name="payAmount"
+              type="number"
+              label="Teacher pay per lesson (RM)"
+              defaultValue="0"
+              min="0"
+              step="0.01"
+              required
+            />
+          </div>
+        ) : null}
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="primary-button"
+            disabled={busy || !enabled || !lessonCount}
+            type="submit"
+          >
+            <CalendarDays size={16} />
+            Schedule every week
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function ClassIntakeTabs({ intakes, activeId, onChange }: { intakes: Row[]; activeId: string; onChange: (id: string) => void }) {
-  return <div className="class-intake-tabs" role="tablist" aria-label="Classes">{intakes.map((intake) => <button type="button" role="tab" key={get(intake, "id")} aria-selected={get(intake, "id") === activeId} className={get(intake, "id") === activeId ? "active" : ""} style={eventStyle(intake)} onClick={() => onChange(get(intake, "id"))}>{get(intake, "name")}</button>)}</div>;
+function ClassIntakeTabs({
+  intakes,
+  activeId,
+  onChange,
+}: {
+  intakes: Row[];
+  activeId: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="class-intake-tabs" role="tablist" aria-label="Classes">
+      {intakes.map((intake) => (
+        <button
+          type="button"
+          role="tab"
+          key={get(intake, "id")}
+          aria-selected={get(intake, "id") === activeId}
+          className={get(intake, "id") === activeId ? "active" : ""}
+          style={eventStyle(intake)}
+          onClick={() => onChange(get(intake, "id"))}
+        >
+          {get(intake, "name")}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-function CourseIntakeCards({ intakes, sessions, openDetail }: { intakes: Row[]; sessions: Row[]; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  return <section className="sheet-section course-intake-list"><div className="sheet-section-title"><h3>Intakes & schedules</h3><span>{intakes.length}</span></div>{intakes.map((intake) => { const intakeLessons = sessions.filter((lesson) => get(lesson, "class_run_id") === get(intake, "id")).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at)); const first = intakeLessons[0]; const phase = cohortPhase(intake, intakeLessons); const rooms = Array.from(new Set(intakeLessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean))).join(", "); return <button type="button" key={get(intake, "id")} className="course-intake-card interactive-list-row" style={eventStyle(first ?? intake)} onClick={() => openDetail({ kind: "course", id: get(intake, "id") })}><div className="course-intake-card-head"><div><span>{get(intake, "code")}</span><strong>{get(intake, "name")}</strong></div><Status value={phase} /></div><div className="course-intake-timing"><CalendarDays size={15} /><strong>{cohortTiming(intake, intakeLessons)}</strong><span>{get(intake, "term_name")}</span></div><div className="course-intake-facts"><span><UsersRound size={15} />{get(intake, "student_count")}/{get(intake, "capacity")} enrolled</span><span><BookOpen size={15} />{intakeLessons.length || get(intake, "session_count")} lessons</span></div><div className="course-intake-assignment"><span>{get(intake, "teacher_name") || "Teacher to be assigned"} · {get(intake, "language_name") || "Language pending"}</span><span>{rooms || "Classroom to be assigned"}</span></div><ChevronRight size={18} /></button>; })}{!intakes.length ? <Empty text="Create an intake to plan its dates, teaching team and learner list." /> : null}</section>;
+function CourseIntakeCards({
+  intakes,
+  sessions,
+  openDetail,
+}: {
+  intakes: Row[];
+  sessions: Row[];
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  return (
+    <section className="sheet-section course-intake-list">
+      <div className="sheet-section-title">
+        <h3>Intakes & schedules</h3>
+        <span>{intakes.length}</span>
+      </div>
+      {intakes.map((intake) => {
+        const intakeLessons = sessions
+          .filter((lesson) => get(lesson, "class_run_id") === get(intake, "id"))
+          .sort(
+            (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+          );
+        const first = intakeLessons[0];
+        const phase = cohortPhase(intake, intakeLessons);
+        const rooms = Array.from(
+          new Set(
+            intakeLessons
+              .map((lesson) => get(lesson, "classroom_name"))
+              .filter(Boolean),
+          ),
+        ).join(", ");
+        return (
+          <button
+            type="button"
+            key={get(intake, "id")}
+            className="course-intake-card interactive-list-row"
+            style={eventStyle(first ?? intake)}
+            onClick={() =>
+              openDetail({ kind: "course", id: get(intake, "id") })
+            }
+          >
+            <div className="course-intake-card-head">
+              <div>
+                <span>{get(intake, "code")}</span>
+                <strong>{get(intake, "name")}</strong>
+              </div>
+              <Status value={phase} />
+            </div>
+            <div className="course-intake-timing">
+              <CalendarDays size={15} />
+              <strong>{cohortTiming(intake, intakeLessons)}</strong>
+              <span>{get(intake, "term_name")}</span>
+            </div>
+            <div className="course-intake-facts">
+              <span>
+                <UsersRound size={15} />
+                {get(intake, "student_count")}/{get(intake, "capacity")}{" "}
+                enrolled
+              </span>
+              <span>
+                <BookOpen size={15} />
+                {intakeLessons.length || get(intake, "session_count")} lessons
+              </span>
+            </div>
+            <div className="course-intake-assignment">
+              <span>
+                {get(intake, "teacher_name") || "Teacher to be assigned"} ·{" "}
+                {get(intake, "language_name") || "Language pending"}
+              </span>
+              <span>{rooms || "Classroom to be assigned"}</span>
+            </div>
+            <ChevronRight size={18} />
+          </button>
+        );
+      })}
+      {!intakes.length ? (
+        <Empty text="Create an intake to plan its dates, teaching team and learner list." />
+      ) : null}
+    </section>
+  );
 }
 
-function CourseProductSettings({ course, busy, run }: { course: Row; busy: boolean; run: (action: string, values?: Row) => Promise<void> }) {
-  const [colour, setColour] = useState(get(course, "display_color") || defaultCourseColour);
-  function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("updateCourse", { ...values, courseId: get(course, "id"), color: colour }); }
-  return <section className="sheet-section"><div className="sheet-section-title"><h3>Course SKU settings</h3><span>Reusable product</span></div><form className="detail-edit-form" onSubmit={save}><FormField name="title" label="Course name" defaultValue={get(course, "title")} required /><FormField name="subject" label="Subject" defaultValue={get(course, "subject")} required /><FormField name="level" label="Level" defaultValue={get(course, "level")} required /><FormField name="sessions" type="number" label="Lessons per intake" defaultValue={get(course, "default_sessions")} min="1" required /><FormField name="minutes" type="number" label="Minutes per lesson" defaultValue={get(course, "default_minutes")} min="30" required /><FormField name="price" type="number" label="Standard fee (RM)" defaultValue={get(course, "list_price")} min="0" step="0.01" required /><CourseColourPicker value={colour} onChange={setColour} disabled={busy} /><div className="detail-form-actions"><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save course</button></div></form></section>;
+function CourseProductSettings({
+  course,
+  busy,
+  run,
+}: {
+  course: Row;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
+  const [colour, setColour] = useState(
+    get(course, "display_color") || defaultCourseColour,
+  );
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("updateCourse", {
+      ...values,
+      courseId: get(course, "id"),
+      color: colour,
+    });
+  }
+  return (
+    <section className="sheet-section">
+      <div className="sheet-section-title">
+        <h3>Course SKU settings</h3>
+        <span>Reusable product</span>
+      </div>
+      <form className="detail-edit-form" onSubmit={save}>
+        <FormField
+          name="title"
+          label="Course name"
+          defaultValue={get(course, "title")}
+          required
+        />
+        <FormField
+          name="subject"
+          label="Subject"
+          defaultValue={get(course, "subject")}
+          required
+        />
+        <FormField
+          name="level"
+          label="Level"
+          defaultValue={get(course, "level")}
+          required
+        />
+        <FormField
+          name="sessions"
+          type="number"
+          label="Lessons per intake"
+          defaultValue={get(course, "default_sessions")}
+          min="1"
+          required
+        />
+        <FormField
+          name="minutes"
+          type="number"
+          label="Minutes per lesson"
+          defaultValue={get(course, "default_minutes")}
+          min="30"
+          required
+        />
+        <FormField
+          name="price"
+          type="number"
+          label="Standard fee (RM)"
+          defaultValue={get(course, "list_price")}
+          min="0"
+          step="0.01"
+          required
+        />
+        <CourseColourPicker
+          value={colour}
+          onChange={setColour}
+          disabled={busy}
+        />
+        <div className="detail-form-actions">
+          <button className="primary-button" disabled={busy} type="submit">
+            <Check size={16} />
+            Save course
+          </button>
+        </div>
+      </form>
+    </section>
+  );
 }
 
-function StudentClassDrawer({ detail, data, busy, run, close, closeAll }: { detail: Exclude<Detail, null>; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void; closeAll: () => void }) {
+function StudentClassDrawer({
+  detail,
+  data,
+  busy,
+  run,
+  close,
+  closeAll,
+}: {
+  detail: Exclude<Detail, null>;
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  close: () => void;
+  closeAll: () => void;
+}) {
   const [tab, setTab] = useState("summary");
   const [leaveLesson, setLeaveLesson] = useState<Row | null>(null);
   const runItem = data.runs.find((row) => get(row, "id") === detail.id);
-  const student = data.students.find((row) => get(row, "id") === detail.studentId) ?? data.students[0];
+  const student =
+    data.students.find((row) => get(row, "id") === detail.studentId) ??
+    data.students[0];
   if (!runItem || !student) return null;
-  const enrollment = data.enrollments.find((row) => get(row, "class_run_id") === detail.id && get(row, "student_id") === get(student, "id"));
-  const sessions = data.sessions.filter((row) => get(row, "class_run_id") === detail.id).sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const enrollment = data.enrollments.find(
+    (row) =>
+      get(row, "class_run_id") === detail.id &&
+      get(row, "student_id") === get(student, "id"),
+  );
+  const sessions = data.sessions
+    .filter((row) => get(row, "class_run_id") === detail.id)
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
   const sessionIds = new Set(sessions.map((row) => get(row, "id")));
-  const attendance = data.attendance.filter((row) => get(row, "student_id") === get(student, "id") && sessionIds.has(get(row, "class_session_id")));
-  const invoice = data.invoices.find((row) => get(row, "id") === get(enrollment, "invoice_id"));
-  const payments = data.payments.filter((row) => get(row, "student_id") === get(student, "id") && (!invoice || get(row, "invoice_id") === get(invoice, "id")));
-  const attended = attendance.filter((row) => ["present", "late"].includes(get(row, "status"))).length;
+  const attendance = data.attendance.filter(
+    (row) =>
+      get(row, "student_id") === get(student, "id") &&
+      sessionIds.has(get(row, "class_session_id")),
+  );
+  const invoice = data.invoices.find(
+    (row) => get(row, "id") === get(enrollment, "invoice_id"),
+  );
+  const payments = data.payments.filter(
+    (row) =>
+      get(row, "student_id") === get(student, "id") &&
+      (!invoice || get(row, "invoice_id") === get(invoice, "id")),
+  );
+  const attended = attendance.filter((row) =>
+    ["present", "late"].includes(get(row, "status")),
+  ).length;
   const upcoming = sessions.find((row) => asTime(row.starts_at) >= Date.now());
-  const outstanding = invoice ? Math.max(0, Number(invoice.total_amount) - Number(invoice.paid_amount)) : 0;
-  const tabs = [{ id: "summary", label: "Overview" }, { id: "lessons", label: "Lessons", count: sessions.length }, { id: "materials", label: "Materials" }, { id: "payments", label: "Payments", count: payments.length }];
+  const outstanding = invoice
+    ? Math.max(0, Number(invoice.total_amount) - Number(invoice.paid_amount))
+    : 0;
+  const tabs = [
+    { id: "summary", label: "Overview" },
+    { id: "lessons", label: "Lessons", count: sessions.length },
+    { id: "materials", label: "Materials" },
+    { id: "payments", label: "Payments", count: payments.length },
+  ];
   const subject = get(runItem, "course_title");
-  return <><div className="sheet-backdrop" role="presentation" onMouseDown={closeAll}><aside className="detail-sheet detail-student-class" role="dialog" aria-modal="true" aria-label={`${subject} class details`} onMouseDown={(event) => event.stopPropagation()}><header className="entity-header"><div className="entity-heading"><div className="entity-icon"><BookOpen size={22} /></div><div><span className="sheet-eyebrow">MY CLASS</span><h2 className="entity-title">{subject}</h2><p>{get(runItem, "name")} · {get(runItem, "language_name") || "Learning class"}</p></div></div><div className="entity-header-actions">{upcoming ? <button className="quiet-button" type="button" onClick={() => setLeaveLesson(upcoming)}>Request leave</button> : null}{outstanding > 0 ? <button className="primary-button" type="button" onClick={() => setTab("payments")}>Pay now</button> : null}</div></header><div className="entity-workspace detail-workspace"><main className="entity-main">{tab === "summary" ? <StudentClassOverview runItem={runItem} sessions={sessions} attendance={attendance} attended={attended} upcoming={upcoming} outstanding={outstanding} onRequestLeave={setLeaveLesson} onShowPayments={() => setTab("payments")} /> : null}{tab === "lessons" ? <StudentClassLessons sessions={sessions} attendance={attendance} onRequestLeave={setLeaveLesson} /> : null}{tab === "materials" ? <StudentClassMaterials sessions={sessions} /> : null}{tab === "payments" ? <PaymentLedger invoices={invoice ? [invoice] : []} payments={payments} run={run} busy={busy} actionLabel="Pay now" /> : null}</main><DetailTabs active={tab} onChange={setTab} tabs={tabs} onClose={close} /></div></aside></div>{leaveLesson ? <StudentLeaveDialog lesson={leaveLesson} busy={busy} onClose={() => setLeaveLesson(null)} onSubmit={(note) => run("requestLeave", { sessionId: get(leaveLesson, "id"), studentId: get(student, "id"), note }).then(() => setLeaveLesson(null))} /> : null}</>;
+  return (
+    <>
+      <div
+        className="sheet-backdrop"
+        role="presentation"
+        onMouseDown={closeAll}
+      >
+        <aside
+          className="detail-sheet detail-student-class"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${subject} class details`}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header className="entity-header">
+            <div className="entity-heading">
+              <div className="entity-icon">
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <span className="sheet-eyebrow">MY CLASS</span>
+                <h2 className="entity-title">{subject}</h2>
+                <p>
+                  {get(runItem, "name")} ·{" "}
+                  {get(runItem, "language_name") || "Learning class"}
+                </p>
+              </div>
+            </div>
+            <div className="entity-header-actions">
+              {upcoming ? (
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={() => setLeaveLesson(upcoming)}
+                >
+                  Request leave
+                </button>
+              ) : null}
+              {outstanding > 0 ? (
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => setTab("payments")}
+                >
+                  Pay now
+                </button>
+              ) : null}
+            </div>
+          </header>
+          <div className="entity-workspace detail-workspace">
+            <main className="entity-main">
+              {tab === "summary" ? (
+                <StudentClassOverview
+                  runItem={runItem}
+                  sessions={sessions}
+                  attendance={attendance}
+                  attended={attended}
+                  upcoming={upcoming}
+                  outstanding={outstanding}
+                  onRequestLeave={setLeaveLesson}
+                  onShowPayments={() => setTab("payments")}
+                />
+              ) : null}
+              {tab === "lessons" ? (
+                <StudentClassLessons
+                  sessions={sessions}
+                  attendance={attendance}
+                  onRequestLeave={setLeaveLesson}
+                />
+              ) : null}
+              {tab === "materials" ? (
+                <StudentClassMaterials sessions={sessions} />
+              ) : null}
+              {tab === "payments" ? (
+                <PaymentLedger
+                  invoices={invoice ? [invoice] : []}
+                  payments={payments}
+                  run={run}
+                  busy={busy}
+                  actionLabel="Pay now"
+                />
+              ) : null}
+            </main>
+            <DetailTabs
+              active={tab}
+              onChange={setTab}
+              tabs={tabs}
+              onClose={close}
+            />
+          </div>
+        </aside>
+      </div>
+      {leaveLesson ? (
+        <StudentLeaveDialog
+          lesson={leaveLesson}
+          busy={busy}
+          onClose={() => setLeaveLesson(null)}
+          onSubmit={(note) =>
+            run("requestLeave", {
+              sessionId: get(leaveLesson, "id"),
+              studentId: get(student, "id"),
+              note,
+            }).then(() => setLeaveLesson(null))
+          }
+        />
+      ) : null}
+    </>
+  );
 }
 
-function StudentClassOverview({ runItem, sessions, attendance, attended, upcoming, outstanding, onRequestLeave, onShowPayments }: { runItem: Row; sessions: Row[]; attendance: Row[]; attended: number; upcoming?: Row; outstanding: number; onRequestLeave: (lesson: Row) => void; onShowPayments: () => void }) {
-  const progress = sessions.length ? Math.round(attended / sessions.length * 100) : 0;
-  return <><section className="detail-metrics"><DetailMetric label="Progress" value={`${progress}%`} /><DetailMetric label="Attended" value={`${attended}/${sessions.length}`} /><DetailMetric label="Balance" value={amount(outstanding)} /></section>{upcoming ? <section className="sheet-section current-lesson"><div className="sheet-section-title"><h3>Next lesson</h3><Status value="next" /></div><article className="current-lesson-card" style={eventStyle(upcoming)}><CourseVisual course={{ title: get(upcoming, "course_title"), subject: get(upcoming, "course_title"), course_color: get(upcoming, "course_color") }} /><div><strong>{get(upcoming, "topic")}</strong><p>{malaysiaDate(upcoming.starts_at)} · {timeRange(upcoming)}</p><span><UserRound size={14} />{get(upcoming, "teacher_name")} · <DoorOpen size={14} />{get(upcoming, "classroom_name")}</span></div><button type="button" className="quiet-button" onClick={() => onRequestLeave(upcoming)}>Request leave</button></article></section> : <section className="sheet-section"><Empty text="There are no more lessons in this class." /></section>}<section className="sheet-section"><div className="sheet-section-title"><h3>Class information</h3></div><div className="sheet-overview"><Info label="Class" value={get(runItem, "name")} /><Info label="Teacher" value={get(runItem, "teacher_name") || "See each lesson"} /><Info label="Lessons" value={`${sessions.length} planned`} /><Info label="Payment" value={outstanding ? `${amount(outstanding)} outstanding` : "Paid"} /></div>{outstanding > 0 ? <div className="detail-form-actions"><button className="primary-button" type="button" onClick={onShowPayments}><Banknote size={16} />Pay outstanding balance</button></div> : null}</section><StudentClassLessons sessions={sessions.slice(0, 3)} attendance={attendance} onRequestLeave={onRequestLeave} title="Lesson plan" /></>;
+function StudentClassOverview({
+  runItem,
+  sessions,
+  attendance,
+  attended,
+  upcoming,
+  outstanding,
+  onRequestLeave,
+  onShowPayments,
+}: {
+  runItem: Row;
+  sessions: Row[];
+  attendance: Row[];
+  attended: number;
+  upcoming?: Row;
+  outstanding: number;
+  onRequestLeave: (lesson: Row) => void;
+  onShowPayments: () => void;
+}) {
+  const progress = sessions.length
+    ? Math.round((attended / sessions.length) * 100)
+    : 0;
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric label="Progress" value={`${progress}%`} />
+        <DetailMetric
+          label="Attended"
+          value={`${attended}/${sessions.length}`}
+        />
+        <DetailMetric label="Balance" value={amount(outstanding)} />
+      </section>
+      {upcoming ? (
+        <section className="sheet-section current-lesson">
+          <div className="sheet-section-title">
+            <h3>Next lesson</h3>
+            <Status value="next" />
+          </div>
+          <article className="current-lesson-card" style={eventStyle(upcoming)}>
+            <CourseVisual
+              course={{
+                title: get(upcoming, "course_title"),
+                subject: get(upcoming, "course_title"),
+                course_color: get(upcoming, "course_color"),
+              }}
+            />
+            <div>
+              <strong>{get(upcoming, "topic")}</strong>
+              <p>
+                {malaysiaDate(upcoming.starts_at)} · {timeRange(upcoming)}
+              </p>
+              <span>
+                <UserRound size={14} />
+                {get(upcoming, "teacher_name")} · <DoorOpen size={14} />
+                {get(upcoming, "classroom_name")}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={() => onRequestLeave(upcoming)}
+            >
+              Request leave
+            </button>
+          </article>
+        </section>
+      ) : (
+        <section className="sheet-section">
+          <Empty text="There are no more lessons in this class." />
+        </section>
+      )}
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Class information</h3>
+        </div>
+        <div className="sheet-overview">
+          <Info label="Class" value={get(runItem, "name")} />
+          <Info
+            label="Teacher"
+            value={get(runItem, "teacher_name") || "See each lesson"}
+          />
+          <Info label="Lessons" value={`${sessions.length} planned`} />
+          <Info
+            label="Payment"
+            value={outstanding ? `${amount(outstanding)} outstanding` : "Paid"}
+          />
+        </div>
+        {outstanding > 0 ? (
+          <div className="detail-form-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={onShowPayments}
+            >
+              <Banknote size={16} />
+              Pay outstanding balance
+            </button>
+          </div>
+        ) : null}
+      </section>
+      <StudentClassLessons
+        sessions={sessions.slice(0, 3)}
+        attendance={attendance}
+        onRequestLeave={onRequestLeave}
+        title="Lesson plan"
+      />
+    </>
+  );
 }
 
-function StudentClassLessons({ sessions, attendance, onRequestLeave, title = "All lessons" }: { sessions: Row[]; attendance: Row[]; onRequestLeave: (lesson: Row) => void; title?: string }) {
+function StudentClassLessons({
+  sessions,
+  attendance,
+  onRequestLeave,
+  title = "All lessons",
+}: {
+  sessions: Row[];
+  attendance: Row[];
+  onRequestLeave: (lesson: Row) => void;
+  title?: string;
+}) {
   const now = Date.now();
-  return <section className="sheet-section lesson-sequence"><div className="sheet-section-title"><h3>{title}</h3><span>{sessions.length}</span></div>{sessions.map((lesson) => { const record = attendance.find((row) => get(row, "class_session_id") === get(lesson, "id")); const state = asTime(lesson.ends_at) < now ? "completed" : get(record, "status") === "leave" ? "leave" : asTime(lesson.starts_at) <= now ? "current" : "next"; return <article key={get(lesson, "id")} className={`lesson-sequence-row ${state}`} style={eventStyle(lesson)}><i /><div><strong>Lesson {get(lesson, "session_no")} · {get(lesson, "topic")}</strong><p>{malaysiaDate(lesson.starts_at)} · {timeRange(lesson)} · {get(lesson, "classroom_name")}</p></div><div className="lesson-sequence-actions"><Status value={state} />{state === "next" ? <button type="button" className="quiet-button" onClick={() => onRequestLeave(lesson)}>Leave</button> : null}</div></article>; })}{!sessions.length ? <Empty text="No lessons have been scheduled yet." /> : null}</section>;
+  return (
+    <section className="sheet-section lesson-sequence">
+      <div className="sheet-section-title">
+        <h3>{title}</h3>
+        <span>{sessions.length}</span>
+      </div>
+      {sessions.map((lesson) => {
+        const record = attendance.find(
+          (row) => get(row, "class_session_id") === get(lesson, "id"),
+        );
+        const state =
+          asTime(lesson.ends_at) < now
+            ? "completed"
+            : get(record, "status") === "leave"
+              ? "leave"
+              : asTime(lesson.starts_at) <= now
+                ? "current"
+                : "next";
+        return (
+          <article
+            key={get(lesson, "id")}
+            className={`lesson-sequence-row ${state}`}
+            style={eventStyle(lesson)}
+          >
+            <i />
+            <div>
+              <strong>
+                Lesson {get(lesson, "session_no")} · {get(lesson, "topic")}
+              </strong>
+              <p>
+                {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)} ·{" "}
+                {get(lesson, "classroom_name")}
+              </p>
+            </div>
+            <div className="lesson-sequence-actions">
+              <Status value={state} />
+              {state === "next" ? (
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => onRequestLeave(lesson)}
+                >
+                  Leave
+                </button>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+      {!sessions.length ? (
+        <Empty text="No lessons have been scheduled yet." />
+      ) : null}
+    </section>
+  );
 }
 
 function StudentClassMaterials({ sessions }: { sessions: Row[] }) {
-  return <section className="sheet-section"><div className="sheet-section-title"><h3>Lesson materials</h3><span>0</span></div><div className="materials-empty"><BookOpen size={23} /><strong>No materials shared yet</strong><p>Your teacher's slides, worksheets and homework will appear here.</p></div>{sessions.length ? <div className="material-lesson-hint">This class has {sessions.length} planned lessons.</div> : null}</section>;
+  return (
+    <section className="sheet-section">
+      <div className="sheet-section-title">
+        <h3>Lesson materials</h3>
+        <span>0</span>
+      </div>
+      <div className="materials-empty">
+        <BookOpen size={23} />
+        <strong>No materials shared yet</strong>
+        <p>Your teacher's slides, worksheets and homework will appear here.</p>
+      </div>
+      {sessions.length ? (
+        <div className="material-lesson-hint">
+          This class has {sessions.length} planned lessons.
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
-function StudentLeaveDialog({ lesson, busy, onClose, onSubmit }: { lesson: Row; busy: boolean; onClose: () => void; onSubmit: (note: string) => void }) {
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); onSubmit(String(new FormData(event.currentTarget).get("note") ?? "")); }
-  return <div className="payment-dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="payment-dialog leave-request-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><header><div><span>Leave request</span><h3>{get(lesson, "topic")}</h3><p>{malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="leave-request-body"><label className="form-field"><span>Reason for leave</span><textarea name="note" required placeholder="Tell your teacher briefly" /></label></div><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Send size={15} />Send request</button></footer></form></div>;
+function StudentLeaveDialog({
+  lesson,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  lesson: Row;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (note: string) => void;
+}) {
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSubmit(String(new FormData(event.currentTarget).get("note") ?? ""));
+  }
+  return (
+    <div
+      className="payment-dialog-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <form
+        className="payment-dialog leave-request-dialog"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>Leave request</span>
+            <h3>{get(lesson, "topic")}</h3>
+            <p>
+              {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}
+            </p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="leave-request-body">
+          <label className="form-field">
+            <span>Reason for leave</span>
+            <textarea
+              name="note"
+              required
+              placeholder="Tell your teacher briefly"
+            />
+          </label>
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={busy} type="submit">
+            <Send size={15} />
+            Send request
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function DetailSheet({ detail, data, t, busy, run, close, closeAll, openDetail }: { detail: Exclude<Detail, null>; data: PortalData; t: typeof copy.en; busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void; closeAll: () => void; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  if (detail.kind === "studentClass") return <StudentClassDrawer detail={detail} data={data} busy={busy} run={run} close={close} closeAll={closeAll} />;
-  if (detail.kind === "courseCatalog") return <CourseCatalogueDrawer detail={detail} data={data} busy={busy} run={run} close={close} closeAll={closeAll} openDetail={openDetail} />;
+function DetailSheet({
+  detail,
+  data,
+  t,
+  busy,
+  run,
+  close,
+  closeAll,
+  openDetail,
+}: {
+  detail: Exclude<Detail, null>;
+  data: PortalData;
+  t: typeof copy.en;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  close: () => void;
+  closeAll: () => void;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  if (detail.kind === "studentClass")
+    return (
+      <StudentClassDrawer
+        detail={detail}
+        data={data}
+        busy={busy}
+        run={run}
+        close={close}
+        closeAll={closeAll}
+      />
+    );
+  if (detail.kind === "courseCatalog")
+    return (
+      <CourseCatalogueDrawer
+        detail={detail}
+        data={data}
+        busy={busy}
+        run={run}
+        close={close}
+        closeAll={closeAll}
+        openDetail={openDetail}
+      />
+    );
   if (detail.kind === "course") {
     const classRun = data.runs.find((item) => get(item, "id") === detail.id);
     if (!classRun) return null;
-    return <CourseCatalogueDrawer detail={{ kind: "courseCatalog", id: get(classRun, "course_id"), selectedRunId: get(classRun, "id") }} data={data} busy={busy} run={run} close={close} closeAll={closeAll} openDetail={openDetail} />;
+    return (
+      <CourseCatalogueDrawer
+        detail={{
+          kind: "courseCatalog",
+          id: get(classRun, "course_id"),
+          selectedRunId: get(classRun, "id"),
+        }}
+        data={data}
+        busy={busy}
+        run={run}
+        close={close}
+        closeAll={closeAll}
+        openDetail={openDetail}
+      />
+    );
   }
-  if (detail.kind === "studentCreate") return <StudentCreateDrawer busy={busy} run={run} close={close} />;
-  const item = detail.kind === "session" ? data.sessions.find((row) => get(row, "id") === detail.id) : detail.kind === "student" ? data.students.find((row) => get(row, "id") === detail.id) : detail.kind === "teacher" ? data.teachers.find((row) => get(row, "id") === detail.id) : detail.kind === "course" ? data.runs.find((row) => get(row, "id") === detail.id) : data.classrooms.find((row) => get(row, "id") === detail.id);
+  if (detail.kind === "studentCreate")
+    return <StudentCreateDrawer busy={busy} run={run} close={close} />;
+  const item =
+    detail.kind === "session"
+      ? data.sessions.find((row) => get(row, "id") === detail.id)
+      : detail.kind === "student"
+        ? data.students.find((row) => get(row, "id") === detail.id)
+        : detail.kind === "teacher"
+          ? data.teachers.find((row) => get(row, "id") === detail.id)
+          : detail.kind === "course"
+            ? data.runs.find((row) => get(row, "id") === detail.id)
+            : data.classrooms.find((row) => get(row, "id") === detail.id);
   const [tab, setTab] = useState("summary");
-  const [modifySession, setModifySession] = useState(detail.edit && detail.kind === "session");
+  const [modifySession, setModifySession] = useState(
+    detail.edit && detail.kind === "session",
+  );
   const [editing, setEditing] = useState(false);
   const [enrollStudentId, setEnrollStudentId] = useState("");
   if (!item) return null;
-  const studentEnrollments = detail.kind === "student" ? data.enrollments.filter((row) => get(row, "student_id") === detail.id) : [];
-  const studentInvoices = detail.kind === "student" ? data.invoices.filter((row) => get(row, "student_id") === detail.id) : [];
-  const studentPayments = detail.kind === "student" ? data.payments.filter((row) => get(row, "student_id") === detail.id) : [];
-  const studentAttendance = detail.kind === "student" ? data.attendance.filter((row) => get(row, "student_id") === detail.id) : [];
-  const studentMessages = detail.kind === "student" ? data.messages.filter((row) => get(row, "student_id") === detail.id) : [];
-  const teacherLessons = detail.kind === "teacher" ? data.teacherBookings.filter((row) => get(row, "teacher_id") === detail.id) : [];
-  const roomLessons = detail.kind === "room" ? data.sessions.filter((row) => get(row, "classroom_name") === get(item, "name")) : [];
-  const runLessons = detail.kind === "course" ? data.sessions.filter((row) => get(row, "class_run_id") === detail.id) : [];
-  const runStudents = detail.kind === "course" ? data.enrollments.filter((row) => get(row, "class_run_id") === detail.id) : [];
-  const sessionRoster = detail.kind === "session" ? data.attendance.filter((row) => get(row, "class_session_id") === detail.id) : [];
-  const title = detail.kind === "session" || detail.kind === "course" ? get(item, "course_title") : get(item, "name");
-  const subtitle = detail.kind === "session" ? `${get(item, "topic")} · ${get(item, "starts_at")}` : detail.kind === "student" ? get(item, "level") : detail.kind === "teacher" ? get(item, "subject") : `${get(item, "location")} · ${get(item, "capacity")} seats`;
-  const courseSubtitle = detail.kind === "course" ? `${get(item, "name")} - ${get(item, "term_name")}` : subtitle;
-  const courseSessions = detail.kind === "session" ? data.sessions.filter((row) => get(row, "class_run_id") === get(item, "class_run_id")) : [];
-  const tabs = detail.kind === "student" ? [{ id: "summary", label: "Summary" }, { id: "courses", label: "Courses" }, { id: "payments", label: "Payments", count: studentInvoices.length }, { id: "communication", label: "Email", count: studentMessages.length }] : detail.kind === "teacher" ? [{ id: "summary", label: "Summary" }, { id: "courses", label: "Courses", count: teacherLessons.length }, { id: "income", label: "Income" }] : detail.kind === "session" ? [{ id: "summary", label: "Summary" }] : detail.kind === "course" ? [{ id: "summary", label: "Summary" }, { id: "students", label: "Students", count: runStudents.length }] : [{ id: "summary", label: "Summary" }, { id: "schedule", label: "Schedule", count: roomLessons.length }];
-  const incomeTotal = teacherLessons.reduce((sum, row) => sum + Number(row.pay_amount ?? 0), 0);
-  const incomePaid = teacherLessons.filter((row) => get(row, "pay_status") === "paid").reduce((sum, row) => sum + Number(row.pay_amount ?? 0), 0);
-  const outstanding = studentInvoices.reduce((sum, row) => sum + Math.max(0, Number(row.total_amount ?? 0) - Number(row.paid_amount ?? 0)), 0);
-  async function saveProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); const photo = values.avatarFile; try { if (photo instanceof File && photo.size) values.avatarUrl = await fileAsDataUrl(photo); delete values.avatarFile; await run(detail.kind === "student" ? "updateStudent" : "updateTeacher", { ...values, [detail.kind === "student" ? "studentId" : "teacherId"]: detail.id }); setEditing(false); } catch { /* The shared save message reports the server-side error. */ } }
+  const studentEnrollments =
+    detail.kind === "student"
+      ? data.enrollments.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const studentInvoices =
+    detail.kind === "student"
+      ? data.invoices.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const studentPayments =
+    detail.kind === "student"
+      ? data.payments.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const studentAttendance =
+    detail.kind === "student"
+      ? data.attendance.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const studentMessages =
+    detail.kind === "student"
+      ? data.messages.filter((row) => get(row, "student_id") === detail.id)
+      : [];
+  const teacherLessons =
+    detail.kind === "teacher"
+      ? data.teacherBookings.filter(
+          (row) => get(row, "teacher_id") === detail.id,
+        )
+      : [];
+  const roomLessons =
+    detail.kind === "room"
+      ? data.sessions.filter(
+          (row) => get(row, "classroom_name") === get(item, "name"),
+        )
+      : [];
+  const runLessons =
+    detail.kind === "course"
+      ? data.sessions.filter((row) => get(row, "class_run_id") === detail.id)
+      : [];
+  const runStudents =
+    detail.kind === "course"
+      ? data.enrollments.filter((row) => get(row, "class_run_id") === detail.id)
+      : [];
+  const sessionRoster =
+    detail.kind === "session"
+      ? data.attendance.filter(
+          (row) => get(row, "class_session_id") === detail.id,
+        )
+      : [];
+  const title =
+    detail.kind === "session" || detail.kind === "course"
+      ? get(item, "course_title")
+      : get(item, "name");
+  const subtitle =
+    detail.kind === "session"
+      ? `${get(item, "topic")} · ${get(item, "starts_at")}`
+      : detail.kind === "student"
+        ? get(item, "level")
+        : detail.kind === "teacher"
+          ? get(item, "subject")
+          : `${get(item, "location")} · ${get(item, "capacity")} seats`;
+  const courseSubtitle =
+    detail.kind === "course"
+      ? `${get(item, "name")} - ${get(item, "term_name")}`
+      : subtitle;
+  const courseSessions =
+    detail.kind === "session"
+      ? data.sessions.filter(
+          (row) => get(row, "class_run_id") === get(item, "class_run_id"),
+        )
+      : [];
+  const tabs =
+    detail.kind === "student"
+      ? [
+          { id: "summary", label: "Summary" },
+          { id: "courses", label: "Courses" },
+          { id: "payments", label: "Payments", count: studentInvoices.length },
+          {
+            id: "communication",
+            label: "Email",
+            count: studentMessages.length,
+          },
+        ]
+      : detail.kind === "teacher"
+        ? [
+            { id: "summary", label: "Summary" },
+            { id: "courses", label: "Courses", count: teacherLessons.length },
+            { id: "income", label: "Income" },
+          ]
+        : detail.kind === "session"
+          ? [{ id: "summary", label: "Summary" }]
+          : detail.kind === "course"
+            ? [
+                { id: "summary", label: "Summary" },
+                {
+                  id: "students",
+                  label: "Students",
+                  count: runStudents.length,
+                },
+              ]
+            : [
+                { id: "summary", label: "Summary" },
+                {
+                  id: "schedule",
+                  label: "Schedule",
+                  count: roomLessons.length,
+                },
+              ];
+  const incomeTotal = teacherLessons.reduce(
+    (sum, row) => sum + Number(row.pay_amount ?? 0),
+    0,
+  );
+  const incomePaid = teacherLessons
+    .filter((row) => get(row, "pay_status") === "paid")
+    .reduce((sum, row) => sum + Number(row.pay_amount ?? 0), 0);
+  const outstanding = studentInvoices.reduce(
+    (sum, row) =>
+      sum +
+      Math.max(0, Number(row.total_amount ?? 0) - Number(row.paid_amount ?? 0)),
+    0,
+  );
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const photo = values.avatarFile;
+    try {
+      if (photo instanceof File && photo.size)
+        values.avatarUrl = await fileAsDataUrl(photo);
+      delete values.avatarFile;
+      await run(detail.kind === "student" ? "updateStudent" : "updateTeacher", {
+        ...values,
+        [detail.kind === "student" ? "studentId" : "teacherId"]: detail.id,
+      });
+      setEditing(false);
+    } catch {
+      /* The shared save message reports the server-side error. */
+    }
+  }
   const openStudents = () => setTab("summary");
-  return <><div className="sheet-backdrop" role="presentation" onMouseDown={closeAll}><aside className={`detail-sheet detail-${detail.kind}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header className="entity-header"><div className="entity-heading">{detail.kind === "student" || detail.kind === "teacher" ? <Avatar className="entity-avatar" person={item} /> : <div className="entity-icon">{detail.kind === "session" ? <ClipboardCheck size={22} /> : detail.kind === "course" ? <BookOpen size={22} /> : <DoorOpen size={22} />}</div>}<div><span className="sheet-eyebrow">{detail.kind === "session" ? "Lesson" : detail.kind === "course" ? "Class intake" : detail.kind === "student" ? "Student" : detail.kind === "teacher" ? "Teacher" : "Classroom"}</span><h2 className="entity-title">{title}{detail.kind === "course" ? <span className="class-name-chip" style={eventStyle(item)}>{get(item, "name")}</span> : null}</h2><p>{detail.kind === "course" ? get(item, "term_name") : courseSubtitle}</p></div></div><div className="entity-header-actions">{detail.kind === "student" || detail.kind === "teacher" ? <button className="quiet-button" type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit profile"}</button> : null}{detail.kind === "session" ? <><button className="quiet-button" type="button" onClick={() => setModifySession(true)}>Modify</button><button className="primary-button" type="button" onClick={openStudents}>Check in</button></> : null}</div></header><div className="entity-workspace detail-workspace"><main className="entity-main">{detail.kind === "student" ? <StudentDetailContent tab={tab} editing={editing} item={item} enrollments={studentEnrollments} invoices={studentInvoices} payments={studentPayments} attendance={studentAttendance} sessions={data.sessions} messages={studentMessages} outstanding={outstanding} busy={busy} saveProfile={saveProfile} run={run} openDetail={openDetail} /> : null}{detail.kind === "teacher" ? <TeacherDetailContent tab={tab} editing={editing} item={item} lessons={teacherLessons} total={incomeTotal} paid={incomePaid} busy={busy} saveProfile={saveProfile} openDetail={openDetail} /> : null}{detail.kind === "session" ? <SessionDetailContent tab={tab} item={item} courseSessions={courseSessions} roster={sessionRoster} students={data.students} classrooms={data.classrooms} teachers={data.teachers} draftStartsAt={detail.startsAt} enrollStudentId={enrollStudentId} setEnrollStudentId={setEnrollStudentId} busy={busy} run={run} t={t} onSaved={() => setTab("summary")} openDetail={openDetail} /> : null}{detail.kind === "course" ? <CourseDetailContent tab={tab} item={item} lessons={runLessons} students={runStudents} data={data} busy={busy} run={run} openDetail={openDetail} /> : null}{detail.kind === "room" ? <RoomDetailContent tab={tab} item={item} lessons={roomLessons} openDetail={openDetail} /> : null}</main><DetailTabs active={tab} onChange={setTab} tabs={tabs} onClose={close} /></div></aside></div>{modifySession && detail.kind === "session" ? <LessonModifyDialog lesson={item} data={data} busy={busy} run={run} draftStartsAt={detail.startsAt} onClose={() => setModifySession(false)} /> : null}</>;
+  return (
+    <>
+      <div
+        className="sheet-backdrop"
+        role="presentation"
+        onMouseDown={closeAll}
+      >
+        <aside
+          className={`detail-sheet detail-${detail.kind}`}
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header className="entity-header">
+            <div className="entity-heading">
+              {detail.kind === "student" || detail.kind === "teacher" ? (
+                <Avatar className="entity-avatar" person={item} />
+              ) : (
+                <div className="entity-icon">
+                  {detail.kind === "session" ? (
+                    <ClipboardCheck size={22} />
+                  ) : detail.kind === "course" ? (
+                    <BookOpen size={22} />
+                  ) : (
+                    <DoorOpen size={22} />
+                  )}
+                </div>
+              )}
+              <div>
+                <span className="sheet-eyebrow">
+                  {detail.kind === "session"
+                    ? "Lesson"
+                    : detail.kind === "course"
+                      ? "Class intake"
+                      : detail.kind === "student"
+                        ? "Student"
+                        : detail.kind === "teacher"
+                          ? "Teacher"
+                          : "Classroom"}
+                </span>
+                <h2 className="entity-title">
+                  {title}
+                  {detail.kind === "course" ? (
+                    <span className="class-name-chip" style={eventStyle(item)}>
+                      {get(item, "name")}
+                    </span>
+                  ) : null}
+                </h2>
+                <p>
+                  {detail.kind === "course"
+                    ? get(item, "term_name")
+                    : courseSubtitle}
+                </p>
+              </div>
+            </div>
+            <div className="entity-header-actions">
+              {detail.kind === "student" || detail.kind === "teacher" ? (
+                <button
+                  className="quiet-button"
+                  type="button"
+                  onClick={() => setEditing(!editing)}
+                >
+                  {editing ? "Cancel edit" : "Edit profile"}
+                </button>
+              ) : null}
+              {detail.kind === "session" ? (
+                <>
+                  <button
+                    className="quiet-button"
+                    type="button"
+                    onClick={() => setModifySession(true)}
+                  >
+                    Modify
+                  </button>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={openStudents}
+                  >
+                    Check in
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </header>
+          <div className="entity-workspace detail-workspace">
+            <main className="entity-main">
+              {detail.kind === "student" ? (
+                <StudentDetailContent
+                  tab={tab}
+                  editing={editing}
+                  item={item}
+                  enrollments={studentEnrollments}
+                  invoices={studentInvoices}
+                  payments={studentPayments}
+                  attendance={studentAttendance}
+                  sessions={data.sessions}
+                  messages={studentMessages}
+                  outstanding={outstanding}
+                  busy={busy}
+                  saveProfile={saveProfile}
+                  run={run}
+                  openDetail={openDetail}
+                />
+              ) : null}
+              {detail.kind === "teacher" ? (
+                <TeacherDetailContent
+                  tab={tab}
+                  editing={editing}
+                  item={item}
+                  lessons={teacherLessons}
+                  total={incomeTotal}
+                  paid={incomePaid}
+                  busy={busy}
+                  saveProfile={saveProfile}
+                  openDetail={openDetail}
+                />
+              ) : null}
+              {detail.kind === "session" ? (
+                <SessionDetailContent
+                  tab={tab}
+                  item={item}
+                  courseSessions={courseSessions}
+                  roster={sessionRoster}
+                  students={data.students}
+                  classrooms={data.classrooms}
+                  teachers={data.teachers}
+                  draftStartsAt={detail.startsAt}
+                  enrollStudentId={enrollStudentId}
+                  setEnrollStudentId={setEnrollStudentId}
+                  busy={busy}
+                  run={run}
+                  t={t}
+                  onSaved={() => setTab("summary")}
+                  openDetail={openDetail}
+                />
+              ) : null}
+              {detail.kind === "course" ? (
+                <CourseDetailContent
+                  tab={tab}
+                  item={item}
+                  lessons={runLessons}
+                  students={runStudents}
+                  data={data}
+                  busy={busy}
+                  run={run}
+                  openDetail={openDetail}
+                />
+              ) : null}
+              {detail.kind === "room" ? (
+                <RoomDetailContent
+                  tab={tab}
+                  item={item}
+                  lessons={roomLessons}
+                  openDetail={openDetail}
+                />
+              ) : null}
+            </main>
+            <DetailTabs
+              active={tab}
+              onChange={setTab}
+              tabs={tabs}
+              onClose={close}
+            />
+          </div>
+        </aside>
+      </div>
+      {modifySession && detail.kind === "session" ? (
+        <LessonModifyDialog
+          lesson={item}
+          data={data}
+          busy={busy}
+          run={run}
+          draftStartsAt={detail.startsAt}
+          onClose={() => setModifySession(false)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function NotificationDrawer({ notifications, close }: { notifications: Row[]; close: () => void }) {
-  return <div className="notification-backdrop" role="presentation" onMouseDown={close}><aside className="notification-drawer" role="dialog" aria-modal="true" aria-label="Notifications" onMouseDown={(event) => event.stopPropagation()}><header><div><span className="sheet-eyebrow">Updates</span><h2>Notifications</h2></div><button className="header-icon" type="button" onClick={close} aria-label="Close notifications"><X size={18} /></button></header><div className="notification-list">{notifications.map((item) => <article key={get(item, "id")} className={get(item, "status") === "unread" ? "unread" : ""}><Bell size={16} /><div><strong>{get(item, "title")}</strong><p>{get(item, "body")}</p><small>{get(item, "created_at")}</small></div></article>)}{!notifications.length ? <Empty text="No updates yet." /> : null}</div></aside></div>;
+function NotificationDrawer({
+  notifications,
+  close,
+}: {
+  notifications: Row[];
+  close: () => void;
+}) {
+  return (
+    <div
+      className="notification-backdrop"
+      role="presentation"
+      onMouseDown={close}
+    >
+      <aside
+        className="notification-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Notifications"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="sheet-eyebrow">Updates</span>
+            <h2>Notifications</h2>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={close}
+            aria-label="Close notifications"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="notification-list">
+          {notifications.map((item) => (
+            <article
+              key={get(item, "id")}
+              className={get(item, "status") === "unread" ? "unread" : ""}
+            >
+              <Bell size={16} />
+              <div>
+                <strong>{get(item, "title")}</strong>
+                <p>{get(item, "body")}</p>
+                <small>{get(item, "created_at")}</small>
+              </div>
+            </article>
+          ))}
+          {!notifications.length ? <Empty text="No updates yet." /> : null}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
-function StudentCreateDrawer({ busy, run, close }: { busy: boolean; run: (action: string, values?: Row) => Promise<void>; close: () => void }) {
+function StudentCreateDrawer({
+  busy,
+  run,
+  close,
+}: {
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  close: () => void;
+}) {
   const [error, setError] = useState("");
   async function createStudent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1462,192 +14671,2382 @@ function StudentCreateDrawer({ busy, run, close }: { busy: boolean; run: (action
     try {
       const form = new FormData(event.currentTarget);
       const photo = form.get("avatarFile");
-      const avatarUrl = photo instanceof File && photo.size ? await fileAsDataUrl(photo) : String(form.get("avatarUrl") || "sprite:0");
-      await run("createStudent", { name: String(form.get("name") || ""), level: String(form.get("level") || ""), phone: String(form.get("phone") || ""), email: String(form.get("email") || ""), avatarUrl });
+      const avatarUrl =
+        photo instanceof File && photo.size
+          ? await fileAsDataUrl(photo)
+          : String(form.get("avatarUrl") || "sprite:0");
+      await run("createStudent", {
+        name: String(form.get("name") || ""),
+        level: String(form.get("level") || ""),
+        phone: String(form.get("phone") || ""),
+        email: String(form.get("email") || ""),
+        avatarUrl,
+      });
       close();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Student could not be added.");
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Student could not be added.",
+      );
     }
   }
-  return <div className="sheet-backdrop" role="presentation" onMouseDown={close}><aside className="detail-sheet detail-student detail-create" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><header className="entity-header"><div className="entity-heading"><div className="entity-icon"><UserRoundPlus size={22} /></div><div><span className="sheet-eyebrow">Student</span><h2>Add student</h2><p>Create a learner profile and choose a photo.</p></div></div></header><div className="entity-workspace detail-workspace"><main className="entity-main"><section className="detail-metrics"><DetailMetric label="Profile" value="New learner" /><DetailMetric label="Photo" value="Ready to choose" /></section><section className="sheet-section"><div className="sheet-section-title"><h3>Student details</h3><span>New</span></div><form className="detail-edit-form create-student-drawer-form" onSubmit={createStudent}><FormField name="name" label="Student name" required /><FormField name="level" label="Level" defaultValue="Year 7" required /><FormField name="phone" label="Guardian phone" /><FormField name="email" label="Family email" type="email" /><label className="form-field"><span>Starter photo</span><select name="avatarUrl" defaultValue="sprite:0"><option value="sprite:0">Generated portrait 1</option><option value="sprite:1">Generated portrait 2</option><option value="sprite:2">Generated portrait 3</option><option value="sprite:3">Generated portrait 4</option><option value="sprite:4">Generated portrait 5</option><option value="sprite:5">Generated portrait 6</option><option value="sprite:6">Generated portrait 7</option><option value="sprite:7">Generated portrait 8</option></select></label><label className="form-field photo-upload"><span>Replace with photo</span><input name="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" /></label>{error ? <p className="form-error">{error}</p> : null}<div className="detail-form-actions"><button className="quiet-button" type="button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save student</button></div></form></section></main><DetailTabs active="summary" onChange={() => undefined} tabs={[{ id: "summary", label: "Details" }]} onClose={close} /></div></aside></div>;
+  return (
+    <div className="sheet-backdrop" role="presentation" onMouseDown={close}>
+      <aside
+        className="detail-sheet detail-student detail-create"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="entity-header">
+          <div className="entity-heading">
+            <div className="entity-icon">
+              <UserRoundPlus size={22} />
+            </div>
+            <div>
+              <span className="sheet-eyebrow">Student</span>
+              <h2>Add student</h2>
+              <p>Create a learner profile and choose a photo.</p>
+            </div>
+          </div>
+        </header>
+        <div className="entity-workspace detail-workspace">
+          <main className="entity-main">
+            <section className="detail-metrics">
+              <DetailMetric label="Profile" value="New learner" />
+              <DetailMetric label="Photo" value="Ready to choose" />
+            </section>
+            <section className="sheet-section">
+              <div className="sheet-section-title">
+                <h3>Student details</h3>
+                <span>New</span>
+              </div>
+              <form
+                className="detail-edit-form create-student-drawer-form"
+                onSubmit={createStudent}
+              >
+                <FormField name="name" label="Student name" required />
+                <FormField
+                  name="level"
+                  label="Level"
+                  defaultValue="Year 7"
+                  required
+                />
+                <FormField name="phone" label="Guardian phone" />
+                <FormField name="email" label="Family email" type="email" />
+                <label className="form-field">
+                  <span>Starter photo</span>
+                  <select name="avatarUrl" defaultValue="sprite:0">
+                    <option value="sprite:0">Generated portrait 1</option>
+                    <option value="sprite:1">Generated portrait 2</option>
+                    <option value="sprite:2">Generated portrait 3</option>
+                    <option value="sprite:3">Generated portrait 4</option>
+                    <option value="sprite:4">Generated portrait 5</option>
+                    <option value="sprite:5">Generated portrait 6</option>
+                    <option value="sprite:6">Generated portrait 7</option>
+                    <option value="sprite:7">Generated portrait 8</option>
+                  </select>
+                </label>
+                <label className="form-field photo-upload">
+                  <span>Replace with photo</span>
+                  <input
+                    name="avatarFile"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                  />
+                </label>
+                {error ? <p className="form-error">{error}</p> : null}
+                <div className="detail-form-actions">
+                  <button
+                    className="quiet-button"
+                    type="button"
+                    onClick={close}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    type="submit"
+                  >
+                    <Check size={16} />
+                    Save student
+                  </button>
+                </div>
+              </form>
+            </section>
+          </main>
+          <DetailTabs
+            active="summary"
+            onChange={() => undefined}
+            tabs={[{ id: "summary", label: "Details" }]}
+            onClose={close}
+          />
+        </div>
+      </aside>
+    </div>
+  );
 }
 
-function DetailTabs({ active, onChange, tabs, onClose }: { active: string; onChange: (value: string) => void; tabs: { id: string; label: string; count?: number }[]; onClose: () => void }) { return <nav className="detail-tabs-right" aria-label="Details sections"><button className="drawer-close-tab" type="button" onClick={onClose} title="Close details" aria-label="Close details"><ChevronRight size={20} /></button>{tabs.filter((tab) => tab.id !== "income").map((tab) => <button type="button" className={active === tab.id ? "active" : ""} onClick={() => onChange(tab.id)} key={tab.id}><DetailTabIcon id={tab.id} /><span>{tab.label}</span>{tab.count !== undefined ? <b>{tab.count}</b> : null}</button>)}</nav>; }
-function DetailTabIcon({ id }: { id: string }) { const Icon = id === "summary" ? Home : id === "modify" ? Settings2 : id === "courses" || id === "lessons" || id === "intakes" || id === "materials" ? BookOpen : id === "students" ? Users : id === "payments" || id === "income" || id === "finance" ? Banknote : id === "communication" ? Mail : CalendarDays; return <Icon size={18} />; }
-function DetailMetric({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
-function MetricCard({ label, value }: { label: string; value: string }) { return <DetailMetric label={label} value={value} />; }
+function DetailTabs({
+  active,
+  onChange,
+  tabs,
+  onClose,
+}: {
+  active: string;
+  onChange: (value: string) => void;
+  tabs: { id: string; label: string; count?: number }[];
+  onClose: () => void;
+}) {
+  return (
+    <nav className="detail-tabs-right" aria-label="Details sections">
+      <button
+        className="drawer-close-tab"
+        type="button"
+        onClick={onClose}
+        title="Close details"
+        aria-label="Close details"
+      >
+        <ChevronRight size={20} />
+      </button>
+      {tabs
+        .filter((tab) => tab.id !== "income")
+        .map((tab) => (
+          <button
+            type="button"
+            className={active === tab.id ? "active" : ""}
+            onClick={() => onChange(tab.id)}
+            key={tab.id}
+          >
+            <DetailTabIcon id={tab.id} />
+            <span>{tab.label}</span>
+            {tab.count !== undefined ? <b>{tab.count}</b> : null}
+          </button>
+        ))}
+    </nav>
+  );
+}
+function DetailTabIcon({ id }: { id: string }) {
+  const Icon =
+    id === "summary"
+      ? Home
+      : id === "modify"
+        ? Settings2
+        : id === "courses" ||
+            id === "lessons" ||
+            id === "intakes" ||
+            id === "materials"
+          ? BookOpen
+          : id === "students"
+            ? Users
+            : id === "payments" || id === "income" || id === "finance"
+              ? Banknote
+              : id === "communication"
+                ? Mail
+                : CalendarDays;
+  return <Icon size={18} />;
+}
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return <DetailMetric label={label} value={value} />;
+}
 
-function CourseDetailContent({ tab, item, lessons, students, data, busy, run, openDetail }: { tab: string; item: Row; lessons: Row[]; students: Row[]; data: PortalData; busy: boolean; run: (action: string, values?: Row) => Promise<void>; openDetail: (detail: Exclude<Detail, null>) => void }) {
+function CourseDetailContent({
+  tab,
+  item,
+  lessons,
+  students,
+  data,
+  busy,
+  run,
+  openDetail,
+}: {
+  tab: string;
+  item: Row;
+  lessons: Row[];
+  students: Row[];
+  data: PortalData;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const now = Date.now();
-  const manuallyCurrent = lessons.find((lesson) => get(lesson, "status") === "current");
+  const manuallyCurrent = lessons.find(
+    (lesson) => get(lesson, "status") === "current",
+  );
   const currentId = get(manuallyCurrent, "id");
-  const completedLessons = lessons.filter((lesson) => asTime(lesson.ends_at) < now);
-  const activeLessons = lessons.filter((lesson) => asTime(lesson.ends_at) >= now || get(lesson, "id") === currentId);
-  const lessonTemplates = data.courseLessons.filter((lesson) => get(lesson, "course_id") === get(item, "course_id"));
-  const missingLessonCount = Math.max(0, lessonTemplates.length - lessons.length);
+  const completedLessons = lessons.filter(
+    (lesson) => asTime(lesson.ends_at) < now,
+  );
+  const activeLessons = lessons.filter(
+    (lesson) =>
+      asTime(lesson.ends_at) >= now || get(lesson, "id") === currentId,
+  );
+  const lessonTemplates = data.courseLessons.filter(
+    (lesson) => get(lesson, "course_id") === get(item, "course_id"),
+  );
+  const missingLessonCount = Math.max(
+    0,
+    lessonTemplates.length - lessons.length,
+  );
   const seats = Math.max(0, Number(get(item, "capacity")) - students.length);
-  if (tab === "students") return <><section className="detail-metrics"><DetailMetric label="Enrolled" value={`${students.length}/${get(item, "capacity")}`} /><DetailMetric label="Open seats" value={String(seats)} /></section><ListSection title="Current students" rows={students} fields={[["student_name", "Student"], ["contracted_fee", "Course fee"], ["invoice_status", "Payment"]]} moneyKeys={["contracted_fee"]} onOpen={(student) => openDetail({ kind: "student", id: get(student, "student_id") })} /></>;
-  return <><section className="detail-metrics"><DetailMetric label="Enrolled" value={`${students.length}/${get(item, "capacity")}`} /><DetailMetric label="Lessons" value={String(lessons.length)} /><DetailMetric label="Intake fee" value={amount(item.price)} /></section><section className="sheet-section"><div className="sheet-section-title"><h3>Intake overview</h3><div className="action-group"><button className="quiet-button" type="button" onClick={() => setCalendarOpen(true)}><CalendarDays size={15} />Schedule class</button><button className="primary-button" type="button" onClick={() => setSettingsOpen(true)}><Settings2 size={15} />Class settings</button></div></div><div className="current-lesson-card" style={eventStyle(item)}><CourseVisual course={item} /><div><strong>{get(item, "name")}</strong><p>{get(item, "term_name")}</p><span><UsersRound size={14} />{students.length} students enrolled</span></div></div>{missingLessonCount ? <div className="class-sync-warning"><BookOpen size={16} /><span>{missingLessonCount}/{lessonTemplates.length} lessons not scheduled after the Course plan changed.</span><button className="table-button" disabled={busy} type="button" onClick={() => void run("syncClassLessons", { runId: get(item, "id") })}>Update</button></div> : null}</section><InteractiveLessonSequence title="Class lessons" sessions={[...activeLessons, ...completedLessons]} currentId={currentId} expanded onOpen={(session) => openDetail({ kind: "session", id: get(session, "id") })} onSetCurrent={(session) => void run("setCurrentLesson", { sessionId: get(session, "id") })} /><section className="sheet-action-footer"><div><span>Ready to add a learner?</span><strong>{openSeats(item)} seats available in this intake</strong></div><button className="primary-button" type="button" onClick={() => setEnrollOpen(true)}><UserRoundPlus size={15} />Enroll student</button></section>{enrollOpen ? <EnrollmentDialog data={data} busy={busy} run={run} initialRun={item} courseId={get(item, "course_id")} onClose={() => setEnrollOpen(false)} /> : null}{settingsOpen ? <ClassSettingsDialog runItem={item} lessons={lessons} data={data} busy={busy} run={run} openDetail={openDetail} onClose={() => setSettingsOpen(false)} /> : null}{calendarOpen ? <ClassScheduleDialog runItem={item} lessons={lessons} missingCount={missingLessonCount} totalCount={lessonTemplates.length} busy={busy} run={run} onOpen={openDetail} onClose={() => setCalendarOpen(false)} onQuick={() => { setCalendarOpen(false); setQuickOpen(true); }} /> : null}{quickOpen ? <QuickScheduleDialog runItem={item} lessonCount={lessonTemplates.length || lessons.length} defaultDuration={Number(lessonTemplates[0]?.default_duration_minutes || 90)} data={data} busy={busy} run={run} onClose={() => setQuickOpen(false)} /> : null}</>;
+  if (tab === "students")
+    return (
+      <>
+        <section className="detail-metrics">
+          <DetailMetric
+            label="Enrolled"
+            value={`${students.length}/${get(item, "capacity")}`}
+          />
+          <DetailMetric label="Open seats" value={String(seats)} />
+        </section>
+        <ListSection
+          title="Current students"
+          rows={students}
+          fields={[
+            ["student_name", "Student"],
+            ["contracted_fee", "Course fee"],
+            ["invoice_status", "Payment"],
+          ]}
+          moneyKeys={["contracted_fee"]}
+          onOpen={(student) =>
+            openDetail({ kind: "student", id: get(student, "student_id") })
+          }
+        />
+      </>
+    );
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric
+          label="Enrolled"
+          value={`${students.length}/${get(item, "capacity")}`}
+        />
+        <DetailMetric label="Lessons" value={String(lessons.length)} />
+        <DetailMetric label="Intake fee" value={amount(item.price)} />
+      </section>
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Intake overview</h3>
+          <div className="action-group">
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+            >
+              <CalendarDays size={15} />
+              Schedule class
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 size={15} />
+              Class settings
+            </button>
+          </div>
+        </div>
+        <div className="current-lesson-card" style={eventStyle(item)}>
+          <CourseVisual course={item} />
+          <div>
+            <strong>{get(item, "name")}</strong>
+            <p>{get(item, "term_name")}</p>
+            <span>
+              <UsersRound size={14} />
+              {students.length} students enrolled
+            </span>
+          </div>
+        </div>
+        {missingLessonCount ? (
+          <div className="class-sync-warning">
+            <BookOpen size={16} />
+            <span>
+              {missingLessonCount}/{lessonTemplates.length} lessons not
+              scheduled after the Course plan changed.
+            </span>
+            <button
+              className="table-button"
+              disabled={busy}
+              type="button"
+              onClick={() =>
+                void run("syncClassLessons", { runId: get(item, "id") })
+              }
+            >
+              Update
+            </button>
+          </div>
+        ) : null}
+      </section>
+      <InteractiveLessonSequence
+        title="Class lessons"
+        sessions={[...activeLessons, ...completedLessons]}
+        currentId={currentId}
+        expanded
+        onOpen={(session) =>
+          openDetail({ kind: "session", id: get(session, "id") })
+        }
+        onSetCurrent={(session) =>
+          void run("setCurrentLesson", { sessionId: get(session, "id") })
+        }
+      />
+      <section className="sheet-action-footer">
+        <div>
+          <span>Ready to add a learner?</span>
+          <strong>{openSeats(item)} seats available in this intake</strong>
+        </div>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => setEnrollOpen(true)}
+        >
+          <UserRoundPlus size={15} />
+          Enroll student
+        </button>
+      </section>
+      {enrollOpen ? (
+        <EnrollmentDialog
+          data={data}
+          busy={busy}
+          run={run}
+          initialRun={item}
+          courseId={get(item, "course_id")}
+          onClose={() => setEnrollOpen(false)}
+        />
+      ) : null}
+      {settingsOpen ? (
+        <ClassSettingsDialog
+          runItem={item}
+          lessons={lessons}
+          data={data}
+          busy={busy}
+          run={run}
+          openDetail={openDetail}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
+      {calendarOpen ? (
+        <ClassScheduleDialog
+          runItem={item}
+          lessons={lessons}
+          missingCount={missingLessonCount}
+          totalCount={lessonTemplates.length}
+          busy={busy}
+          run={run}
+          onOpen={openDetail}
+          onClose={() => setCalendarOpen(false)}
+          onQuick={() => {
+            setCalendarOpen(false);
+            setQuickOpen(true);
+          }}
+        />
+      ) : null}
+      {quickOpen ? (
+        <QuickScheduleDialog
+          runItem={item}
+          lessonCount={lessonTemplates.length || lessons.length}
+          defaultDuration={Number(
+            lessonTemplates[0]?.default_duration_minutes || 90,
+          )}
+          data={data}
+          busy={busy}
+          run={run}
+          onClose={() => setQuickOpen(false)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function StudentDetailContent({ tab, editing, item, enrollments, invoices, payments, attendance, sessions, messages, outstanding, busy, saveProfile, run, openDetail }: { tab: string; editing: boolean; item: Row; enrollments: Row[]; invoices: Row[]; payments: Row[]; attendance: Row[]; sessions: Row[]; messages: Row[]; outstanding: number; busy: boolean; saveProfile: (event: FormEvent<HTMLFormElement>) => void; run: (action: string, values?: Row) => Promise<void>; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const activeEnrollments = enrollments.filter((row) => get(row, "run_status") !== "finished").map((row) => ({ ...row, course_status: "active" }));
-  const finishedEnrollments = enrollments.filter((row) => get(row, "run_status") === "finished").map((row) => ({ ...row, course_status: "finished" }));
-  if (tab === "courses") return <><StudentCourseProgress title="Active courses" enrollments={activeEnrollments} attendance={attendance} sessions={sessions} invoices={invoices} onOpen={(enrollment) => openDetail({ kind: "course", id: get(enrollment, "class_run_id") })} /><StudentCourseProgress title="Finished courses" enrollments={finishedEnrollments} attendance={attendance} sessions={sessions} invoices={invoices} onOpen={(enrollment) => openDetail({ kind: "course", id: get(enrollment, "class_run_id") })} /></>;
-  if (tab === "payments") return <PaymentLedger invoices={invoices} payments={payments} run={run} busy={busy} />;
-  if (tab === "communication") return <CommunicationPanel item={item} messages={messages} run={run} busy={busy} />;
-  if (tab === "summary") return <StudentSummaryCard item={item} editing={editing} activeEnrollments={activeEnrollments} sessions={sessions} invoices={invoices} outstanding={outstanding} busy={busy} saveProfile={saveProfile} run={run} />;
+function StudentDetailContent({
+  tab,
+  editing,
+  item,
+  enrollments,
+  invoices,
+  payments,
+  attendance,
+  sessions,
+  messages,
+  outstanding,
+  busy,
+  saveProfile,
+  run,
+  openDetail,
+}: {
+  tab: string;
+  editing: boolean;
+  item: Row;
+  enrollments: Row[];
+  invoices: Row[];
+  payments: Row[];
+  attendance: Row[];
+  sessions: Row[];
+  messages: Row[];
+  outstanding: number;
+  busy: boolean;
+  saveProfile: (event: FormEvent<HTMLFormElement>) => void;
+  run: (action: string, values?: Row) => Promise<void>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const activeEnrollments = enrollments
+    .filter((row) => get(row, "run_status") !== "finished")
+    .map((row) => ({ ...row, course_status: "active" }));
+  const finishedEnrollments = enrollments
+    .filter((row) => get(row, "run_status") === "finished")
+    .map((row) => ({ ...row, course_status: "finished" }));
+  if (tab === "courses")
+    return (
+      <>
+        <StudentCourseProgress
+          title="Active courses"
+          enrollments={activeEnrollments}
+          attendance={attendance}
+          sessions={sessions}
+          invoices={invoices}
+          onOpen={(enrollment) =>
+            openDetail({ kind: "course", id: get(enrollment, "class_run_id") })
+          }
+        />
+        <StudentCourseProgress
+          title="Finished courses"
+          enrollments={finishedEnrollments}
+          attendance={attendance}
+          sessions={sessions}
+          invoices={invoices}
+          onOpen={(enrollment) =>
+            openDetail({ kind: "course", id: get(enrollment, "class_run_id") })
+          }
+        />
+      </>
+    );
+  if (tab === "payments")
+    return (
+      <PaymentLedger
+        invoices={invoices}
+        payments={payments}
+        run={run}
+        busy={busy}
+      />
+    );
+  if (tab === "communication")
+    return (
+      <CommunicationPanel
+        item={item}
+        messages={messages}
+        run={run}
+        busy={busy}
+      />
+    );
+  if (tab === "summary")
+    return (
+      <StudentSummaryCard
+        item={item}
+        editing={editing}
+        activeEnrollments={activeEnrollments}
+        sessions={sessions}
+        invoices={invoices}
+        outstanding={outstanding}
+        busy={busy}
+        saveProfile={saveProfile}
+        run={run}
+      />
+    );
   return null;
 }
 
-function StudentSummaryCard({ item, editing, activeEnrollments, sessions, invoices, outstanding, busy, saveProfile, run }: { item: Row; editing: boolean; activeEnrollments: Row[]; sessions: Row[]; invoices: Row[]; outstanding: number; busy: boolean; saveProfile: (event: FormEvent<HTMLFormElement>) => void; run: (action: string, values?: Row) => Promise<void> }) {
-  const email = get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`;
-  return <><section className="detail-metrics"><DetailMetric label="Active courses" value={String(activeEnrollments.length)} /><DetailMetric label="Needs attention" value={String(invoices.filter((row) => get(row, "status") !== "paid").length)} /><DetailMetric label="Outstanding" value={amount(outstanding)} /></section>{editing ? <section className="sheet-section"><h3>Edit student</h3><form className="detail-edit-form" onSubmit={saveProfile}><FormField name="name" label="Student name" defaultValue={get(item, "name")} required /><FormField name="level" label="Level" defaultValue={get(item, "level")} required /><FormField name="phone" label="Guardian phone" defaultValue={get(item, "guardian_phone")} /><FormField name="email" label="Email" defaultValue={get(item, "email")} /><label className="form-field photo-upload"><span>Replace photo</span><input name="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" /></label><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save changes</button></form></section> : <section className="sheet-section contact-card"><div className="sheet-section-title"><h3>Student contact</h3><a className="contact-email-button" href={`mailto:${email}`}><Mail size={15} />Email student</a></div><div className="sheet-overview"><Info label="Student code" value={get(item, "code")} /><Info label="Level" value={get(item, "level")} /><Info label="Guardian phone" value={get(item, "guardian_phone")} /><Info label="Email" value={email} /></div></section>}<StudentCourseProgress compact title="Current courses" enrollments={activeEnrollments} attendance={[]} sessions={sessions} invoices={invoices} /></>;
+function StudentSummaryCard({
+  item,
+  editing,
+  activeEnrollments,
+  sessions,
+  invoices,
+  outstanding,
+  busy,
+  saveProfile,
+  run,
+}: {
+  item: Row;
+  editing: boolean;
+  activeEnrollments: Row[];
+  sessions: Row[];
+  invoices: Row[];
+  outstanding: number;
+  busy: boolean;
+  saveProfile: (event: FormEvent<HTMLFormElement>) => void;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
+  const email =
+    get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`;
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric
+          label="Active courses"
+          value={String(activeEnrollments.length)}
+        />
+        <DetailMetric
+          label="Needs attention"
+          value={String(
+            invoices.filter((row) => get(row, "status") !== "paid").length,
+          )}
+        />
+        <DetailMetric label="Outstanding" value={amount(outstanding)} />
+      </section>
+      {editing ? (
+        <section className="sheet-section">
+          <h3>Edit student</h3>
+          <form className="detail-edit-form" onSubmit={saveProfile}>
+            <FormField
+              name="name"
+              label="Student name"
+              defaultValue={get(item, "name")}
+              required
+            />
+            <FormField
+              name="level"
+              label="Level"
+              defaultValue={get(item, "level")}
+              required
+            />
+            <FormField
+              name="phone"
+              label="Guardian phone"
+              defaultValue={get(item, "guardian_phone")}
+            />
+            <FormField
+              name="email"
+              label="Email"
+              defaultValue={get(item, "email")}
+            />
+            <label className="form-field photo-upload">
+              <span>Replace photo</span>
+              <input
+                name="avatarFile"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+              />
+            </label>
+            <button className="primary-button" disabled={busy} type="submit">
+              <Check size={16} />
+              Save changes
+            </button>
+          </form>
+        </section>
+      ) : (
+        <section className="sheet-section contact-card">
+          <div className="sheet-section-title">
+            <h3>Student contact</h3>
+            <a className="contact-email-button" href={`mailto:${email}`}>
+              <Mail size={15} />
+              Email student
+            </a>
+          </div>
+          <div className="sheet-overview">
+            <Info label="Student code" value={get(item, "code")} />
+            <Info label="Level" value={get(item, "level")} />
+            <Info label="Guardian phone" value={get(item, "guardian_phone")} />
+            <Info label="Email" value={email} />
+          </div>
+        </section>
+      )}
+      <StudentCourseProgress
+        compact
+        title="Current courses"
+        enrollments={activeEnrollments}
+        attendance={[]}
+        sessions={sessions}
+        invoices={invoices}
+      />
+    </>
+  );
 }
 
-function PaymentLedger({ invoices, payments, run, busy, actionLabel = "Mark as paid" }: { invoices: Row[]; payments: Row[]; run: (action: string, values?: Row) => Promise<void>; busy: boolean; actionLabel?: string }) {
+function PaymentLedger({
+  invoices,
+  payments,
+  run,
+  busy,
+  actionLabel = "Mark as paid",
+}: {
+  invoices: Row[];
+  payments: Row[];
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  actionLabel?: string;
+}) {
   const [invoiceToPay, setInvoiceToPay] = useState<Row | null>(null);
-  const outstandingInvoices = invoices.filter((invoice) => Number(invoice.total_amount) > Number(invoice.paid_amount));
-  return <><section className="sheet-section payment-ledger"><div className="sheet-section-title"><h3>Payment history</h3><span>{payments.length}</span></div><div className="payment-history">{payments.map((payment) => <article key={get(payment, "id")}><div className="payment-record-details"><div><span>Course</span><strong>{get(payment, "course_title")}</strong></div><div><span>Class</span><strong>{get(payment, "run_name")}</strong></div><div><span>Paid on</span><strong>{get(payment, "received_at")}</strong></div><div><span>Method</span><strong>{get(payment, "method").replace(/_/g, " ")}</strong></div>{get(payment, "proof_reference") ? <div><span>Proof</span><strong>{get(payment, "proof_reference")}</strong></div> : null}{get(payment, "note") ? <div><span>Note</span><strong>{get(payment, "note")}</strong></div> : null}</div><div className="payment-record-amount"><span>Amount received</span><strong>{amount(payment.amount)}</strong></div></article>)}{!payments.length ? <Empty text="No payment received yet." /> : null}</div></section><section className="sheet-section payment-ledger"><div className="sheet-section-title"><h3>Outstanding payments</h3><span>{outstandingInvoices.length}</span></div>{outstandingInvoices.map((invoice) => { const balance = Math.max(0, Number(invoice.total_amount) - Number(invoice.paid_amount)); return <article key={get(invoice, "id")}><div><span>{get(invoice, "course_title")}</span><strong>{get(invoice, "run_name")}</strong><small>Outstanding {amount(balance)} of {amount(invoice.total_amount)}</small></div><Status value={get(invoice, "status")} /><button className="table-button" disabled={busy} type="button" onClick={() => setInvoiceToPay(invoice)}>{actionLabel}</button></article>; })}{!outstandingInvoices.length ? <Empty text="All payments are settled." /> : null}</section>{invoiceToPay ? <PaymentDialog invoice={invoiceToPay} run={run} busy={busy} onClose={() => setInvoiceToPay(null)} /> : null}</>;
+  const outstandingInvoices = invoices.filter(
+    (invoice) => Number(invoice.total_amount) > Number(invoice.paid_amount),
+  );
+  return (
+    <>
+      <section className="sheet-section payment-ledger">
+        <div className="sheet-section-title">
+          <h3>Payment history</h3>
+          <span>{payments.length}</span>
+        </div>
+        <div className="payment-history">
+          {payments.map((payment) => (
+            <article key={get(payment, "id")}>
+              <div className="payment-record-details">
+                <div>
+                  <span>Course</span>
+                  <strong>{get(payment, "course_title")}</strong>
+                </div>
+                <div>
+                  <span>Class</span>
+                  <strong>{get(payment, "run_name")}</strong>
+                </div>
+                <div>
+                  <span>Paid on</span>
+                  <strong>{get(payment, "received_at")}</strong>
+                </div>
+                <div>
+                  <span>Method</span>
+                  <strong>{get(payment, "method").replace(/_/g, " ")}</strong>
+                </div>
+                {get(payment, "proof_reference") ? (
+                  <div>
+                    <span>Proof</span>
+                    <strong>{get(payment, "proof_reference")}</strong>
+                  </div>
+                ) : null}
+                {get(payment, "note") ? (
+                  <div>
+                    <span>Note</span>
+                    <strong>{get(payment, "note")}</strong>
+                  </div>
+                ) : null}
+              </div>
+              <div className="payment-record-amount">
+                <span>Amount received</span>
+                <strong>{amount(payment.amount)}</strong>
+              </div>
+            </article>
+          ))}
+          {!payments.length ? <Empty text="No payment received yet." /> : null}
+        </div>
+      </section>
+      <section className="sheet-section payment-ledger">
+        <div className="sheet-section-title">
+          <h3>Outstanding payments</h3>
+          <span>{outstandingInvoices.length}</span>
+        </div>
+        {outstandingInvoices.map((invoice) => {
+          const balance = Math.max(
+            0,
+            Number(invoice.total_amount) - Number(invoice.paid_amount),
+          );
+          return (
+            <article key={get(invoice, "id")}>
+              <div>
+                <span>{get(invoice, "course_title")}</span>
+                <strong>{get(invoice, "run_name")}</strong>
+                <small>
+                  Outstanding {amount(balance)} of{" "}
+                  {amount(invoice.total_amount)}
+                </small>
+              </div>
+              <Status value={get(invoice, "status")} />
+              <button
+                className="table-button"
+                disabled={busy}
+                type="button"
+                onClick={() => setInvoiceToPay(invoice)}
+              >
+                {actionLabel}
+              </button>
+            </article>
+          );
+        })}
+        {!outstandingInvoices.length ? (
+          <Empty text="All payments are settled." />
+        ) : null}
+      </section>
+      {invoiceToPay ? (
+        <PaymentDialog
+          invoice={invoiceToPay}
+          run={run}
+          busy={busy}
+          onClose={() => setInvoiceToPay(null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function PaymentDialog({ invoice, run, busy, onClose }: { invoice: Row; run: (action: string, values?: Row) => Promise<void>; busy: boolean; onClose: () => void }) {
+function PaymentDialog({
+  invoice,
+  run,
+  busy,
+  onClose,
+}: {
+  invoice: Row;
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+  onClose: () => void;
+}) {
   const original = Number(invoice.total_amount);
   const alreadyPaid = Number(invoice.paid_amount);
   const [discount, setDiscount] = useState(0);
-  const [amountReceived, setAmountReceived] = useState(Math.max(0, original - alreadyPaid));
+  const [amountReceived, setAmountReceived] = useState(
+    Math.max(0, original - alreadyPaid),
+  );
   const currentPrice = Math.max(0, original - discount);
   const dueAfterDiscount = Math.max(0, currentPrice - alreadyPaid);
-  function changeDiscount(value: number) { const next = Math.max(0, Math.min(value, Math.max(0, original - alreadyPaid))); setDiscount(next); setAmountReceived(Math.max(0, original - alreadyPaid - next)); }
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("recordPayment", { ...values, invoiceId: get(invoice, "id"), discount, amount: amountReceived }).then(onClose); }
-  return <div className="payment-dialog-backdrop" role="presentation" onMouseDown={onClose}><form className="payment-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><header><div><span>Payment</span><h3>{get(invoice, "course_title")}</h3><p>{get(invoice, "run_name")}</p></div><button className="header-icon" type="button" onClick={onClose} title="Close"><X size={17} /></button></header><div className="payment-summary"><div><span>Original price</span><strong>{amount(original)}</strong></div><div><span>Discount</span><strong>{amount(discount)}</strong></div><div><span>Current price</span><strong>{amount(currentPrice)}</strong></div></div><div className="payment-form-grid"><FormField label="Discount (RM)" name="discount" type="number" min="0" max={Math.max(0, original - alreadyPaid)} step="0.01" value={discount} onChange={(event) => changeDiscount(Number(event.target.value))} /><label className="form-field"><span>Payment method</span><select name="method" defaultValue="duitnow_qr"><option value="duitnow_qr">DuitNow QR</option><option value="duitnow_transfer">DuitNow transfer</option><option value="fpx_online_banking">FPX / online banking</option><option value="touch_n_go_ewallet">Touch 'n Go eWallet</option><option value="grabpay">GrabPay</option><option value="debit_credit_card">Debit / credit card</option><option value="cash">Cash</option></select></label><FormField label="Payment proof / receipt reference" name="proofReference" placeholder="e.g. DuitNow reference or receipt no." /><label className="form-field payment-note"><span>Note</span><textarea name="note" placeholder="Optional payment note" /></label></div><footer><button className="quiet-button" type="button" onClick={onClose}>Cancel</button><label className="payment-final-amount"><span>Amount received (RM)</span><input name="amount" type="number" min="0.01" max={dueAfterDiscount} step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(Number(event.target.value))} /></label><button className="primary-button" disabled={busy || amountReceived <= 0} type="submit"><Check size={15} />Save payment</button></footer></form></div>;
+  function changeDiscount(value: number) {
+    const next = Math.max(
+      0,
+      Math.min(value, Math.max(0, original - alreadyPaid)),
+    );
+    setDiscount(next);
+    setAmountReceived(Math.max(0, original - alreadyPaid - next));
+  }
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("recordPayment", {
+      ...values,
+      invoiceId: get(invoice, "id"),
+      discount,
+      amount: amountReceived,
+    }).then(onClose);
+  }
+  return (
+    <div
+      className="payment-dialog-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <form
+        className="payment-dialog"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>Payment</span>
+            <h3>{get(invoice, "course_title")}</h3>
+            <p>{get(invoice, "run_name")}</p>
+          </div>
+          <button
+            className="header-icon"
+            type="button"
+            onClick={onClose}
+            title="Close"
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <div className="payment-summary">
+          <div>
+            <span>Original price</span>
+            <strong>{amount(original)}</strong>
+          </div>
+          <div>
+            <span>Discount</span>
+            <strong>{amount(discount)}</strong>
+          </div>
+          <div>
+            <span>Current price</span>
+            <strong>{amount(currentPrice)}</strong>
+          </div>
+        </div>
+        <div className="payment-form-grid">
+          <FormField
+            label="Discount (RM)"
+            name="discount"
+            type="number"
+            min="0"
+            max={Math.max(0, original - alreadyPaid)}
+            step="0.01"
+            value={discount}
+            onChange={(event) => changeDiscount(Number(event.target.value))}
+          />
+          <label className="form-field">
+            <span>Payment method</span>
+            <select name="method" defaultValue="duitnow_qr">
+              <option value="duitnow_qr">DuitNow QR</option>
+              <option value="duitnow_transfer">DuitNow transfer</option>
+              <option value="fpx_online_banking">FPX / online banking</option>
+              <option value="touch_n_go_ewallet">Touch 'n Go eWallet</option>
+              <option value="grabpay">GrabPay</option>
+              <option value="debit_credit_card">Debit / credit card</option>
+              <option value="cash">Cash</option>
+            </select>
+          </label>
+          <FormField
+            label="Payment proof / receipt reference"
+            name="proofReference"
+            placeholder="e.g. DuitNow reference or receipt no."
+          />
+          <label className="form-field payment-note">
+            <span>Note</span>
+            <textarea name="note" placeholder="Optional payment note" />
+          </label>
+        </div>
+        <footer>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <label className="payment-final-amount">
+            <span>Amount received (RM)</span>
+            <input
+              name="amount"
+              type="number"
+              min="0.01"
+              max={dueAfterDiscount}
+              step="0.01"
+              value={amountReceived}
+              onChange={(event) =>
+                setAmountReceived(Number(event.target.value))
+              }
+            />
+          </label>
+          <button
+            className="primary-button"
+            disabled={busy || amountReceived <= 0}
+            type="submit"
+          >
+            <Check size={15} />
+            Save payment
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
-function CommunicationPanel({ item, messages, run, busy }: { item: Row; messages: Row[]; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) { const email = get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`; function send(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void run("sendMessage", { ...values, studentId: get(item, "id"), recipient: email }); event.currentTarget.reset(); } return <><section className="sheet-section communication-contact"><div><span>EMAIL</span><strong>{email}</strong></div><a className="contact-email-button" href={`mailto:${email}`}><Mail size={15} />Open email</a></section><section className="sheet-section"><div className="sheet-section-title"><h3>Message history</h3><span>{messages.length}</span></div><div className="message-history">{messages.map((message) => <article key={get(message, "id")}><span>{get(message, "direction") === "outbound" ? "Sent" : "Received"}</span><strong>{get(message, "subject")}</strong><p>{get(message, "body")}</p><small>{get(message, "created_at")}</small></article>)}{!messages.length ? <Empty text="No messages yet." /> : null}</div></section><section className="sheet-section"><h3>New email</h3><form className="communication-form" onSubmit={send}><FormField name="subject" label="Subject" required /><label className="form-field"><span>Message</span><textarea name="body" required /></label><button className="primary-button" disabled={busy} type="submit"><Send size={15} />Send email</button></form></section></>; }
-
-function StudentCourseProgress({ title, enrollments, attendance, sessions, invoices, compact = false, onOpen }: { title?: string; enrollments: Row[]; attendance: Row[]; sessions: Row[]; invoices: Row[]; compact?: boolean; onOpen?: (enrollment: Row) => void }) {
-  return <section className={`sheet-section student-course-progress${compact ? " compact" : ""}`}><div className="sheet-section-title"><h3>{title || (compact ? "Course progress" : "Courses")}</h3><span>{enrollments.length}</span></div><div className="student-progress-list">{enrollments.map((enrollment) => { const runId = get(enrollment, "class_run_id"); const records = attendance.filter((record) => get(record, "class_run_id") === runId); const runSessions = sessions.filter((session) => get(session, "class_run_id") === runId); const attended = records.filter((record) => ["present", "late"].includes(get(record, "status"))).length; const upcoming = runSessions.find((session) => new Date(get(session, "starts_at").replace(" ", "T")).getTime() >= Date.now()); const invoice = invoices.find((row) => get(row, "id") === get(enrollment, "invoice_id")); const courseStatus = get(enrollment, "course_status") || (get(enrollment, "run_status") === "finished" ? "finished" : "active"); return <article key={get(enrollment, "id")} className={onOpen ? "interactive-list-row" : ""} onClick={() => onOpen?.(enrollment)}><CourseVisual course={{ title: get(enrollment, "course_title"), subject: get(enrollment, "course_title"), course_color: get(enrollment, "course_color") }} /><div className="student-progress-main"><div><strong>{get(enrollment, "course_title")}</strong><p>{get(enrollment, "run_name")}</p></div><div className="student-progress-meta"><span><CalendarDays size={14} />{attended}/{runSessions.length} attended</span><span><ClipboardCheck size={14} />{courseStatus === "finished" ? "Finished" : upcoming ? `Next: ${get(upcoming, "topic")}` : "Course in progress"}</span></div><div className="student-progress-track"><i style={{ width: `${runSessions.length ? Math.round(attended / runSessions.length * 100) : 0}%` }} /></div></div><div className="student-course-payment"><Status value={courseStatus} /><Status value={get(enrollment, "invoice_status") || "no_invoice"} /></div></article>; })}</div>{!enrollments.length ? <Empty text="No courses in this group." /> : null}</section>;
+function CommunicationPanel({
+  item,
+  messages,
+  run,
+  busy,
+}: {
+  item: Row;
+  messages: Row[];
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+}) {
+  const email =
+    get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`;
+  function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run("sendMessage", {
+      ...values,
+      studentId: get(item, "id"),
+      recipient: email,
+    });
+    event.currentTarget.reset();
+  }
+  return (
+    <>
+      <section className="sheet-section communication-contact">
+        <div>
+          <span>EMAIL</span>
+          <strong>{email}</strong>
+        </div>
+        <a className="contact-email-button" href={`mailto:${email}`}>
+          <Mail size={15} />
+          Open email
+        </a>
+      </section>
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Message history</h3>
+          <span>{messages.length}</span>
+        </div>
+        <div className="message-history">
+          {messages.map((message) => (
+            <article key={get(message, "id")}>
+              <span>
+                {get(message, "direction") === "outbound" ? "Sent" : "Received"}
+              </span>
+              <strong>{get(message, "subject")}</strong>
+              <p>{get(message, "body")}</p>
+              <small>{get(message, "created_at")}</small>
+            </article>
+          ))}
+          {!messages.length ? <Empty text="No messages yet." /> : null}
+        </div>
+      </section>
+      <section className="sheet-section">
+        <h3>New email</h3>
+        <form className="communication-form" onSubmit={send}>
+          <FormField name="subject" label="Subject" required />
+          <label className="form-field">
+            <span>Message</span>
+            <textarea name="body" required />
+          </label>
+          <button className="primary-button" disabled={busy} type="submit">
+            <Send size={15} />
+            Send email
+          </button>
+        </form>
+      </section>
+    </>
+  );
 }
 
-function TeacherDetailContent({ tab, editing, item, lessons, total, paid, busy, saveProfile, openDetail }: { tab: string; editing: boolean; item: Row; lessons: Row[]; total: number; paid: number; busy: boolean; saveProfile: (event: FormEvent<HTMLFormElement>) => void; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const teachingRuns = Array.from(lessons.reduce((runs, lesson) => { const key = get(lesson, "class_run_id") || get(lesson, "run_name"); const existing = runs.get(key); if (existing) { existing.lesson_count = Number(existing.lesson_count ?? 0) + 1; existing.pay_total = Number(existing.pay_total ?? 0) + Number(lesson.pay_amount ?? 0); } else { runs.set(key, { ...lesson, id: key, lesson_count: 1, pay_total: Number(lesson.pay_amount ?? 0), course_status: get(lesson, "run_status") === "finished" ? "finished" : "active" }); } return runs; }, new Map<string, Row>()).values());
-  const activeRuns = teachingRuns.filter((row) => get(row, "course_status") === "active");
-  const finishedRuns = teachingRuns.filter((row) => get(row, "course_status") === "finished");
-  if (tab !== "courses") return <><section className="detail-metrics"><DetailMetric label="Scheduled lessons" value={String(lessons.length)} /><DetailMetric label="Active classes" value={String(activeRuns.length)} /><DetailMetric label="Completed classes" value={String(finishedRuns.length)} /></section>{editing ? <section className="sheet-section"><h3>Edit teacher</h3><form className="detail-edit-form" onSubmit={saveProfile}><FormField name="name" label="Teacher name" defaultValue={get(item, "name")} required /><FormField name="subject" label="Subject" defaultValue={get(item, "subject")} required /><FormField name="phone" label="Phone" defaultValue={get(item, "phone")} /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save changes</button></form></section> : <section className="sheet-section"><h3>Teacher profile</h3><div className="sheet-overview"><Info label="Teacher code" value={get(item, "code")} /><Info label="Subject" value={get(item, "subject")} /><Info label="Phone" value={get(item, "phone")} /><Info label="Status" value={get(item, "status")} /></div></section>}<ListSection title="Next lessons" rows={lessons.slice(0, 3)} fields={[["course_title", "Course"], ["topic", "Lesson"], ["starts_at", "Start"]]} onOpen={(lesson) => openDetail({ kind: "session", id: get(lesson, "class_session_id") })} /></>;
-  if (tab === "courses") return <><ListSection title="Active courses" rows={activeRuns} fields={[["course_title", "Course"], ["run_name", "Class"], ["lesson_count", "Lessons"], ["course_status", "Status"]]} onOpen={(run) => openDetail({ kind: "course", id: get(run, "class_run_id") })} /><ListSection title="Finished courses" rows={finishedRuns} fields={[["course_title", "Course"], ["run_name", "Class"], ["lesson_count", "Lessons"], ["course_status", "Status"]]} onOpen={(run) => openDetail({ kind: "course", id: get(run, "class_run_id") })} /></>;
-  if (tab === "income") return <section className="sheet-section"><div className="detail-metrics"><DetailMetric label="Scheduled pay" value={amount(total)} /><DetailMetric label="Paid" value={amount(paid)} /><DetailMetric label="To pay" value={amount(total - paid)} /></div><ListSection title="Income by lesson" rows={lessons} fields={[["course_title", "Course"], ["starts_at", "Date"], ["pay_amount", "Amount"], ["pay_status", "Status"]]} moneyKeys={["pay_amount"]} onOpen={(lesson) => openDetail({ kind: "session", id: get(lesson, "class_session_id") })} /></section>;
-  return <><section className="detail-metrics"><DetailMetric label="Lessons" value={String(lessons.length)} /><DetailMetric label="Scheduled pay" value={amount(total)} /><DetailMetric label="Paid" value={amount(paid)} /></section>{editing ? <section className="sheet-section"><h3>Edit teacher</h3><form className="detail-edit-form" onSubmit={saveProfile}><FormField name="name" label="Teacher name" defaultValue={get(item, "name")} required /><FormField name="subject" label="Subject" defaultValue={get(item, "subject")} required /><FormField name="phone" label="Phone" defaultValue={get(item, "phone")} /><button className="primary-button" disabled={busy} type="submit"><Check size={16} />Save changes</button></form></section> : <section className="sheet-section"><h3>Teacher profile</h3><div className="sheet-overview"><Info label="Teacher code" value={get(item, "code")} /><Info label="Subject" value={get(item, "subject")} /><Info label="Phone" value={get(item, "phone")} /><Info label="Status" value={get(item, "status")} /></div></section>}<ListSection title="Next lessons" rows={lessons.slice(0, 3)} fields={[["course_title", "Course"], ["topic", "Lesson"], ["starts_at", "Start"]]} onOpen={(lesson) => openDetail({ kind: "session", id: get(lesson, "class_session_id") })} /></>;
+function StudentCourseProgress({
+  title,
+  enrollments,
+  attendance,
+  sessions,
+  invoices,
+  compact = false,
+  onOpen,
+}: {
+  title?: string;
+  enrollments: Row[];
+  attendance: Row[];
+  sessions: Row[];
+  invoices: Row[];
+  compact?: boolean;
+  onOpen?: (enrollment: Row) => void;
+}) {
+  return (
+    <section
+      className={`sheet-section student-course-progress${compact ? " compact" : ""}`}
+    >
+      <div className="sheet-section-title">
+        <h3>{title || (compact ? "Course progress" : "Courses")}</h3>
+        <span>{enrollments.length}</span>
+      </div>
+      <div className="student-progress-list">
+        {enrollments.map((enrollment) => {
+          const runId = get(enrollment, "class_run_id");
+          const records = attendance.filter(
+            (record) => get(record, "class_run_id") === runId,
+          );
+          const runSessions = sessions.filter(
+            (session) => get(session, "class_run_id") === runId,
+          );
+          const attended = records.filter((record) =>
+            ["present", "late"].includes(get(record, "status")),
+          ).length;
+          const upcoming = runSessions.find(
+            (session) =>
+              new Date(get(session, "starts_at").replace(" ", "T")).getTime() >=
+              Date.now(),
+          );
+          const invoice = invoices.find(
+            (row) => get(row, "id") === get(enrollment, "invoice_id"),
+          );
+          const courseStatus =
+            get(enrollment, "course_status") ||
+            (get(enrollment, "run_status") === "finished"
+              ? "finished"
+              : "active");
+          return (
+            <article
+              key={get(enrollment, "id")}
+              className={onOpen ? "interactive-list-row" : ""}
+              onClick={() => onOpen?.(enrollment)}
+            >
+              <CourseVisual
+                course={{
+                  title: get(enrollment, "course_title"),
+                  subject: get(enrollment, "course_title"),
+                  course_color: get(enrollment, "course_color"),
+                }}
+              />
+              <div className="student-progress-main">
+                <div>
+                  <strong>{get(enrollment, "course_title")}</strong>
+                  <p>{get(enrollment, "run_name")}</p>
+                </div>
+                <div className="student-progress-meta">
+                  <span>
+                    <CalendarDays size={14} />
+                    {attended}/{runSessions.length} attended
+                  </span>
+                  <span>
+                    <ClipboardCheck size={14} />
+                    {courseStatus === "finished"
+                      ? "Finished"
+                      : upcoming
+                        ? `Next: ${get(upcoming, "topic")}`
+                        : "Course in progress"}
+                  </span>
+                </div>
+                <div className="student-progress-track">
+                  <i
+                    style={{
+                      width: `${runSessions.length ? Math.round((attended / runSessions.length) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="student-course-payment">
+                <Status value={courseStatus} />
+                <Status
+                  value={get(enrollment, "invoice_status") || "no_invoice"}
+                />
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!enrollments.length ? <Empty text="No courses in this group." /> : null}
+    </section>
+  );
 }
 
-function SessionDetailContent({ tab, item, courseSessions, roster, students, classrooms, teachers, draftStartsAt, enrollStudentId, setEnrollStudentId, busy, run, t, onSaved, openDetail }: { tab: string; item: Row; courseSessions: Row[]; roster: Row[]; students: Row[]; classrooms: Row[]; teachers: Row[]; draftStartsAt?: string; enrollStudentId: string; setEnrollStudentId: (value: string) => void; busy: boolean; run: (action: string, values?: Row) => Promise<void>; t: typeof copy.en; onSaved: () => void; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  if (tab === "summary") return <SessionSummary item={item} courseSessions={courseSessions} roster={roster} students={students} enrollStudentId={enrollStudentId} setEnrollStudentId={setEnrollStudentId} busy={busy} run={run} t={t} openDetail={openDetail} />;
-  if (tab === "summary") return <><section className="detail-metrics"><DetailMetric label="Students" value={String(roster.length)} /><DetailMetric label="Teacher" value={get(item, "teacher_name")} /><DetailMetric label="Room" value={get(item, "classroom_name")} /></section><section className="sheet-section current-lesson"><div className="sheet-section-title"><h3>Current lesson</h3><Status value="scheduled" /></div><div className="current-lesson-card" style={eventStyle(item)}><CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "course_title"), course_color: get(item, "course_color") }} /><div><strong>{get(item, "topic")}</strong><p>{get(item, "course_title")} · Lesson {get(item, "session_no")}</p><span><Clock3 size={14} />{datePart(item.starts_at)} · {timeRange(item)}</span></div></div></section><LessonSequence sessions={courseSessions} currentId={get(item, "id")} /></>;
-  if (tab === "lessons") return <LessonSequence sessions={courseSessions} currentId={get(item, "id")} expanded onOpen={(session) => openDetail({ kind: "session", id: get(session, "id") })} />;
-  return <><section className="sheet-section"><div className="sheet-section-title"><h3>Class register</h3><span>{roster.length}</span></div>{roster.map((row) => <div className="sheet-roster" key={get(row, "id")}><div className="roster-student"><img src={avatarUrl({ id: get(row, "student_id"), name: get(row, "student_name") })} alt="" /><div><strong>{get(row, "student_name")}</strong><small>{amount(row.allocated_fee)}</small></div></div><Status value={get(row, "status")} /><div className="attendance-buttons">{[["present", t.present], ["late", t.late], ["leave", t.leave], ["absent", t.absent]].map(([status, label]) => <button type="button" key={status} disabled={busy} className={get(row, "status") === status ? "selected" : ""} onClick={() => void run("setAttendance", { studentBookingId: get(row, "student_booking_id"), attendanceStatus: status })}>{label}</button>)}</div></div>)}</section><section className="sheet-section"><div className="sheet-section-title"><h3>Add student</h3></div><div className="sheet-enroll"><select value={enrollStudentId} onChange={(event) => setEnrollStudentId(event.target.value)}><option value="">Select student</option>{students.filter((student) => !roster.some((row) => get(row, "student_id") === get(student, "id"))).map((student) => <option key={get(student, "id")} value={get(student, "id")}>{get(student, "name")}</option>)}</select><button className="primary-button" disabled={busy || !enrollStudentId} type="button" onClick={() => void run("enrollStudent", { runId: get(item, "class_run_id"), studentId: enrollStudentId })}><Plus size={15} />Enroll</button></div></section></>;
+function TeacherDetailContent({
+  tab,
+  editing,
+  item,
+  lessons,
+  total,
+  paid,
+  busy,
+  saveProfile,
+  openDetail,
+}: {
+  tab: string;
+  editing: boolean;
+  item: Row;
+  lessons: Row[];
+  total: number;
+  paid: number;
+  busy: boolean;
+  saveProfile: (event: FormEvent<HTMLFormElement>) => void;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const teachingRuns = Array.from(
+    lessons
+      .reduce((runs, lesson) => {
+        const key = get(lesson, "class_run_id") || get(lesson, "run_name");
+        const existing = runs.get(key);
+        if (existing) {
+          existing.lesson_count = Number(existing.lesson_count ?? 0) + 1;
+          existing.pay_total =
+            Number(existing.pay_total ?? 0) + Number(lesson.pay_amount ?? 0);
+        } else {
+          runs.set(key, {
+            ...lesson,
+            id: key,
+            lesson_count: 1,
+            pay_total: Number(lesson.pay_amount ?? 0),
+            course_status:
+              get(lesson, "run_status") === "finished" ? "finished" : "active",
+          });
+        }
+        return runs;
+      }, new Map<string, Row>())
+      .values(),
+  );
+  const activeRuns = teachingRuns.filter(
+    (row) => get(row, "course_status") === "active",
+  );
+  const finishedRuns = teachingRuns.filter(
+    (row) => get(row, "course_status") === "finished",
+  );
+  if (tab !== "courses")
+    return (
+      <>
+        <section className="detail-metrics">
+          <DetailMetric
+            label="Scheduled lessons"
+            value={String(lessons.length)}
+          />
+          <DetailMetric
+            label="Active classes"
+            value={String(activeRuns.length)}
+          />
+          <DetailMetric
+            label="Completed classes"
+            value={String(finishedRuns.length)}
+          />
+        </section>
+        {editing ? (
+          <section className="sheet-section">
+            <h3>Edit teacher</h3>
+            <form className="detail-edit-form" onSubmit={saveProfile}>
+              <FormField
+                name="name"
+                label="Teacher name"
+                defaultValue={get(item, "name")}
+                required
+              />
+              <FormField
+                name="subject"
+                label="Subject"
+                defaultValue={get(item, "subject")}
+                required
+              />
+              <FormField
+                name="phone"
+                label="Phone"
+                defaultValue={get(item, "phone")}
+              />
+              <button className="primary-button" disabled={busy} type="submit">
+                <Check size={16} />
+                Save changes
+              </button>
+            </form>
+          </section>
+        ) : (
+          <section className="sheet-section">
+            <h3>Teacher profile</h3>
+            <div className="sheet-overview">
+              <Info label="Teacher code" value={get(item, "code")} />
+              <Info label="Subject" value={get(item, "subject")} />
+              <Info label="Phone" value={get(item, "phone")} />
+              <Info label="Status" value={get(item, "status")} />
+            </div>
+          </section>
+        )}
+        <ListSection
+          title="Next lessons"
+          rows={lessons.slice(0, 3)}
+          fields={[
+            ["course_title", "Course"],
+            ["topic", "Lesson"],
+            ["starts_at", "Start"],
+          ]}
+          onOpen={(lesson) =>
+            openDetail({ kind: "session", id: get(lesson, "class_session_id") })
+          }
+        />
+      </>
+    );
+  if (tab === "courses")
+    return (
+      <>
+        <ListSection
+          title="Active courses"
+          rows={activeRuns}
+          fields={[
+            ["course_title", "Course"],
+            ["run_name", "Class"],
+            ["lesson_count", "Lessons"],
+            ["course_status", "Status"],
+          ]}
+          onOpen={(run) =>
+            openDetail({ kind: "course", id: get(run, "class_run_id") })
+          }
+        />
+        <ListSection
+          title="Finished courses"
+          rows={finishedRuns}
+          fields={[
+            ["course_title", "Course"],
+            ["run_name", "Class"],
+            ["lesson_count", "Lessons"],
+            ["course_status", "Status"],
+          ]}
+          onOpen={(run) =>
+            openDetail({ kind: "course", id: get(run, "class_run_id") })
+          }
+        />
+      </>
+    );
+  if (tab === "income")
+    return (
+      <section className="sheet-section">
+        <div className="detail-metrics">
+          <DetailMetric label="Scheduled pay" value={amount(total)} />
+          <DetailMetric label="Paid" value={amount(paid)} />
+          <DetailMetric label="To pay" value={amount(total - paid)} />
+        </div>
+        <ListSection
+          title="Income by lesson"
+          rows={lessons}
+          fields={[
+            ["course_title", "Course"],
+            ["starts_at", "Date"],
+            ["pay_amount", "Amount"],
+            ["pay_status", "Status"],
+          ]}
+          moneyKeys={["pay_amount"]}
+          onOpen={(lesson) =>
+            openDetail({ kind: "session", id: get(lesson, "class_session_id") })
+          }
+        />
+      </section>
+    );
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric label="Lessons" value={String(lessons.length)} />
+        <DetailMetric label="Scheduled pay" value={amount(total)} />
+        <DetailMetric label="Paid" value={amount(paid)} />
+      </section>
+      {editing ? (
+        <section className="sheet-section">
+          <h3>Edit teacher</h3>
+          <form className="detail-edit-form" onSubmit={saveProfile}>
+            <FormField
+              name="name"
+              label="Teacher name"
+              defaultValue={get(item, "name")}
+              required
+            />
+            <FormField
+              name="subject"
+              label="Subject"
+              defaultValue={get(item, "subject")}
+              required
+            />
+            <FormField
+              name="phone"
+              label="Phone"
+              defaultValue={get(item, "phone")}
+            />
+            <button className="primary-button" disabled={busy} type="submit">
+              <Check size={16} />
+              Save changes
+            </button>
+          </form>
+        </section>
+      ) : (
+        <section className="sheet-section">
+          <h3>Teacher profile</h3>
+          <div className="sheet-overview">
+            <Info label="Teacher code" value={get(item, "code")} />
+            <Info label="Subject" value={get(item, "subject")} />
+            <Info label="Phone" value={get(item, "phone")} />
+            <Info label="Status" value={get(item, "status")} />
+          </div>
+        </section>
+      )}
+      <ListSection
+        title="Next lessons"
+        rows={lessons.slice(0, 3)}
+        fields={[
+          ["course_title", "Course"],
+          ["topic", "Lesson"],
+          ["starts_at", "Start"],
+        ]}
+        onOpen={(lesson) =>
+          openDetail({ kind: "session", id: get(lesson, "class_session_id") })
+        }
+      />
+    </>
+  );
 }
 
-function InteractiveLessonSequence({ sessions, currentId, expanded = false, title, onOpen, onSetCurrent }: { sessions: Row[]; currentId: string; expanded?: boolean; title?: string; onOpen?: (session: Row) => void; onSetCurrent?: (session: Row) => void }) {
+function SessionDetailContent({
+  tab,
+  item,
+  courseSessions,
+  roster,
+  students,
+  classrooms,
+  teachers,
+  draftStartsAt,
+  enrollStudentId,
+  setEnrollStudentId,
+  busy,
+  run,
+  t,
+  onSaved,
+  openDetail,
+}: {
+  tab: string;
+  item: Row;
+  courseSessions: Row[];
+  roster: Row[];
+  students: Row[];
+  classrooms: Row[];
+  teachers: Row[];
+  draftStartsAt?: string;
+  enrollStudentId: string;
+  setEnrollStudentId: (value: string) => void;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  t: typeof copy.en;
+  onSaved: () => void;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  if (tab === "summary")
+    return (
+      <SessionSummary
+        item={item}
+        courseSessions={courseSessions}
+        roster={roster}
+        students={students}
+        enrollStudentId={enrollStudentId}
+        setEnrollStudentId={setEnrollStudentId}
+        busy={busy}
+        run={run}
+        t={t}
+        openDetail={openDetail}
+      />
+    );
+  if (tab === "summary")
+    return (
+      <>
+        <section className="detail-metrics">
+          <DetailMetric label="Students" value={String(roster.length)} />
+          <DetailMetric label="Teacher" value={get(item, "teacher_name")} />
+          <DetailMetric label="Room" value={get(item, "classroom_name")} />
+        </section>
+        <section className="sheet-section current-lesson">
+          <div className="sheet-section-title">
+            <h3>Current lesson</h3>
+            <Status value="scheduled" />
+          </div>
+          <div className="current-lesson-card" style={eventStyle(item)}>
+            <CourseVisual
+              course={{
+                title: get(item, "course_title"),
+                subject: get(item, "course_title"),
+                course_color: get(item, "course_color"),
+              }}
+            />
+            <div>
+              <strong>{get(item, "topic")}</strong>
+              <p>
+                {get(item, "course_title")} · Lesson {get(item, "session_no")}
+              </p>
+              <span>
+                <Clock3 size={14} />
+                {datePart(item.starts_at)} · {timeRange(item)}
+              </span>
+            </div>
+          </div>
+        </section>
+        <LessonSequence sessions={courseSessions} currentId={get(item, "id")} />
+      </>
+    );
+  if (tab === "lessons")
+    return (
+      <LessonSequence
+        sessions={courseSessions}
+        currentId={get(item, "id")}
+        expanded
+        onOpen={(session) =>
+          openDetail({ kind: "session", id: get(session, "id") })
+        }
+      />
+    );
+  return (
+    <>
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Class register</h3>
+          <span>{roster.length}</span>
+        </div>
+        {roster.map((row) => (
+          <div className="sheet-roster" key={get(row, "id")}>
+            <div className="roster-student">
+              <img
+                src={avatarUrl({
+                  id: get(row, "student_id"),
+                  name: get(row, "student_name"),
+                })}
+                alt=""
+              />
+              <div>
+                <strong>{get(row, "student_name")}</strong>
+                <small>{amount(row.allocated_fee)}</small>
+              </div>
+            </div>
+            <Status value={get(row, "status")} />
+            <div className="attendance-buttons">
+              {[
+                ["present", t.present],
+                ["late", t.late],
+                ["leave", t.leave],
+                ["absent", t.absent],
+              ].map(([status, label]) => (
+                <button
+                  type="button"
+                  key={status}
+                  disabled={busy}
+                  className={get(row, "status") === status ? "selected" : ""}
+                  onClick={() =>
+                    void run("setAttendance", {
+                      studentBookingId: get(row, "student_booking_id"),
+                      attendanceStatus: status,
+                    })
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+      <section className="sheet-section">
+        <div className="sheet-section-title">
+          <h3>Add student</h3>
+        </div>
+        <div className="sheet-enroll">
+          <select
+            value={enrollStudentId}
+            onChange={(event) => setEnrollStudentId(event.target.value)}
+          >
+            <option value="">Select student</option>
+            {students
+              .filter(
+                (student) =>
+                  !roster.some(
+                    (row) => get(row, "student_id") === get(student, "id"),
+                  ),
+              )
+              .map((student) => (
+                <option key={get(student, "id")} value={get(student, "id")}>
+                  {get(student, "name")}
+                </option>
+              ))}
+          </select>
+          <button
+            className="primary-button"
+            disabled={busy || !enrollStudentId}
+            type="button"
+            onClick={() =>
+              void run("enrollStudent", {
+                runId: get(item, "class_run_id"),
+                studentId: enrollStudentId,
+              })
+            }
+          >
+            <Plus size={15} />
+            Enroll
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function InteractiveLessonSequence({
+  sessions,
+  currentId,
+  expanded = false,
+  title,
+  onOpen,
+  onSetCurrent,
+}: {
+  sessions: Row[];
+  currentId: string;
+  expanded?: boolean;
+  title?: string;
+  onOpen?: (session: Row) => void;
+  onSetCurrent?: (session: Row) => void;
+}) {
   const now = Date.now();
-  const ordered = [...sessions].sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const automaticNext = ordered.find((session) => asTime(session.starts_at) > now);
-  const visible = expanded ? ordered : ordered.filter((session) => get(session, "id") === currentId || get(session, "id") === get(automaticNext, "id")).slice(0, 3);
-  return <section className="sheet-section lesson-sequence"><div className="sheet-section-title"><h3>{title || (expanded ? "Course lessons" : "Course sequence")}</h3><span>{sessions.length}</span></div>{visible.map((session) => {
-    const isCurrent = get(session, "id") === currentId || (!currentId && asTime(session.starts_at) <= now && asTime(session.ends_at) >= now);
-    const state = isCurrent ? "current" : asTime(session.ends_at) < now ? "completed" : get(session, "id") === get(automaticNext, "id") ? "next" : "scheduled";
-    const canSetCurrent = Boolean(onSetCurrent) && state !== "current" && state !== "completed";
-    return <article key={get(session, "id")} className={`lesson-sequence-row ${state}${onOpen ? " interactive-list-row" : ""}`} style={eventStyle(session)} onClick={() => onOpen?.(session)}><i /><div><strong>Lesson {get(session, "session_no")} · {get(session, "topic")}</strong><p>{malaysiaDate(session.starts_at)} · {timeRange(session)}</p></div><div className="lesson-sequence-actions"><Status value={state === "current" ? "current" : state === "next" ? "next" : state === "completed" ? "completed" : "scheduled"} />{canSetCurrent ? <button type="button" className="table-button" onClick={(event) => { event.stopPropagation(); onSetCurrent?.(session); }}>Set current</button> : null}</div></article>;
-  })}{!visible.length ? <Empty text="No lessons in this group." /> : null}</section>;
+  const ordered = [...sessions].sort(
+    (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
+  );
+  const automaticNext = ordered.find(
+    (session) => asTime(session.starts_at) > now,
+  );
+  const visible = expanded
+    ? ordered
+    : ordered
+        .filter(
+          (session) =>
+            get(session, "id") === currentId ||
+            get(session, "id") === get(automaticNext, "id"),
+        )
+        .slice(0, 3);
+  return (
+    <section className="sheet-section lesson-sequence">
+      <div className="sheet-section-title">
+        <h3>{title || (expanded ? "Course lessons" : "Course sequence")}</h3>
+        <span>{sessions.length}</span>
+      </div>
+      {visible.map((session) => {
+        const isCurrent =
+          get(session, "id") === currentId ||
+          (!currentId &&
+            asTime(session.starts_at) <= now &&
+            asTime(session.ends_at) >= now);
+        const state = isCurrent
+          ? "current"
+          : asTime(session.ends_at) < now
+            ? "completed"
+            : get(session, "id") === get(automaticNext, "id")
+              ? "next"
+              : "scheduled";
+        const canSetCurrent =
+          Boolean(onSetCurrent) && state !== "current" && state !== "completed";
+        return (
+          <article
+            key={get(session, "id")}
+            className={`lesson-sequence-row ${state}${onOpen ? " interactive-list-row" : ""}`}
+            style={eventStyle(session)}
+            onClick={() => onOpen?.(session)}
+          >
+            <i />
+            <div>
+              <strong>
+                Lesson {get(session, "session_no")} · {get(session, "topic")}
+              </strong>
+              <p>
+                {malaysiaDate(session.starts_at)} · {timeRange(session)}
+              </p>
+            </div>
+            <div className="lesson-sequence-actions">
+              <Status
+                value={
+                  state === "current"
+                    ? "current"
+                    : state === "next"
+                      ? "next"
+                      : state === "completed"
+                        ? "completed"
+                        : "scheduled"
+                }
+              />
+              {canSetCurrent ? (
+                <button
+                  type="button"
+                  className="table-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSetCurrent?.(session);
+                  }}
+                >
+                  Set current
+                </button>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+      {!visible.length ? <Empty text="No lessons in this group." /> : null}
+    </section>
+  );
 }
 
-function LessonSequence({ sessions, currentId, expanded = false, title, onOpen }: { sessions: Row[]; currentId: string; expanded?: boolean; title?: string; onOpen?: (session: Row) => void }) { const now = Date.now(); const upcoming = sessions.find((session) => asTime(session.starts_at) > now); const rows = expanded ? sessions : sessions.filter((session) => get(session, "id") === currentId || get(session, "id") === get(upcoming, "id")).slice(0, 3); return <section className="sheet-section lesson-sequence"><div className="sheet-section-title"><h3>{title || (expanded ? "Course lessons" : "Course sequence")}</h3><span>{sessions.length}</span></div>{rows.map((session) => { const state = get(session, "id") === currentId ? "current" : asTime(session.ends_at) < now ? "completed" : get(session, "id") === get(upcoming, "id") ? "next" : "scheduled"; return <article key={get(session, "id")} className={`lesson-sequence-row ${state}${onOpen ? " interactive-list-row" : ""}`} style={eventStyle(session)} onClick={() => onOpen?.(session)}><i /><div><strong>Lesson {get(session, "session_no")} · {get(session, "topic")}</strong><p>{datePart(session.starts_at)} · {timeRange(session)}</p></div><Status value={state === "current" ? "current" : state === "next" ? "next" : state === "completed" ? "completed" : "scheduled"} /></article>; })}{!rows.length ? <Empty text="No lessons in this group." /> : null}</section>; }
+function LessonSequence({
+  sessions,
+  currentId,
+  expanded = false,
+  title,
+  onOpen,
+}: {
+  sessions: Row[];
+  currentId: string;
+  expanded?: boolean;
+  title?: string;
+  onOpen?: (session: Row) => void;
+}) {
+  const now = Date.now();
+  const upcoming = sessions.find((session) => asTime(session.starts_at) > now);
+  const rows = expanded
+    ? sessions
+    : sessions
+        .filter(
+          (session) =>
+            get(session, "id") === currentId ||
+            get(session, "id") === get(upcoming, "id"),
+        )
+        .slice(0, 3);
+  return (
+    <section className="sheet-section lesson-sequence">
+      <div className="sheet-section-title">
+        <h3>{title || (expanded ? "Course lessons" : "Course sequence")}</h3>
+        <span>{sessions.length}</span>
+      </div>
+      {rows.map((session) => {
+        const state =
+          get(session, "id") === currentId
+            ? "current"
+            : asTime(session.ends_at) < now
+              ? "completed"
+              : get(session, "id") === get(upcoming, "id")
+                ? "next"
+                : "scheduled";
+        return (
+          <article
+            key={get(session, "id")}
+            className={`lesson-sequence-row ${state}${onOpen ? " interactive-list-row" : ""}`}
+            style={eventStyle(session)}
+            onClick={() => onOpen?.(session)}
+          >
+            <i />
+            <div>
+              <strong>
+                Lesson {get(session, "session_no")} · {get(session, "topic")}
+              </strong>
+              <p>
+                {datePart(session.starts_at)} · {timeRange(session)}
+              </p>
+            </div>
+            <Status
+              value={
+                state === "current"
+                  ? "current"
+                  : state === "next"
+                    ? "next"
+                    : state === "completed"
+                      ? "completed"
+                      : "scheduled"
+              }
+            />
+          </article>
+        );
+      })}
+      {!rows.length ? <Empty text="No lessons in this group." /> : null}
+    </section>
+  );
+}
 
-function RoomScheduleContent({ lessons, openDetail }: { lessons: Row[]; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  const initialDate = lessons[0] ? fromKey(datePart(lessons[0].starts_at)) : new Date();
+function RoomScheduleContent({
+  lessons,
+  openDetail,
+}: {
+  lessons: Row[];
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  const initialDate = lessons[0]
+    ? fromKey(datePart(lessons[0].starts_at))
+    : new Date();
   const [mode, setMode] = useState<"calendar" | "list">("calendar");
   const [anchor, setAnchor] = useState(initialDate);
-  const monthTitle = anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" });
-  return <section className="sheet-section room-schedule-section"><div className="sheet-section-title"><h3>Room schedule</h3><span>{lessons.length}</span></div><div className="room-schedule-toolbar"><div className="segmented-control"><button className={mode === "calendar" ? "active" : ""} type="button" onClick={() => setMode("calendar")}><CalendarDays size={14} />Calendar</button><button className={mode === "list" ? "active" : ""} type="button" onClick={() => setMode("list")}><List size={14} />List</button></div>{mode === "calendar" ? <div className="room-month-navigation"><button type="button" className="header-icon" title="Previous month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1, 12))}><ChevronLeft size={16} /></button><strong>{monthTitle}</strong><button type="button" className="header-icon" title="Next month" onClick={() => setAnchor((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1, 12))}><ChevronRight size={16} /></button></div> : null}</div>{mode === "calendar" ? <div className="room-schedule-calendar"><MonthCalendar anchor={anchor} events={lessons} c={calendarText.en} language="en" onOpen={(id) => openDetail({ kind: "session", id })} onSelectDate={() => undefined} /></div> : <ScheduleListView events={lessons} onOpen={(id) => openDetail({ kind: "session", id })} />}</section>;
+  const monthTitle = anchor.toLocaleDateString("en-MY", {
+    month: "long",
+    year: "numeric",
+  });
+  return (
+    <section className="sheet-section room-schedule-section">
+      <div className="sheet-section-title">
+        <h3>Room schedule</h3>
+        <span>{lessons.length}</span>
+      </div>
+      <div className="room-schedule-toolbar">
+        <div className="segmented-control">
+          <button
+            className={mode === "calendar" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("calendar")}
+          >
+            <CalendarDays size={14} />
+            Calendar
+          </button>
+          <button
+            className={mode === "list" ? "active" : ""}
+            type="button"
+            onClick={() => setMode("list")}
+          >
+            <List size={14} />
+            List
+          </button>
+        </div>
+        {mode === "calendar" ? (
+          <div className="room-month-navigation">
+            <button
+              type="button"
+              className="header-icon"
+              title="Previous month"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <strong>{monthTitle}</strong>
+            <button
+              type="button"
+              className="header-icon"
+              title="Next month"
+              onClick={() =>
+                setAnchor(
+                  (date) =>
+                    new Date(date.getFullYear(), date.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {mode === "calendar" ? (
+        <div className="room-schedule-calendar">
+          <MonthCalendar
+            anchor={anchor}
+            events={lessons}
+            c={calendarText.en}
+            language="en"
+            onOpen={(id) => openDetail({ kind: "session", id })}
+            onSelectDate={() => undefined}
+          />
+        </div>
+      ) : (
+        <ScheduleListView
+          events={lessons}
+          onOpen={(id) => openDetail({ kind: "session", id })}
+        />
+      )}
+    </section>
+  );
 }
 
-function RoomDetailContent({ tab, item, lessons, openDetail }: { tab: string; item: Row; lessons: Row[]; openDetail: (detail: Exclude<Detail, null>) => void }) { return tab === "schedule" ? <RoomScheduleContent lessons={lessons} openDetail={openDetail} /> : <><section className="detail-metrics"><DetailMetric label="Capacity" value={`${get(item, "capacity")} seats`} /><DetailMetric label="Scheduled lessons" value={String(lessons.length)} /></section><section className="sheet-section"><h3>Room profile</h3><div className="sheet-overview"><Info label="Campus" value={get(item, "campus_name")} /><Info label="Room type" value={get(item, "room_type")} /><Info label="Resources" value={get(item, "resources")} /><Info label="Status" value={get(item, "status")} /></div></section></>;
+function RoomDetailContent({
+  tab,
+  item,
+  lessons,
+  openDetail,
+}: {
+  tab: string;
+  item: Row;
+  lessons: Row[];
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  return tab === "schedule" ? (
+    <RoomScheduleContent lessons={lessons} openDetail={openDetail} />
+  ) : (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric
+          label="Capacity"
+          value={`${get(item, "capacity")} seats`}
+        />
+        <DetailMetric
+          label="Scheduled lessons"
+          value={String(lessons.length)}
+        />
+      </section>
+      <section className="sheet-section">
+        <h3>Room profile</h3>
+        <div className="sheet-overview">
+          <Info label="Campus" value={get(item, "campus_name")} />
+          <Info label="Room type" value={get(item, "room_type")} />
+          <Info label="Resources" value={get(item, "resources")} />
+          <Info label="Status" value={get(item, "status")} />
+        </div>
+      </section>
+    </>
+  );
 }
 
-function SessionSummary({ item, courseSessions, roster, students, enrollStudentId, setEnrollStudentId, busy, run, t, openDetail }: { item: Row; courseSessions: Row[]; roster: Row[]; students: Row[]; enrollStudentId: string; setEnrollStudentId: (value: string) => void; busy: boolean; run: (action: string, values?: Row) => Promise<void>; t: typeof copy.en; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  return <><section className="detail-metrics"><DetailMetric label="Students" value={String(roster.length)} /><button className="detail-metric-link" type="button" onClick={() => openDetail({ kind: "teacher", id: get(item, "teacher_id") })}><DetailMetric label="Teacher" value={get(item, "teacher_name")} /></button><button className="detail-metric-link" type="button" onClick={() => openDetail({ kind: "room", id: get(item, "classroom_id") })}><DetailMetric label="Room" value={get(item, "classroom_name")} /></button></section><section className="sheet-section current-lesson"><div className="sheet-section-title"><h3>Current lesson</h3><Status value="scheduled" /></div><button type="button" className="current-lesson-card interactive-list-row" style={eventStyle(item)} onClick={() => openDetail({ kind: "course", id: get(item, "class_run_id") })}><CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "course_title"), course_color: get(item, "course_color") }} /><div><strong>{get(item, "topic")}</strong><p>{get(item, "course_title")} - Lesson {get(item, "session_no")}</p><span><Clock3 size={14} />{datePart(item.starts_at)} - {timeRange(item)}</span></div></button></section><LessonSequence sessions={courseSessions} currentId={get(item, "id")} onOpen={(session) => openDetail({ kind: "session", id: get(session, "id") })} /><ClassRegister roster={roster} busy={busy} run={run} t={t} openDetail={openDetail} /><SessionEnrollment item={item} roster={roster} students={students} enrollStudentId={enrollStudentId} setEnrollStudentId={setEnrollStudentId} busy={busy} run={run} /></>;
+function SessionSummary({
+  item,
+  courseSessions,
+  roster,
+  students,
+  enrollStudentId,
+  setEnrollStudentId,
+  busy,
+  run,
+  t,
+  openDetail,
+}: {
+  item: Row;
+  courseSessions: Row[];
+  roster: Row[];
+  students: Row[];
+  enrollStudentId: string;
+  setEnrollStudentId: (value: string) => void;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  t: typeof copy.en;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  return (
+    <>
+      <section className="detail-metrics">
+        <DetailMetric label="Students" value={String(roster.length)} />
+        <button
+          className="detail-metric-link"
+          type="button"
+          onClick={() =>
+            openDetail({ kind: "teacher", id: get(item, "teacher_id") })
+          }
+        >
+          <DetailMetric label="Teacher" value={get(item, "teacher_name")} />
+        </button>
+        <button
+          className="detail-metric-link"
+          type="button"
+          onClick={() =>
+            openDetail({ kind: "room", id: get(item, "classroom_id") })
+          }
+        >
+          <DetailMetric label="Room" value={get(item, "classroom_name")} />
+        </button>
+      </section>
+      <section className="sheet-section current-lesson">
+        <div className="sheet-section-title">
+          <h3>Current lesson</h3>
+          <Status value="scheduled" />
+        </div>
+        <button
+          type="button"
+          className="current-lesson-card interactive-list-row"
+          style={eventStyle(item)}
+          onClick={() =>
+            openDetail({ kind: "course", id: get(item, "class_run_id") })
+          }
+        >
+          <CourseVisual
+            course={{
+              title: get(item, "course_title"),
+              subject: get(item, "course_title"),
+              course_color: get(item, "course_color"),
+            }}
+          />
+          <div>
+            <strong>{get(item, "topic")}</strong>
+            <p>
+              {get(item, "course_title")} - Lesson {get(item, "session_no")}
+            </p>
+            <span>
+              <Clock3 size={14} />
+              {datePart(item.starts_at)} - {timeRange(item)}
+            </span>
+          </div>
+        </button>
+      </section>
+      <LessonSequence
+        sessions={courseSessions}
+        currentId={get(item, "id")}
+        onOpen={(session) =>
+          openDetail({ kind: "session", id: get(session, "id") })
+        }
+      />
+      <ClassRegister
+        roster={roster}
+        busy={busy}
+        run={run}
+        t={t}
+        openDetail={openDetail}
+      />
+      <SessionEnrollment
+        item={item}
+        roster={roster}
+        students={students}
+        enrollStudentId={enrollStudentId}
+        setEnrollStudentId={setEnrollStudentId}
+        busy={busy}
+        run={run}
+      />
+    </>
+  );
 }
 
-function ClassRegister({ roster, busy, run, t, openDetail }: { roster: Row[]; busy: boolean; run: (action: string, values?: Row) => Promise<void>; t: typeof copy.en; openDetail: (detail: Exclude<Detail, null>) => void }) {
-  return <section className="sheet-section class-register"><div className="sheet-section-title"><h3>Class register</h3><span>{roster.length}</span></div>{roster.map((row) => <div className="sheet-roster" key={get(row, "id")}><button type="button" className="roster-student interactive-list-row" onClick={() => openDetail({ kind: "student", id: get(row, "student_id") })}><Avatar person={{ id: get(row, "student_id"), name: get(row, "student_name") }} /><div><strong>{get(row, "student_name")}</strong><small>{amount(row.allocated_fee)}</small></div></button><Status value={get(row, "status")} /><div className="attendance-actions"><button type="button" disabled={busy} className={`check-in-action ${get(row, "status") === "present" ? "selected" : ""}`} onClick={() => void run("setAttendance", { studentBookingId: get(row, "student_booking_id"), attendanceStatus: "present" })}><Check size={14} />Check-in</button><details className="attendance-more"><summary title="More attendance actions"><MoreHorizontal size={17} /></summary><div className="attendance-more-menu">{[["late", t.late], ["leave", t.leave], ["absent", t.absent]].map(([status, label]) => <button type="button" key={status} disabled={busy} className={get(row, "status") === status ? "selected" : ""} onClick={() => void run("setAttendance", { studentBookingId: get(row, "student_booking_id"), attendanceStatus: status })}>{label}</button>)}</div></details></div></div>)}</section>;
+function ClassRegister({
+  roster,
+  busy,
+  run,
+  t,
+  openDetail,
+}: {
+  roster: Row[];
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+  t: typeof copy.en;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
+  return (
+    <section className="sheet-section class-register">
+      <div className="sheet-section-title">
+        <h3>Class register</h3>
+        <span>{roster.length}</span>
+      </div>
+      {roster.map((row) => (
+        <div className="sheet-roster" key={get(row, "id")}>
+          <button
+            type="button"
+            className="roster-student interactive-list-row"
+            onClick={() =>
+              openDetail({ kind: "student", id: get(row, "student_id") })
+            }
+          >
+            <Avatar
+              person={{
+                id: get(row, "student_id"),
+                name: get(row, "student_name"),
+              }}
+            />
+            <div>
+              <strong>{get(row, "student_name")}</strong>
+              <small>{amount(row.allocated_fee)}</small>
+            </div>
+          </button>
+          <Status value={get(row, "status")} />
+          <div className="attendance-actions">
+            <button
+              type="button"
+              disabled={busy}
+              className={`check-in-action ${get(row, "status") === "present" ? "selected" : ""}`}
+              onClick={() =>
+                void run("setAttendance", {
+                  studentBookingId: get(row, "student_booking_id"),
+                  attendanceStatus: "present",
+                })
+              }
+            >
+              <Check size={14} />
+              Check-in
+            </button>
+            <details className="attendance-more">
+              <summary title="More attendance actions">
+                <MoreHorizontal size={17} />
+              </summary>
+              <div className="attendance-more-menu">
+                {[
+                  ["late", t.late],
+                  ["leave", t.leave],
+                  ["absent", t.absent],
+                ].map(([status, label]) => (
+                  <button
+                    type="button"
+                    key={status}
+                    disabled={busy}
+                    className={get(row, "status") === status ? "selected" : ""}
+                    onClick={() =>
+                      void run("setAttendance", {
+                        studentBookingId: get(row, "student_booking_id"),
+                        attendanceStatus: status,
+                      })
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
 }
 
-function SessionEnrollment({ item, roster, students, enrollStudentId, setEnrollStudentId, busy, run }: { item: Row; roster: Row[]; students: Row[]; enrollStudentId: string; setEnrollStudentId: (value: string) => void; busy: boolean; run: (action: string, values?: Row) => Promise<void> }) {
-  return <section className="sheet-section"><div className="sheet-section-title"><h3>Add student</h3></div><div className="sheet-enroll"><select value={enrollStudentId} onChange={(event) => setEnrollStudentId(event.target.value)}><option value="">Select student</option>{students.filter((student) => !roster.some((row) => get(row, "student_id") === get(student, "id"))).map((student) => <option key={get(student, "id")} value={get(student, "id")}>{get(student, "name")}</option>)}</select><button className="primary-button" disabled={busy || !enrollStudentId} type="button" onClick={() => void run("enrollStudent", { runId: get(item, "class_run_id"), studentId: enrollStudentId })}><Plus size={15} />Enroll</button></div></section>;
+function SessionEnrollment({
+  item,
+  roster,
+  students,
+  enrollStudentId,
+  setEnrollStudentId,
+  busy,
+  run,
+}: {
+  item: Row;
+  roster: Row[];
+  students: Row[];
+  enrollStudentId: string;
+  setEnrollStudentId: (value: string) => void;
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<void>;
+}) {
+  return (
+    <section className="sheet-section">
+      <div className="sheet-section-title">
+        <h3>Add student</h3>
+      </div>
+      <div className="sheet-enroll">
+        <select
+          value={enrollStudentId}
+          onChange={(event) => setEnrollStudentId(event.target.value)}
+        >
+          <option value="">Select student</option>
+          {students
+            .filter(
+              (student) =>
+                !roster.some(
+                  (row) => get(row, "student_id") === get(student, "id"),
+                ),
+            )
+            .map((student) => (
+              <option key={get(student, "id")} value={get(student, "id")}>
+                {get(student, "name")}
+              </option>
+            ))}
+        </select>
+        <button
+          className="primary-button"
+          disabled={busy || !enrollStudentId}
+          type="button"
+          onClick={() =>
+            void run("enrollStudent", {
+              runId: get(item, "class_run_id"),
+              studentId: enrollStudentId,
+            })
+          }
+        >
+          <Plus size={15} />
+          Enroll
+        </button>
+      </div>
+    </section>
+  );
 }
 
-function Info({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value || "-"}</strong></div>; }
-function ListSection({ title, rows, fields, moneyKeys = [], onOpen }: { title: string; rows: Row[]; fields: [string, string][]; moneyKeys?: string[]; onOpen?: (row: Row) => void }) { const [primary, ...details] = fields; return <section className="sheet-section detail-list-section"><div className="sheet-section-title"><h3>{title}</h3><span>{rows.length}</span></div><div className="detail-list-cards">{rows.map((row) => <article className={`sheet-list-row themed-list-row${onOpen ? " interactive-list-row" : ""}`} style={eventStyle(row)} key={get(row, "id")} onClick={() => onOpen?.(row)}><header><span>{primary[1]}</span>{primary[0].includes("status") ? <Status value={get(row, primary[0])} /> : <strong>{moneyKeys.includes(primary[0]) ? amount(row[primary[0]]) : get(row, primary[0])}</strong>}</header><div className="themed-list-details">{details.map(([key, label]) => <div key={key}><span>{label}</span>{key.includes("status") ? <Status value={get(row, key)} /> : <strong>{moneyKeys.includes(key) ? amount(row[key]) : get(row, key)}</strong>}</div>)}</div></article>)}</div>{!rows.length ? <Empty text="No records" /> : null}</section>; }
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value || "-"}</strong>
+    </div>
+  );
+}
+function ListSection({
+  title,
+  rows,
+  fields,
+  moneyKeys = [],
+  onOpen,
+}: {
+  title: string;
+  rows: Row[];
+  fields: [string, string][];
+  moneyKeys?: string[];
+  onOpen?: (row: Row) => void;
+}) {
+  const [primary, ...details] = fields;
+  return (
+    <section className="sheet-section detail-list-section">
+      <div className="sheet-section-title">
+        <h3>{title}</h3>
+        <span>{rows.length}</span>
+      </div>
+      <div className="detail-list-cards">
+        {rows.map((row) => (
+          <article
+            className={`sheet-list-row themed-list-row${onOpen ? " interactive-list-row" : ""}`}
+            style={eventStyle(row)}
+            key={get(row, "id")}
+            onClick={() => onOpen?.(row)}
+          >
+            <header>
+              <span>{primary[1]}</span>
+              {primary[0].includes("status") ? (
+                <Status value={get(row, primary[0])} />
+              ) : (
+                <strong>
+                  {moneyKeys.includes(primary[0])
+                    ? amount(row[primary[0]])
+                    : get(row, primary[0])}
+                </strong>
+              )}
+            </header>
+            <div className="themed-list-details">
+              {details.map(([key, label]) => (
+                <div key={key}>
+                  <span>{label}</span>
+                  {key.includes("status") ? (
+                    <Status value={get(row, key)} />
+                  ) : (
+                    <strong>
+                      {moneyKeys.includes(key)
+                        ? amount(row[key])
+                        : get(row, key)}
+                    </strong>
+                  )}
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+      {!rows.length ? <Empty text="No records" /> : null}
+    </section>
+  );
+}
 
 type GridColumn = { key: string; label: string; width?: number };
 
 function defaultColumnWidth(column: GridColumn) {
   if (column.width) return column.width;
   if (column.key === "actions") return 154;
-  if (/(invoice|student|teacher|course|class|topic|name)/.test(column.key)) return 190;
+  if (/(invoice|student|teacher|course|class|topic|name)/.test(column.key))
+    return 190;
   if (/(status|method|level|type)/.test(column.key)) return 126;
   if (/(amount|fee|price|paid|balance|due|pay)/.test(column.key)) return 118;
   return column.width || 148;
 }
 
-function ResizableDataTable({ columns, rows, empty, renderCell, onRowClick }: { columns: GridColumn[]; rows: Row[]; empty: string; renderCell: (row: Row, column: GridColumn) => ReactNode; onRowClick?: (row: Row) => void }) {
+function ResizableDataTable({
+  columns,
+  rows,
+  empty,
+  renderCell,
+  onRowClick,
+}: {
+  columns: GridColumn[];
+  rows: Row[];
+  empty: string;
+  renderCell: (row: Row, column: GridColumn) => ReactNode;
+  onRowClick?: (row: Row) => void;
+}) {
   const signature = columns.map((column) => column.key).join("|");
   const [widths, setWidths] = useState(() => columns.map(defaultColumnWidth));
   const widthsRef = useRef(widths);
-  useEffect(() => { const next = columns.map(defaultColumnWidth); widthsRef.current = next; setWidths(next); }, [signature]);
+  useEffect(() => {
+    const next = columns.map(defaultColumnWidth);
+    widthsRef.current = next;
+    setWidths(next);
+  }, [signature]);
   const totalWidth = widths.reduce((total, width) => total + width, 0);
 
-  function resizeColumn(index: number, event: React.PointerEvent<HTMLButtonElement>) {
-    event.preventDefault(); event.stopPropagation();
-    const startX = event.clientX; const startWidth = widthsRef.current[index];
+  function resizeColumn(
+    index: number,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = widthsRef.current[index];
     const update = (move: PointerEvent) => {
       const minimum = columns[index].key === "actions" ? 142 : 112;
       const next = Math.max(minimum, startWidth + move.clientX - startX);
-      setWidths((current) => { const revised = [...current]; revised[index] = next; widthsRef.current = revised; return revised; });
+      setWidths((current) => {
+        const revised = [...current];
+        revised[index] = next;
+        widthsRef.current = revised;
+        return revised;
+      });
     };
-    const stop = () => { window.removeEventListener("pointermove", update); window.removeEventListener("pointerup", stop); };
-    window.addEventListener("pointermove", update); window.addEventListener("pointerup", stop);
+    const stop = () => {
+      window.removeEventListener("pointermove", update);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", update);
+    window.addEventListener("pointerup", stop);
   }
 
-  return <div className="table-scroll grid-scroll"><table className={`data-table resizable-data-table${columns.at(-1)?.key === "actions" ? " has-actions" : ""}`} style={{ minWidth: `${totalWidth}px`, width: `${totalWidth}px` }}><colgroup>{widths.map((width, index) => <col key={columns[index].key} style={{ width }} />)}</colgroup><thead><tr>{columns.map((column, index) => <th key={column.key}><span>{column.label}</span><button className="column-resizer" type="button" aria-label={`Resize ${column.label} column`} onPointerDown={(event) => resizeColumn(index, event)} /></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={get(row, "id")} onClick={() => onRowClick?.(row)}>{columns.map((column) => <td key={column.key}>{renderCell(row, column)}</td>)}</tr>)}{!rows.length ? <tr><td className="empty-cell" colSpan={columns.length}>{empty}</td></tr> : null}</tbody></table></div>;
+  return (
+    <div className="table-scroll grid-scroll">
+      <table
+        className={`data-table resizable-data-table${columns.at(-1)?.key === "actions" ? " has-actions" : ""}`}
+        style={{ minWidth: `${totalWidth}px`, width: `${totalWidth}px` }}
+      >
+        <colgroup>
+          {widths.map((width, index) => (
+            <col key={columns[index].key} style={{ width }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            {columns.map((column, index) => (
+              <th key={column.key}>
+                <span>{column.label}</span>
+                <button
+                  className="column-resizer"
+                  type="button"
+                  aria-label={`Resize ${column.label} column`}
+                  onPointerDown={(event) => resizeColumn(index, event)}
+                />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={get(row, "id")} onClick={() => onRowClick?.(row)}>
+              {columns.map((column) => (
+                <td key={column.key}>{renderCell(row, column)}</td>
+              ))}
+            </tr>
+          ))}
+          {!rows.length ? (
+            <tr>
+              <td className="empty-cell" colSpan={columns.length}>
+                {empty}
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function Table({ columns, rows, empty, moneyKeys = [] }: { columns: [string, string][]; rows: Row[]; empty: string; moneyKeys?: string[] }) {
+function Table({
+  columns,
+  rows,
+  empty,
+  moneyKeys = [],
+}: {
+  columns: [string, string][];
+  rows: Row[];
+  empty: string;
+  moneyKeys?: string[];
+}) {
   const gridColumns = columns.map(([key, label]) => ({ key, label }));
-  return <ResizableDataTable columns={gridColumns} rows={rows} empty={empty} renderCell={(row, column) => column.key.includes("status") ? <Status value={get(row, column.key)} /> : moneyKeys.includes(column.key) ? amount(row[column.key]) : get(row, column.key) || "-"} />;
+  return (
+    <ResizableDataTable
+      columns={gridColumns}
+      rows={rows}
+      empty={empty}
+      renderCell={(row, column) =>
+        column.key.includes("status") ? (
+          <Status value={get(row, column.key)} />
+        ) : moneyKeys.includes(column.key) ? (
+          amount(row[column.key])
+        ) : (
+          get(row, column.key) || "-"
+        )
+      }
+    />
+  );
 }
-function ClickableTable({ columns, rows, empty, moneyKeys = [], onOpen }: { columns: [string, string][]; rows: Row[]; empty: string; moneyKeys?: string[]; onOpen: (id: string) => void }) {
+function ClickableTable({
+  columns,
+  rows,
+  empty,
+  moneyKeys = [],
+  onOpen,
+}: {
+  columns: [string, string][];
+  rows: Row[];
+  empty: string;
+  moneyKeys?: string[];
+  onOpen: (id: string) => void;
+}) {
   const gridColumns = columns.map(([key, label]) => ({ key, label }));
-  return <ResizableDataTable columns={gridColumns} rows={rows} empty={empty} onRowClick={(row) => onOpen(get(row, "id"))} renderCell={(row, column) => column.key.includes("status") ? <Status value={get(row, column.key)} /> : moneyKeys.includes(column.key) ? amount(row[column.key]) : get(row, column.key) || "-"} />;
+  return (
+    <ResizableDataTable
+      columns={gridColumns}
+      rows={rows}
+      empty={empty}
+      onRowClick={(row) => onOpen(get(row, "id"))}
+      renderCell={(row, column) =>
+        column.key.includes("status") ? (
+          <Status value={get(row, column.key)} />
+        ) : moneyKeys.includes(column.key) ? (
+          amount(row[column.key])
+        ) : (
+          get(row, column.key) || "-"
+        )
+      }
+    />
+  );
 }
-function InvoiceTable({ rows, run, busy }: { rows: Row[]; run: (action: string, values?: Row) => Promise<void>; busy: boolean }) {
+function InvoiceTable({
+  rows,
+  run,
+  busy,
+}: {
+  rows: Row[];
+  run: (action: string, values?: Row) => Promise<void>;
+  busy: boolean;
+}) {
   const [invoiceToPay, setInvoiceToPay] = useState<Row | null>(null);
-  const columns: GridColumn[] = [{ key: "invoice_no", label: "Invoice", width: 230 }, { key: "student_name", label: "Student", width: 190 }, { key: "course_title", label: "Course", width: 220 }, { key: "total_amount", label: "Due", width: 126 }, { key: "paid_amount", label: "Paid", width: 126 }, { key: "balance", label: "Balance", width: 126 }, { key: "status", label: "Status", width: 126 }, { key: "actions", label: "Actions", width: 160 }];
-  return <><ResizableDataTable columns={columns} rows={rows} empty="No invoices found." renderCell={(row, column) => {
-    const balance = Math.max(0, Number(row.total_amount) - Number(row.paid_amount));
-    if (column.key === "balance") return amount(balance);
-    if (column.key === "total_amount" || column.key === "paid_amount") return amount(row[column.key]);
-    if (column.key === "status") return <Status value={get(row, "status")} />;
-    if (column.key === "actions") return balance > 0 ? <button className="table-button" disabled={busy} type="button" onClick={(event) => { event.stopPropagation(); setInvoiceToPay(row); }}>Mark as paid</button> : <Status value="paid" />;
-    return get(row, column.key) || "-";
-  }} />{invoiceToPay ? <PaymentDialog invoice={invoiceToPay} run={run} busy={busy} onClose={() => setInvoiceToPay(null)} /> : null}</>;
+  const columns: GridColumn[] = [
+    { key: "invoice_no", label: "Invoice", width: 230 },
+    { key: "student_name", label: "Student", width: 190 },
+    { key: "course_title", label: "Course", width: 220 },
+    { key: "total_amount", label: "Due", width: 126 },
+    { key: "paid_amount", label: "Paid", width: 126 },
+    { key: "balance", label: "Balance", width: 126 },
+    { key: "status", label: "Status", width: 126 },
+    { key: "actions", label: "Actions", width: 160 },
+  ];
+  return (
+    <>
+      <ResizableDataTable
+        columns={columns}
+        rows={rows}
+        empty="No invoices found."
+        renderCell={(row, column) => {
+          const balance = Math.max(
+            0,
+            Number(row.total_amount) - Number(row.paid_amount),
+          );
+          if (column.key === "balance") return amount(balance);
+          if (column.key === "total_amount" || column.key === "paid_amount")
+            return amount(row[column.key]);
+          if (column.key === "status")
+            return <Status value={get(row, "status")} />;
+          if (column.key === "actions")
+            return balance > 0 ? (
+              <button
+                className="table-button"
+                disabled={busy}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setInvoiceToPay(row);
+                }}
+              >
+                Mark as paid
+              </button>
+            ) : (
+              <Status value="paid" />
+            );
+          return get(row, column.key) || "-";
+        }}
+      />
+      {invoiceToPay ? (
+        <PaymentDialog
+          invoice={invoiceToPay}
+          run={run}
+          busy={busy}
+          onClose={() => setInvoiceToPay(null)}
+        />
+      ) : null}
+    </>
+  );
 }
-function Status({ value }: { value: string }) { return <span className={`status-chip status-${value}`}>{value || "-"}</span>; }
-function Empty({ text }: { text: string }) { return <div className="empty-block">{text}</div>; }
-function FormField({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) { return <label className="form-field"><span>{label}</span><input {...props} /></label>; }
-function SelectField({ label, rows, value, onChange, ...props }: { label: string; rows: Row[]; value?: string; onChange?: (value: string) => void } & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange">) {
-  const control = value === undefined ? {} : { value, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onChange?.(event.target.value) };
-  return <label className="form-field"><span>{label}</span><select {...props} {...control}>{!rows.length ? <option value="">No options</option> : null}{rows.map((row) => <option key={get(row, "id")} value={get(row, "id")}>{get(row, "name") || get(row, "title")} {get(row, "code") ? `· ${get(row, "code")}` : ""}</option>)}</select></label>;
+function Status({ value }: { value: string }) {
+  return <span className={`status-chip status-${value}`}>{value || "-"}</span>;
+}
+function Empty({ text }: { text: string }) {
+  return <div className="empty-block">{text}</div>;
+}
+function FormField({
+  label,
+  ...props
+}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      <input {...props} />
+    </label>
+  );
+}
+function SelectField({
+  label,
+  rows,
+  value,
+  onChange,
+  ...props
+}: {
+  label: string;
+  rows: Row[];
+  value?: string;
+  onChange?: (value: string) => void;
+} & Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange">) {
+  const control =
+    value === undefined
+      ? {}
+      : {
+          value,
+          onChange: (event: React.ChangeEvent<HTMLSelectElement>) =>
+            onChange?.(event.target.value),
+        };
+  return (
+    <label className="form-field">
+      <span>{label}</span>
+      <select {...props} {...control}>
+        {!rows.length ? <option value="">No options</option> : null}
+        {rows.map((row) => (
+          <option key={get(row, "id")} value={get(row, "id")}>
+            {get(row, "name") || get(row, "title")}{" "}
+            {get(row, "code") ? `· ${get(row, "code")}` : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }

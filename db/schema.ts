@@ -9,18 +9,24 @@ export const courses = sqliteTable("courses", {
   totalSessions: integer("total_sessions").notNull(),
   price: real("price").notNull().default(0),
   status: text("status").notNull().default("draft"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const courseSessions = sqliteTable("course_sessions", {
   id: text("id").primaryKey(),
-  courseId: text("course_id").notNull().references(() => courses.id),
+  courseId: text("course_id")
+    .notNull()
+    .references(() => courses.id),
   sessionNo: integer("session_no").notNull(),
   title: text("title").notNull(),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   status: text("status").notNull().default("planned"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const campuses = sqliteTable("campuses", {
@@ -30,7 +36,9 @@ export const campuses = sqliteTable("campuses", {
   address: text("address").notNull().default(""),
   mapLabel: text("map_label").notNull().default("Level 1"),
   status: text("status").notNull().default("active"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classrooms = sqliteTable("classrooms", {
@@ -47,7 +55,9 @@ export const classrooms = sqliteTable("classrooms", {
   mapWidth: integer("map_width").notNull().default(180),
   mapHeight: integer("map_height").notNull().default(110),
   status: text("status").notNull().default("active"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const students = sqliteTable("students", {
@@ -57,7 +67,9 @@ export const students = sqliteTable("students", {
   level: text("level").notNull(),
   guardianPhone: text("guardian_phone").notNull().default(""),
   status: text("status").notNull().default("active"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const teachers = sqliteTable("teachers", {
@@ -67,62 +79,98 @@ export const teachers = sqliteTable("teachers", {
   subject: text("subject").notNull(),
   phone: text("phone").notNull().default(""),
   status: text("status").notNull().default("available"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const enrollments = sqliteTable("enrollments", {
   id: text("id").primaryKey(),
-  courseId: text("course_id").notNull().references(() => courses.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  courseId: text("course_id")
+    .notNull()
+    .references(() => courses.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   status: text("status").notNull().default("enrolled"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const resourceBookings = sqliteTable("resource_bookings", {
   id: text("id").primaryKey(),
-  courseSessionId: text("course_session_id").notNull().references(() => courseSessions.id),
+  courseSessionId: text("course_session_id")
+    .notNull()
+    .references(() => courseSessions.id),
   resourceType: text("resource_type").notNull().default("classroom"),
-  resourceId: text("resource_id").notNull().references(() => classrooms.id),
+  resourceId: text("resource_id")
+    .notNull()
+    .references(() => classrooms.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   status: text("status").notNull().default("reserved"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const teacherBookings = sqliteTable("teacher_bookings", {
   id: text("id").primaryKey(),
-  courseSessionId: text("course_session_id").notNull().references(() => courseSessions.id),
-  teacherId: text("teacher_id").notNull().references(() => teachers.id),
+  courseSessionId: text("course_session_id")
+    .notNull()
+    .references(() => courseSessions.id),
+  teacherId: text("teacher_id")
+    .notNull()
+    .references(() => teachers.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   compensationAmount: real("compensation_amount").notNull().default(0),
   compensationStatus: text("compensation_status").notNull().default("unpaid"),
   status: text("status").notNull().default("reserved"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const studentBookings = sqliteTable("student_bookings", {
   id: text("id").primaryKey(),
-  courseSessionId: text("course_session_id").notNull().references(() => courseSessions.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  courseSessionId: text("course_session_id")
+    .notNull()
+    .references(() => courseSessions.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   enrollmentId: text("enrollment_id").references(() => enrollments.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   feeAmount: real("fee_amount").notNull().default(0),
   paymentStatus: text("payment_status").notNull().default("unpaid"),
   status: text("status").notNull().default("reserved"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const attendanceRecords = sqliteTable("attendance_records", {
   id: text("id").primaryKey(),
-  courseSessionId: text("course_session_id").notNull().references(() => courseSessions.id),
-  studentId: text("student_id").notNull().references(() => students.id),
-  studentBookingId: text("student_booking_id").references(() => studentBookings.id),
+  courseSessionId: text("course_session_id")
+    .notNull()
+    .references(() => courseSessions.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
+  studentBookingId: text("student_booking_id").references(
+    () => studentBookings.id,
+  ),
   status: text("status").notNull().default("pending"),
   note: text("note").notNull().default(""),
-  markedAt: text("marked_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  markedAt: text("marked_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 // V2 is the operational model used by the management portal.  Legacy tables
@@ -135,7 +183,9 @@ export const academicTerms = sqliteTable("academic_terms", {
   startsOn: text("starts_on").notNull(),
   endsOn: text("ends_on").notNull(),
   status: text("status").notNull().default("active"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const teachingCentres = sqliteTable("teaching_centres", {
@@ -156,8 +206,12 @@ export const courseCatalogs = sqliteTable("course_catalogs", {
   listPrice: real("list_price").notNull().default(0),
   displayColor: text("display_color").notNull().default("#0F8AA8"),
   status: text("status").notNull().default("active"),
-  teachingCentreId: text("teaching_centre_id").references(() => teachingCentres.id),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  teachingCentreId: text("teaching_centre_id").references(
+    () => teachingCentres.id,
+  ),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const teachingLanguages = sqliteTable("teaching_languages", {
@@ -168,15 +222,23 @@ export const teachingLanguages = sqliteTable("teaching_languages", {
 });
 
 export const teacherLanguages = sqliteTable("teacher_languages", {
-  teacherId: text("teacher_id").notNull().references(() => teachers.id),
-  languageId: text("language_id").notNull().references(() => teachingLanguages.id),
+  teacherId: text("teacher_id")
+    .notNull()
+    .references(() => teachers.id),
+  languageId: text("language_id")
+    .notNull()
+    .references(() => teachingLanguages.id),
 });
 
 export const classRuns = sqliteTable("class_runs", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
-  courseId: text("course_id").notNull().references(() => courseCatalogs.id),
-  termId: text("term_id").notNull().references(() => academicTerms.id),
+  courseId: text("course_id")
+    .notNull()
+    .references(() => courseCatalogs.id),
+  termId: text("term_id")
+    .notNull()
+    .references(() => academicTerms.id),
   name: text("name").notNull(),
   capacity: integer("capacity").notNull(),
   price: real("price").notNull().default(0),
@@ -187,96 +249,235 @@ export const classRuns = sqliteTable("class_runs", {
   deliveryMode: text("delivery_mode").notNull().default("onsite"),
   languageId: text("language_id").references(() => teachingLanguages.id),
   teacherId: text("teacher_id").references(() => teachers.id),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classSessions = sqliteTable("class_sessions", {
   id: text("id").primaryKey(),
-  classRunId: text("class_run_id").notNull().references(() => classRuns.id),
+  classRunId: text("class_run_id")
+    .notNull()
+    .references(() => classRuns.id),
   sessionNo: integer("session_no").notNull(),
   topic: text("topic").notNull(),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   status: text("status").notNull().default("scheduled"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classResourceBookings = sqliteTable("class_resource_bookings", {
   id: text("id").primaryKey(),
-  classSessionId: text("class_session_id").notNull().references(() => classSessions.id),
-  classroomId: text("classroom_id").notNull().references(() => classrooms.id),
+  classSessionId: text("class_session_id")
+    .notNull()
+    .references(() => classSessions.id),
+  classroomId: text("classroom_id")
+    .notNull()
+    .references(() => classrooms.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   status: text("status").notNull().default("reserved"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classTeacherBookings = sqliteTable("class_teacher_bookings", {
   id: text("id").primaryKey(),
-  classSessionId: text("class_session_id").notNull().references(() => classSessions.id),
-  teacherId: text("teacher_id").notNull().references(() => teachers.id),
+  classSessionId: text("class_session_id")
+    .notNull()
+    .references(() => classSessions.id),
+  teacherId: text("teacher_id")
+    .notNull()
+    .references(() => teachers.id),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
   payAmount: real("pay_amount").notNull().default(0),
   payStatus: text("pay_status").notNull().default("unpaid"),
   status: text("status").notNull().default("confirmed"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classEnrollments = sqliteTable("class_enrollments", {
   id: text("id").primaryKey(),
-  classRunId: text("class_run_id").notNull().references(() => classRuns.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  classRunId: text("class_run_id")
+    .notNull()
+    .references(() => classRuns.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   contractedFee: real("contracted_fee").notNull().default(0),
+  deliveryMode: text("delivery_mode").notNull().default("onsite"),
+  passId: text("pass_id"),
   status: text("status").notNull().default("enrolled"),
-  enrolledAt: text("enrolled_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  enrolledAt: text("enrolled_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classStudentBookings = sqliteTable("class_student_bookings", {
   id: text("id").primaryKey(),
-  classSessionId: text("class_session_id").notNull().references(() => classSessions.id),
-  enrollmentId: text("enrollment_id").notNull().references(() => classEnrollments.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  classSessionId: text("class_session_id")
+    .notNull()
+    .references(() => classSessions.id),
+  enrollmentId: text("enrollment_id")
+    .notNull()
+    .references(() => classEnrollments.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   allocatedFee: real("allocated_fee").notNull().default(0),
   status: text("status").notNull().default("booked"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classAttendance = sqliteTable("class_attendance", {
   id: text("id").primaryKey(),
-  studentBookingId: text("student_booking_id").notNull().references(() => classStudentBookings.id),
+  studentBookingId: text("student_booking_id")
+    .notNull()
+    .references(() => classStudentBookings.id),
   status: text("status").notNull().default("pending"),
   note: text("note").notNull().default(""),
-  markedAt: text("marked_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  markedAt: text("marked_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const studentInvoices = sqliteTable("student_invoices", {
   id: text("id").primaryKey(),
   invoiceNo: text("invoice_no").notNull().unique(),
-  enrollmentId: text("enrollment_id").notNull().references(() => classEnrollments.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  enrollmentId: text("enrollment_id")
+    .notNull()
+    .references(() => classEnrollments.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   totalAmount: real("total_amount").notNull().default(0),
   paidAmount: real("paid_amount").notNull().default(0),
   status: text("status").notNull().default("unpaid"),
-  issuedAt: text("issued_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  issuedAt: text("issued_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
   dueAt: text("due_at").notNull().default(""),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const studentPayments = sqliteTable("student_payments", {
   id: text("id").primaryKey(),
-  invoiceId: text("invoice_id").notNull().references(() => studentInvoices.id),
-  studentId: text("student_id").notNull().references(() => students.id),
+  invoiceId: text("invoice_id")
+    .notNull()
+    .references(() => studentInvoices.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
   amount: real("amount").notNull(),
   method: text("method").notNull().default("bank_transfer"),
-  receivedAt: text("received_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  receivedAt: text("received_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const passProducts = sqliteTable("pass_products", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  onsiteCredits: integer("onsite_credits").notNull().default(0),
+  onlineCredits: integer("online_credits").notNull().default(0),
+  studyCredits: integer("study_credits").notNull().default(0),
+  validityType: text("validity_type").notNull().default("calendar_month"),
+  validityDays: integer("validity_days").notNull().default(30),
+  price: real("price").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const studentPasses = sqliteTable("student_passes", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
+  productId: text("product_id")
+    .notNull()
+    .references(() => passProducts.id),
+  name: text("name").notNull(),
+  validFrom: text("valid_from").notNull(),
+  validUntil: text("valid_until").notNull(),
+  onsiteRemaining: integer("onsite_remaining").notNull().default(0),
+  onlineRemaining: integer("online_remaining").notNull().default(0),
+  studyRemaining: integer("study_remaining").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const passOrders = sqliteTable("pass_orders", {
+  id: text("id").primaryKey(),
+  passId: text("pass_id")
+    .notNull()
+    .references(() => studentPasses.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
+  productId: text("product_id")
+    .notNull()
+    .references(() => passProducts.id),
+  selectedRunId: text("selected_run_id").references(() => classRuns.id),
+  deliveryMode: text("delivery_mode"),
+  totalAmount: real("total_amount").notNull().default(0),
+  paidAmount: real("paid_amount").notNull().default(0),
+  status: text("status").notNull().default("unpaid"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const passPayments = sqliteTable("pass_payments", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id")
+    .notNull()
+    .references(() => passOrders.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
+  amount: real("amount").notNull(),
+  method: text("method").notNull().default("duitnow_qr"),
+  proofReference: text("proof_reference").notNull().default(""),
+  note: text("note").notNull().default(""),
+  receivedAt: text("received_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });

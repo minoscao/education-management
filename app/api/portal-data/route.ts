@@ -1711,7 +1711,16 @@ async function requestLeave(payload: ActionPayload) {
   if (!payload.sessionId || !payload.studentId) throw new Error("Lesson booking not found.");
   const booking = await row<{ id: string }>("SELECT id FROM class_student_bookings WHERE class_session_id = ? AND student_id = ?", [payload.sessionId, payload.studentId]);
   if (!booking) throw new Error("Lesson booking not found.");
-  await execute("UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", ["leave", "Requested by student", booking.id]);
+  const note = payload.note?.trim() || "Requested by student";
+  await execute("UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", ["leave", note, booking.id]);
+  const [student, teacher] = await Promise.all([
+    row<{ name: string }>("SELECT name FROM students WHERE id = ?", [payload.studentId]),
+    row<{ teacher_id: string }>("SELECT teacher_id FROM class_teacher_bookings WHERE class_session_id = ? LIMIT 1", [payload.sessionId]),
+  ]);
+  if (teacher?.teacher_id) await execute(
+    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'teacher', ?, ?, ?, 'unread')",
+    [id("notice"), teacher.teacher_id, "Leave request", `${student?.name || "A student"} requested leave. ${note}`],
+  );
 }
 
 async function sendMessage(payload: ActionPayload) {

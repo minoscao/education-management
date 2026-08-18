@@ -2196,6 +2196,23 @@ button.status-cell {
 .detail-sheet.detail-student .detail-tabs-right button.active { color: #3d7f40 !important; }
 .detail-sheet.detail-student .detail-tabs-right button.active b { background: #e8f6e3 !important; color: #3d7f40 !important; }
 
+/* Student class drawers use the same detail shell, with the student portal palette. */
+.detail-sheet.detail-student-class .entity-header { border-bottom-color: var(--student-border) !important; background: var(--student-hero) !important; }
+.detail-sheet.detail-student-class .entity-icon { border-color: var(--student-border); background: #ffffff; color: var(--student-accent); }
+.detail-sheet.detail-student-class .detail-tabs-right { border-color: var(--student-button) !important; background: var(--student-button) !important; }
+.detail-sheet.detail-student-class .detail-tabs-right button.active { color: var(--student-accent) !important; }
+.detail-sheet.detail-student-class .detail-tabs-right button.active b { background: #e9f0ff !important; color: var(--student-accent) !important; }
+.student-course-card { width: 100%; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.student-course-card:hover { transform: translateY(-2px); box-shadow: 0 9px 18px rgba(44, 80, 154, .14); }
+.student-course-card:focus-visible { outline: 3px solid var(--student-accent); outline-offset: 2px; }
+.materials-empty { display: grid; justify-items: start; gap: 7px; padding: 20px; border: 1px dashed #c8d8ee; border-radius: 7px; background: #f7faff; color: #5e7893; }
+.materials-empty svg { color: var(--student-accent); }.materials-empty strong { color: #284a70; }.materials-empty p { margin: 0; font-size: 12px; }
+.material-lesson-hint { margin-top: 12px; color: #657e95; font-size: 12px; }
+.leave-request-body { padding: 18px 20px; }
+.detail-student-class .current-lesson-card { grid-template-columns: 86px minmax(0, 1fr) auto; align-items: center; }
+.detail-student-class .current-lesson-card > .quiet-button { margin-right: 12px; white-space: nowrap; }
+@media (max-width: 560px) { .detail-student-class .current-lesson-card { grid-template-columns: 68px minmax(0, 1fr); }.detail-student-class .current-lesson-card > .quiet-button { grid-column: 2; margin: 0 12px 12px; justify-self: start; } }
+
 /* Teacher portraits use rounded squares, leaving circular portraits for students. */
 .teacher-avatar,.teacher-avatar .avatar-photo,.teacher-table-person .avatar-photo,.detail-teacher .entity-avatar { border-radius: 8px !important; }
 .teacher-avatar .avatar-photo { width: 100%; height: 100%; }

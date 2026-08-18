@@ -682,7 +682,7 @@ const pptOperatingTeacherIds = [
  * its teachable band.  Historical rows are retained as inactive records.
  */
 async function syncPptOperatingResources(force = false) {
-  const marker = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["ppt_operating_resources_v1"]);
+  const marker = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["ppt_operating_resources_v2"]);
   if (marker && !force) return;
 
   await ensureTeachingConfiguration();
@@ -812,7 +812,7 @@ async function syncPptOperatingResources(force = false) {
     }
   }
   await executeBatchInChunks(slotUpdates);
-  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["ppt_operating_resources_v1", "2 rooms and shared teacher pool applied"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["ppt_operating_resources_v2", "2 rooms, shared teacher pool, and conflict-free timetable applied"]);
 }
 
 async function ensureCourseLessonBlueprints() {

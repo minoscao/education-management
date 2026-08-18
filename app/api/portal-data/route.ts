@@ -688,16 +688,16 @@ async function syncPptOperatingResources(force = false) {
   await ensureTeachingConfiguration();
   await ensureCampuses();
   const teachers = [
-    ["teacher-lim-wei", "TCH-PPM-01", "Teacher Lim Wei", "Primary Mathematics + Sudoku", "lang-ce,lang-me"],
-    ["teacher-ng-jun", "TCH-PPM-02", "Teacher Ng Jun", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
-    ["teacher-chen-yi", "TCH-PPM-03", "Teacher Chen Yi", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
-    ["teacher-wong-kai", "TCH-PPM-04", "Teacher Wong Kai", "Advanced Mathematics + Sudoku", "lang-ce"],
-    ["teacher-nadia", "TCH-PPM-05", "Cikgu Nadia", "Advanced Mathematics + Sudoku · weekend cover", "lang-me"],
-    ["teacher-hana", "TCH-LANG-01", "Ms Hana", "Languages · Mandarin + English stream", "lang-ce"],
-    ["teacher-farah", "TCH-LANG-02", "Cikgu Farah", "Communication · Bahasa + English stream", "lang-me"],
-    ["teacher-mira", "TCH-LANG-03", "Cikgu Mira", "English & Bahasa · Bahasa + English stream", "lang-me"],
-    ["teacher-zara", "TCH-LANG-04", "Ms Zara", "Advanced languages · weekend cover", "lang-ce,lang-me"],
-    ["teacher-tan-uec", "TCH-LANG-05", "Teacher Tan", "Chinese", "lang-zh"],
+    ["teacher-lim-wei", "POOL-MATH-PRIMARY", "Teacher Lim Wei", "Primary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-ng-jun", "POOL-MATH-LOWER-A", "Teacher Ng Jun", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-chen-yi", "POOL-MATH-LOWER-B", "Teacher Chen Yi", "Lower Secondary Mathematics + Sudoku", "lang-ce,lang-me"],
+    ["teacher-wong-kai", "POOL-MATH-ADV-CE", "Teacher Wong Kai", "Advanced Mathematics + Sudoku", "lang-ce"],
+    ["teacher-nadia", "POOL-MATH-ADV-ME", "Cikgu Nadia", "Advanced Mathematics + Sudoku · weekend cover", "lang-me"],
+    ["teacher-hana", "POOL-LANG-CE", "Ms Hana", "Languages · Mandarin + English stream", "lang-ce"],
+    ["teacher-farah", "POOL-LANG-COMM-ME", "Cikgu Farah", "Communication · Bahasa + English stream", "lang-me"],
+    ["teacher-mira", "POOL-LANG-ME", "Cikgu Mira", "English & Bahasa · Bahasa + English stream", "lang-me"],
+    ["teacher-zara", "POOL-LANG-ADV", "Ms Zara", "Advanced languages · weekend cover", "lang-ce,lang-me"],
+    ["teacher-tan-uec", "POOL-LANG-ZH", "Teacher Tan", "Chinese", "lang-zh"],
   ] as const;
   const classrooms = [
     ["plan-room-math-sci", "ROOM-MATH-SCI", "数理化教室", "Kluang learning hub", "数理化课程使用", 26],

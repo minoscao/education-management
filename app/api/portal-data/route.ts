@@ -682,7 +682,7 @@ const pptOperatingTeacherIds = [
  * its teachable band.  Historical rows are retained as inactive records.
  */
 async function syncPptOperatingResources(force = false) {
-  const marker = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["ppt_operating_resources_v3"]);
+  const marker = await row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", ["ppt_operating_resources_v4"]);
   if (marker && !force) return;
 
   await ensureTeachingConfiguration();
@@ -774,9 +774,9 @@ async function syncPptOperatingResources(force = false) {
     }
   }
   // The source schedule has one language-room collision on Sunday. H3 Bahasa
-  // moves to the free Friday 17:30 window, directly before the lower-secondary
-  // evening slot, so both the room and the advanced-language teacher stay free.
-  const pbRunAdjustments = [["pb-run-31", 5, "17:30"]] as const;
+  // moves to the free Sunday 09:00 window, before the next language-room
+  // session, so both the room and the advanced-language teacher stay free.
+  const pbRunAdjustments = [["pb-run-31", 0, "09:00"]] as const;
   for (const [runId, weekday, time] of pbRunAdjustments) {
     const sessions = await rows<{ id: string; session_no: number }>("SELECT id, session_no FROM class_sessions WHERE class_run_id = ? ORDER BY session_no", [runId]);
     const firstDate = dateAfter("2026-08-24", (weekday - 1 + 7) % 7);
@@ -812,7 +812,7 @@ async function syncPptOperatingResources(force = false) {
     }
   }
   await executeBatchInChunks(slotUpdates);
-  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["ppt_operating_resources_v3", "2 rooms, shared teacher pool, and conflict-free timetable applied"]);
+  await execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", ["ppt_operating_resources_v4", "2 rooms, shared teacher pool, and conflict-free timetable applied"]);
 }
 
 async function ensureCourseLessonBlueprints() {

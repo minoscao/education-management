@@ -78,7 +78,8 @@ type View =
   | "studentCourses"
   | "studentCalendar"
   | "studentPasses"
-  | "studentBooking";
+  | "studentBooking"
+  | "studentLessonBooking";
 type Detail = {
   kind:
     | "session"
@@ -955,6 +956,7 @@ export function ManagementPortal() {
               ["studentPasses", Banknote, "My pass"],
               ["studentCourses", BookOpen, "My courses"],
               ["studentBooking", CalendarDays, "Book a course"],
+              ["studentLessonBooking", CalendarDays, "Book a lesson"],
               ["studentCalendar", CalendarDays, "My timetable"],
             ]}
           />
@@ -1222,6 +1224,13 @@ export function ManagementPortal() {
             onChoose={(id) => setBookingRunId(id)}
           />
         ) : null}
+        {view === "studentLessonBooking" ? (
+          <StudentLessonBooking
+            data={data}
+            studentId={selectedStudentId}
+            onChoose={(id) => setBookingRunId(id)}
+          />
+        ) : null}
         {view === "studentCalendar" ? (
           <StudentTimetableV2
             data={data}
@@ -1336,6 +1345,7 @@ function pageTitle(view: View, t: typeof copy.en) {
     studentPasses: "My pass",
     studentCourses: "My courses",
     studentBooking: "Book a course",
+    studentLessonBooking: "Book a lesson",
     studentCalendar: "My timetable",
   };
   return titles[view];
@@ -2497,15 +2507,15 @@ function StudentCourseBooking({
             const filled = Number(get(item, "student_count"));
             const seats = Math.max(0, capacity - filled);
             return (
-              <button key={get(item, "id")} type="button" className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
+              <button key={get(item, "id")} type="button" disabled={used} className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
                 <CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "subject"), display_color: get(item, "run_course_color") }} />
                 <div>
-                  <span>{used ? "ENROLLED" : "AVAILABLE CLASS"}</span>
+                  <span>{used ? "ALREADY PURCHASED" : "AVAILABLE CLASS"}</span>
                   <h3>{get(item, "course_title")}</h3>
                   <p>{get(item, "name")}</p>
                   <small>{get(item, "teacher_name") || "Teacher to be confirmed"} · {get(item, "session_count")} lessons</small>
                 </div>
-                <aside><strong>{seats}</strong><span>seats left</span>{capacity > 0 && seats / capacity < .2 ? <em>Few left</em> : null}</aside>
+                <aside>{used ? <><strong className="purchased-mark"><Check size={20} /></strong><span>Already purchased</span></> : <><strong>{seats}</strong><span>seats left</span>{capacity > 0 && seats / capacity < .2 ? <em>Few left</em> : null}</>}</aside>
               </button>
             );
           })}
@@ -2514,6 +2524,116 @@ function StudentCourseBooking({
       ) : (
         <section className="student-calendar-view"><header><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1))}><ChevronLeft size={17} /></button><strong>{anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" })}</strong><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1))}><ChevronRight size={17} /></button></header><MonthCalendar anchor={anchor} events={sessions} c={calendarText.en} language="en" onOpen={(sessionId) => { const session = sessions.find((item) => get(item, "id") === sessionId); if (session) onChoose(get(session, "class_run_id")); }} onSelectDate={() => undefined} /></section>
       )}
+    </section>
+  );
+}
+
+function StudentLessonBooking({
+  data,
+  studentId,
+  onChoose,
+}: {
+  data: PortalData;
+  studentId: string;
+  onChoose: (id: string) => void;
+}) {
+  const [anchor, setAnchor] = useState(new Date());
+  const weekStart = new Date(anchor);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekStart);
+    day.setDate(weekStart.getDate() + index);
+    return day;
+  });
+  const start = weekStart.getTime();
+  const end = new Date(weekStart).setDate(weekStart.getDate() + 7);
+  const openRunIds = new Set(
+    data.runs
+      .filter((run) => !["finished", "cancelled"].includes(get(run, "status")))
+      .map((run) => get(run, "id")),
+  );
+  const enrolledRuns = new Set(
+    data.enrollments
+      .filter(
+        (item) =>
+          get(item, "student_id") === studentId &&
+          get(item, "status") === "enrolled",
+      )
+      .map((item) => get(item, "class_run_id")),
+  );
+  const sessions = data.sessions
+    .filter((session) => {
+      const timestamp = asTime(session.starts_at);
+      return (
+        openRunIds.has(get(session, "class_run_id")) &&
+        timestamp >= start &&
+        timestamp < end
+      );
+    })
+    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
+  const courseRun = (id: string) => data.runs.find((run) => get(run, "id") === id);
+  const teacherFor = (session: Row) =>
+    data.teachers.find((teacher) => get(teacher, "id") === get(session, "teacher_id")) ||
+    ({ id: get(session, "teacher_id"), name: get(session, "teacher_name") || "Teacher to be confirmed" } as Row);
+  return (
+    <section className="student-portal student-lesson-booking">
+      <section className="student-simple-heading">
+        <CalendarDays size={22} />
+        <div>
+          <span>BOOK A LESSON</span>
+          <h2>Choose a lesson for your week</h2>
+          <p>See your teacher, time and available places before you join a class.</p>
+        </div>
+      </section>
+      <section className="student-week-booking">
+        <header>
+          <button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 7))}><ChevronLeft size={17} /></button>
+          <div><strong>{weekStart.toLocaleDateString("en-MY", { day: "numeric", month: "short" })} - {days[6].toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}</strong><span>Pick a lesson that works for you</span></div>
+          <button type="button" className="quiet-button" onClick={() => setAnchor(new Date())}>This week</button>
+          <button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7))}><ChevronRight size={17} /></button>
+        </header>
+        <div className="student-week-grid">
+          {days.map((day) => {
+            const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+            const daySessions = sessions.filter((session) => String(session.starts_at).slice(0, 10) === key);
+            return (
+              <section key={key} className={day.toDateString() === new Date().toDateString() ? "today" : ""}>
+                <header><span>{day.toLocaleDateString("en-MY", { weekday: "short" })}</span><strong>{day.getDate()}</strong></header>
+                <div>
+                  {daySessions.map((session) => {
+                    const run = courseRun(get(session, "class_run_id"));
+                    const teacher = teacherFor(session);
+                    const purchased = enrolledRuns.has(get(session, "class_run_id"));
+                    const availableSeats = Math.max(
+                      0,
+                      Number(get(run || {}, "capacity")) -
+                        Number(get(run || {}, "student_count")),
+                    );
+                    return (
+                      <button
+                        key={get(session, "id")}
+                        type="button"
+                        className={`student-week-lesson ${purchased ? "is-purchased" : ""}`}
+                        style={eventStyle(session)}
+                        disabled={purchased}
+                        onClick={() => onChoose(get(session, "class_run_id"))}
+                      >
+                        <span className="student-week-time">{timePart(session.starts_at)}</span>
+                        <strong>{get(session, "course_title")}</strong>
+                        <small>{get(session, "topic")}</small>
+                        <div className="student-week-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><span><b>{get(teacher, "name")}</b><em>{get(teacher, "bio") || "Your lesson teacher"}</em></span></div>
+                        <footer>{purchased ? <span>Already purchased</span> : <><span>{availableSeats} seats left</span><b>Book lesson</b></>}</footer>
+                      </button>
+                    );
+                  })}
+                  {!daySessions.length ? <p className="student-week-empty">No lessons</p> : null}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </section>
     </section>
   );
 }
@@ -2548,16 +2668,29 @@ function CourseBookingDialog({
   const passTotal = Number(monthly?.price || 0) * passMonths;
   const first = sessions[0];
   const last = sessions.at(-1);
+  const alreadyPurchased = data.enrollments.some(
+    (enrollment) =>
+      get(enrollment, "student_id") === studentId &&
+      get(enrollment, "class_run_id") === runId &&
+      get(enrollment, "status") === "enrolled",
+  );
   if (!item) return null;
   return (
     <div className="payment-dialog-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="course-booking-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <header><div><span>COURSE BOOKING</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")} · {first && last ? `${malaysiaDate(first.starts_at)} - ${malaysiaDate(last.starts_at)}` : "Dates to be confirmed"}</p></div><button type="button" className="header-icon" onClick={onClose}><X size={17} /></button></header>
         <main>
+          {alreadyPurchased ? (
+            <section className="booking-already-purchased">
+              <span><Check size={19} /></span>
+              <div><strong>Already purchased</strong><p>You are already enrolled in this class. Your lessons are ready in My courses and My timetable.</p></div>
+            </section>
+          ) : <>
           <section className="booking-delivery"><button type="button" className={delivery === "onsite" ? "selected" : ""} onClick={() => setDelivery("onsite")}><Building2 size={20} /><strong>Onsite class</strong><span>{credits} onsite credits available</span></button><button type="button" className={delivery === "online" ? "selected" : ""} onClick={() => setDelivery("online")}><BookOpen size={20} /><strong>Live online</strong><span>{credits} online credits available</span></button></section>
           <section className="booking-price-compare"><article><span>BUY THIS COURSE</span><strong>{amount(direct)}</strong><p>{amount(perLesson)} × {sessions.length} lessons</p><button className="primary-button" type="button" disabled={busy} onClick={() => void run("enrollStudentWithPayment", { studentId, runId, contractedFee: direct, payNow: false }).then(onClose)}>Enroll · pay later</button></article><article className="featured"><span>{passMonths}-MONTH LEARNING PASS</span><strong>{amount(passTotal)}</strong><p>{passMonths} calendar month{passMonths > 1 ? "s" : ""} · {Number(monthly?.onsite_credits || 0) * passMonths} onsite + {Number(monthly?.online_credits || 0) * passMonths} online + {Number(monthly?.study_credits || 0) * passMonths} study visits</p><button className="quiet-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Choose Pass</button></article></section>
+          </>}
         </main>
-        <footer>{credits > 0 ? <button className="primary-button" type="button" disabled={busy} onClick={() => void run("bookCourseWithCredit", { studentId, runId, deliveryMode: delivery }).then(onClose)}><Check size={16} />{delivery === "online" ? "Join online class" : "Reserve onsite seat"}</button> : <button className="primary-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Buy a pass to continue</button>}</footer>
+        <footer>{alreadyPurchased ? <button className="quiet-button" type="button" onClick={onClose}>Back to courses</button> : credits > 0 ? <button className="primary-button" type="button" disabled={busy} onClick={() => void run("bookCourseWithCredit", { studentId, runId, deliveryMode: delivery }).then(onClose)}><Check size={16} />{delivery === "online" ? "Join online class" : "Reserve onsite seat"}</button> : <button className="primary-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Buy a pass to continue</button>}</footer>
       </section>
     </div>
   );
@@ -15988,6 +16121,11 @@ function TeacherDetailContent({
                 label="Phone"
                 defaultValue={get(item, "phone")}
               />
+              <FormField
+                name="bio"
+                label="About this teacher"
+                defaultValue={get(item, "bio")}
+              />
               <button className="primary-button" disabled={busy} type="submit">
                 <Check size={16} />
                 Save changes
@@ -16003,6 +16141,7 @@ function TeacherDetailContent({
               <Info label="Phone" value={get(item, "phone")} />
               <Info label="Status" value={get(item, "status")} />
             </div>
+            {get(item, "bio") ? <p className="teacher-profile-bio">{get(item, "bio")}</p> : null}
           </section>
         )}
         <ListSection

@@ -50,6 +50,7 @@ type ActionPayload = {
   note?: string;
   phone?: string;
   email?: string;
+  bio?: string;
   avatarUrl?: string;
   location?: string;
   campusId?: string;
@@ -6397,6 +6398,11 @@ async function ensurePassData() {
     );
   if (!names.has("pass_id"))
     await execute("ALTER TABLE class_enrollments ADD COLUMN pass_id text");
+  const teacherColumns = await rows<{ name: string }>(
+    "PRAGMA table_info('teachers')",
+  );
+  if (!teacherColumns.some((column) => column.name === "bio"))
+    await execute("ALTER TABLE teachers ADD COLUMN bio text NOT NULL DEFAULT ''");
   const orderColumns = await rows<{ name: string }>(
     "PRAGMA table_info('pass_orders')",
   );
@@ -6499,6 +6505,32 @@ async function ensurePassData() {
       "pass-monthly",
     ],
   );
+  await executeBatch([
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["A warm Mandarin and Chinese teacher who builds confidence through stories, discussion and clear learning habits.", "teacher-zhang"],
+    },
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["A patient mathematics teacher who makes every step visible, practical and easy to practise at home.", "teacher-sophia"],
+    },
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["A classically trained music teacher who helps beginners enjoy rhythm, technique and performing together.", "teacher-lim"],
+    },
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["An English specialist who turns reading, writing and speaking into confident everyday communication.", "teacher-olivia"],
+    },
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["A supportive science teacher who uses hands-on examples to make difficult ideas feel approachable.", "teacher-raj"],
+    },
+    {
+      sql: "UPDATE teachers SET bio = ? WHERE id = ? AND (bio IS NULL OR bio = '')",
+      values: ["A Bahasa educator who creates lively lessons rooted in clear language and local context.", "teacher-nurul"],
+    },
+  ]);
 }
 
 async function ensureSamplePasses() {
@@ -6614,11 +6646,12 @@ async function updateEntity(payload: ActionPayload) {
   }
   if (payload.action === "updateTeacher" && payload.teacherId) {
     await execute(
-      "UPDATE teachers SET name = ?, subject = ?, phone = ? WHERE id = ?",
+      "UPDATE teachers SET name = ?, subject = ?, phone = ?, bio = COALESCE(?, bio) WHERE id = ?",
       [
         payload.name?.trim() || "Untitled teacher",
         payload.subject?.trim() || "General",
         payload.phone?.trim() || "",
+        payload.bio?.trim() || null,
         payload.teacherId,
       ],
     );

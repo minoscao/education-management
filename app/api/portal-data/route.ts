@@ -5872,7 +5872,7 @@ async function setAttendance(payload: ActionPayload) {
       "SELECT class_enrollments.pass_id, class_enrollments.delivery_mode, class_student_bookings.student_id FROM class_student_bookings JOIN class_enrollments ON class_enrollments.id = class_student_bookings.enrollment_id WHERE class_student_bookings.id = ?",
       [payload.studentBookingId],
     );
-    if (booking?.pass_id) {
+    if (booking?.pass_id && booking.delivery_mode !== "online") {
       const alreadyUsed = await row<{ id: string }>(
         "SELECT id FROM pass_credit_uses WHERE student_booking_id = ?",
         [payload.studentBookingId],
@@ -6008,6 +6008,17 @@ async function enrollWithPass(
     throw new Error(
       `This pass has no ${selectedMode} lesson credits remaining.`,
     );
+  const existing = await row<{ id: string }>(
+    "SELECT id FROM class_enrollments WHERE class_run_id = ? AND student_id = ? AND status = 'enrolled'",
+    [runId, studentId],
+  );
+  if (existing) {
+    await execute(
+      "UPDATE class_enrollments SET pass_id = ?, delivery_mode = ? WHERE id = ?",
+      [passId, selectedMode, existing.id],
+    );
+    return;
+  }
   await enrollStudent(runId, studentId, 0, true, {
     passId,
     delivery: selectedMode,

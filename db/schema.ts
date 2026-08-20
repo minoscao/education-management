@@ -415,6 +415,7 @@ export const passProducts = sqliteTable("pass_products", {
 
 export const studentPasses = sqliteTable("student_passes", {
   id: text("id").primaryKey(),
+  orderId: text("order_id"),
   studentId: text("student_id")
     .notNull()
     .references(() => students.id),
@@ -422,6 +423,8 @@ export const studentPasses = sqliteTable("student_passes", {
     .notNull()
     .references(() => passProducts.id),
   name: text("name").notNull(),
+  creditType: text("credit_type").notNull().default("bundle"),
+  creditsTotal: integer("credits_total").notNull().default(0),
   validFrom: text("valid_from").notNull(),
   validUntil: text("valid_until").notNull(),
   onsiteRemaining: integer("onsite_remaining").notNull().default(0),
@@ -446,6 +449,7 @@ export const passOrders = sqliteTable("pass_orders", {
     .references(() => passProducts.id),
   selectedRunId: text("selected_run_id").references(() => classRuns.id),
   deliveryMode: text("delivery_mode"),
+  reservationMonths: integer("reservation_months").notNull().default(1),
   totalAmount: real("total_amount").notNull().default(0),
   paidAmount: real("paid_amount").notNull().default(0),
   status: text("status").notNull().default("unpaid"),
@@ -470,6 +474,23 @@ export const passPayments = sqliteTable("pass_payments", {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
   createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const studentCreditUses = sqliteTable("student_credit_uses", {
+  id: text("id").primaryKey(),
+  passId: text("pass_id")
+    .notNull()
+    .references(() => studentPasses.id),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => students.id),
+  classRunId: text("class_run_id").references(() => classRuns.id),
+  classSessionId: text("class_session_id").references(() => classSessions.id),
+  creditType: text("credit_type").notNull(),
+  amount: integer("amount").notNull().default(1),
+  usedAt: text("used_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });

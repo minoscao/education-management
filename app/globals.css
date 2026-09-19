@@ -2930,6 +2930,20 @@ summary:focus-visible { outline: 3px solid rgba(14, 147, 180, .32); outline-offs
 .market-route-mode { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 4px; padding: 0 17px 12px; }.market-route-mode > span { color: #88abaa; font-size: 10px; font-weight: 850; }.market-route-mode button { display: inline-flex; min-width: 0; min-height: 28px; align-items: center; justify-content: center; gap: 4px; padding: 0 5px; border: 1px solid rgba(120, 204, 197, .26); border-radius: 5px; background: transparent; color: #9ebfbd; cursor: pointer; font-size: 10px; font-weight: 850; }.market-route-mode button:hover { border-color: #f6c45b; color: #fff0c8; }.market-route-mode button.active { border-color: #6fd0c5; background: rgba(75, 167, 157, .18); color: #ecfffb; }
 .market-landmark-shell { border: 0 !important; background: transparent !important; }.market-landmark-marker { display: block; width: 12px; height: 12px; border: 2px solid rgba(56, 218, 202, .8); border-radius: 50%; background: rgba(18, 167, 154, .28); box-shadow: 0 0 0 4px rgba(18, 167, 154, .08); }.market-landmark-tooltip { padding: 3px 6px; border: 1px solid rgba(68, 200, 186, .35); border-radius: 4px; background: rgba(7, 28, 36, .74); color: rgba(198, 242, 235, .82); font-size: 10px; font-weight: 800; box-shadow: none; }.market-landmark-tooltip::before { display: none; }
 
+.booking-selection-summary { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #dcebed; color: #28515d; }
+.booking-selection-summary > div { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.booking-selection-summary svg { flex-shrink: 0; color: #0f8aa8; }
+.booking-selection-summary span, .booking-selection-summary small { color: #607b84; font-size: 12px; }
+.booking-payment-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.booking-payment-options > button { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border: 1px solid #c8e1e6; border-radius: 7px; background: #fff; color: #28515d; text-align: left; font: inherit; cursor: pointer; transition: background .15s, border-color .15s; }
+.booking-payment-options > button:hover, .booking-payment-options > button.selected { border-color: #0f8aa8; background: #eefafd; }
+.booking-payment-options > button.selected { box-shadow: inset 0 0 0 1px #0f8aa8; }
+.booking-payment-options p, .booking-payment-options small { margin: 0; font-size: 12px; line-height: 1.5; }
+.booking-credit-balances { display: flex; flex-wrap: wrap; gap: 12px; }
+.booking-credit-balances span { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.booking-credit-balances b { font-size: 19px; color: #087f9f; }
+.pass-choice-grid button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 600px) { .booking-payment-options { grid-template-columns: 1fr; } .course-booking-dialog > footer { flex-wrap: wrap; } }
 .entity-header-actions .detail-edit-action {
   display: inline-flex;
   align-items: center;

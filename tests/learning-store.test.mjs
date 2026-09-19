@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText + '\n//# sourceURL=learning-store.ts';
-const { LearningStore, passWindows, monthCount, malaysiaDay } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { LearningStore, passWindows, monthCount, malaysiaDay, creditCoverage, passOfferCards } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 async function fixture() {
   const db = new DatabaseSync(':memory:');
@@ -120,6 +120,59 @@ async function teachingFixture() {
   f.insert('class_sessions', { id: 'session2', class_run_id: 'run', session_no: 2, starts_at: '2026-09-27 12:00', ends_at: '2026-09-27 13:30' });
   return f;
 }
+
+test('coverage uses each lesson date, expiry and unreserved balance rather than a total', () => {
+  const cards = [
+    { id: 'sept', credit_type: 'onsite', status: 'active', valid_from: '2026-09-01', valid_until: '2026-09-30', onsite_remaining: 12, onsite_available: 1 },
+    { id: 'oct', credit_type: 'onsite', status: 'active', valid_from: '2026-10-01', valid_until: '2026-10-31', onsite_remaining: 12, onsite_available: 12 },
+  ];
+  assert.deepEqual(creditCoverage(cards, ['2026-09-20', '2026-09-27', '2026-10-04'], 'onsite'), { available: 13, covered: 2, required: 3, missing: 1 });
+  assert.equal(creditCoverage(cards, ['2026-09-20'], 'online').available, 0);
+  assert.equal(creditCoverage(passOfferCards({ validity_type: 'calendar_month', onsite_credits: 4, online_credits: 6 }, '2026-09-20', 2), ['2026-09-20', '2026-10-04'], 'online').missing, 0);
+});
+
+test('buying a pass from an online course preserves the selection and completes it once', async () => {
+  const f = await teachingFixture();
+  try {
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'course-context-online', months: 1, runId: 'run', mode: 'online' });
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings WHERE delivery_mode = \'online\'').get().n, 2);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 1);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM learning_credit_events WHERE credit_type = \'online\' AND status = \'reserved\'').get().n, 2);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_enrollments').get().n, 1);
+  } finally { f.close(); }
+});
+
+test('single-lesson selection survives deferred payment without enrolling the whole course', async () => {
+  const f = await teachingFixture();
+  try {
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'lesson-context-later', months: 1, runId: 'run', sessionId: 'session2', mode: 'onsite' });
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 0);
+    await assert.rejects(f.store.completePassBooking(order), /payment/);
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 1);
+    assert.equal(f.db.prepare('SELECT class_session_id FROM class_student_bookings').get().class_session_id, 'session2');
+    assert.equal(f.db.prepare('SELECT status FROM class_enrollments').get().status, 'single_lesson');
+  } finally { f.close(); }
+});
+
+test('a pass that cannot cover the selected dates is rejected before creating an order', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE class_sessions SET starts_at = '2026-10-04 12:00', ends_at = '2026-10-04 13:30' WHERE id = 'session2'");
+    const input = { studentId: 'student', productId: 'monthly', requestKey: 'too-short-period', months: 1, runId: 'run', mode: 'online', start: '2026-09-20' };
+    await assert.rejects(f.store.createPassOrder(input), /does not cover/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_orders').get().n, 0);
+    const order = await f.store.createPassOrder({ ...input, months: 2 });
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 2);
+  } finally { f.close(); }
+});
 
 test('room and class edits persist and reject capacity changes that break reservations', async () => {
   const f = await teachingFixture();

@@ -54,3 +54,13 @@ test("detail editing stays visible on narrow screens and uses shared save behavi
   assert.match(portal, /if \(await onSave\(Object.fromEntries\(new FormData\(event.currentTarget\)\)\)\) onClose\(\)/);
   assert.match(css, /\.entity-header-actions \.detail-edit-action\s*\{\s*display: inline-flex; min-height: 44px;/);
 });
+
+test("pass checkout preserves the course choice and never asks to choose it again", async () => {
+  const portal = await readProjectFile("app/management-portal.tsx");
+  const purchase = portal.slice(portal.indexOf('function PassPurchaseDialog('), portal.indexOf('function StudentCourses('));
+  assert.doesNotMatch(purchase, /Choose your onsite course|setRunId|pass-run-list|Choose later/);
+  assert.match(purchase, /sessionId: target\?\.sessionId, deliveryMode: target\?\.deliveryMode/);
+  assert.match(portal, /Use existing pass balance/);
+  assert.match(portal, /Buy a new pass/);
+  assert.match(portal, /bookingRunId && !passPurchaseOpen/);
+});

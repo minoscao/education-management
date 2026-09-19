@@ -5823,11 +5823,11 @@ async function purchasePass(payload: ActionPayload) {
   const orderId = await learning().createPassOrder({
     studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
     requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
-    start: payload.passStartAt, runId: payload.runId, mode: payload.deliveryMode,
+    start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode,
   });
   if (payload.payNow === true || payload.payNow === "true")
     return await recordPassPayment({ ...payload, passOrderId: orderId });
-  return "Your unpaid order is saved. Credits will be issued after payment.";
+  return { notice: "Your order and course selection are saved. Payment will issue your credits and complete the booking.", bookingPending: false };
 }
 
 
@@ -5838,15 +5838,17 @@ async function recordPassPayment(payload: ActionPayload) {
   await learning().payPass(orderId, payload.method, payload.proofReference, payload.note);
   const order = await row<{ student_id: string; selected_run_id: string | null; delivery_mode: string }>(
     "SELECT student_id, selected_run_id, delivery_mode FROM pass_orders WHERE id = ?", [orderId]);
-  if (!order?.selected_run_id) return "Payment confirmed. Your learning credits are ready.";
-  let body = "Your pass is ready and your course seats are reserved.";
+  if (!order?.selected_run_id) return { notice: "Payment confirmed. Your learning credits are ready.", bookingPending: false };
+  let body = "Payment confirmed. Your selected lessons are booked and your remaining pass balance is updated.";
+  let bookingPending = false;
   try {
-    await learning().enrollCourse(order.student_id, order.selected_run_id, deliveryMode(order.delivery_mode), "pass");
+    await learning().completePassBooking(orderId);
   } catch (error) {
+    bookingPending = true;
     body = "Your pass is ready. Course reservation needs attention: " + (error instanceof Error ? error.message : "Please contact the campus.");
   }
   await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, 'Pass order updated', ?, 'unread') ON CONFLICT(id) DO UPDATE SET body = excluded.body, status = 'unread'", [orderId + ":notice", order.student_id, body]);
-  return body;
+  return { notice: body, bookingPending };
 }
 
 async function ensurePassData() {
@@ -6621,8 +6623,8 @@ export async function POST(request: Request) {
     if (payload.action === "enrollStudentWithPayment")
       await enrollStudentWithPayment(payload);
     if (payload.action === "purchasePass" || payload.action === "recordPassPayment") {
-      const notice = payload.action === "purchasePass" ? await purchasePass(payload) : await recordPassPayment(payload);
-      return Response.json({ ...(await (await readPortal(true)).json() as Row), notice });
+      const result = payload.action === "purchasePass" ? await purchasePass(payload) : await recordPassPayment(payload);
+      return Response.json({ ...(await (await readPortal(true)).json() as Row), ...result });
     }
     if (payload.action === "bookLesson")
       await learning().bookLesson(payload.studentId ?? "", payload.sessionId ?? "", deliveryMode(payload.deliveryMode));

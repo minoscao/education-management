@@ -56,7 +56,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { malaysiaDay, monthCount } from "./lib/learning-store";
+import { creditCoverage, malaysiaDay, monthCount, passOfferCards } from "./lib/learning-store";
 import { useDialogFocus } from "./lib/use-dialog-focus";
 import { useClock } from "./lib/use-clock";
 import { useStoredChoice } from "./lib/use-stored-choice";
@@ -66,6 +66,7 @@ type Row = Record<string, unknown>;
 type Language = "en" | "zh";
 type Role = "admin" | "teacher" | "student";
 type StudentTheme = "sky" | "ocean" | "mint";
+type BookingTarget = { runId: string; sessionId?: string; deliveryMode: "onsite" | "online" };
 type View =
   | "dashboard"
   | "calendar"
@@ -683,8 +684,8 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
   const selectedTeacherId = get(data.teachers.find(item => get(item, "id") === preferredTeacherId) ?? data.teachers[0], "id");
   const [studentTheme, setStudentTheme] = useStoredChoice<StudentTheme>("student-portal-theme", ["sky", "ocean", "mint"], "sky");
   const [passPurchaseOpen, setPassPurchaseOpen] = useState(false);
-  const [passPurchaseRunId, setPassPurchaseRunId] = useState("");
-  const [passPurchaseMonths, setPassPurchaseMonths] = useState(1);
+  const [passPurchaseTarget, setPassPurchaseTarget] = useState<BookingTarget | null>(null);
+  const [bookingDelivery, setBookingDelivery] = useState<"onsite" | "online">("onsite");
   const [bookingRunId, setBookingRunId] = useState("");
   const [bookingSessionId, setBookingSessionId] = useState("");
   const t = copy[language];
@@ -769,6 +770,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
         error?: string;
         joinUrl?: string;
         notice?: string;
+        bookingPending?: boolean;
         attendanceUpdate?: {
           studentBookingId?: string;
           status?: string;
@@ -804,7 +806,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
       if (payload.attendance.length) setAttendanceLoaded(true);
       setMessage(payload.notice || (language === "en" ? "Saved" : "已保存"));
       if (payload.joinUrl) window.location.assign(payload.joinUrl);
-      return true;
+      return !payload.bookingPending;
     } catch (error) {
       if (previousAttendance)
         setData((current) => ({ ...current, attendance: previousAttendance }));
@@ -1193,7 +1195,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
                 studentId: selectedStudentId,
               })
             }
-            onBuyPass={() => setPassPurchaseOpen(true)}
+            onBuyPass={() => { setPassPurchaseTarget(null); setPassPurchaseOpen(true); }}
           />
         ) : null}
         {view === "studentPasses" ? (
@@ -1202,7 +1204,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
             run={run}
             busy={busy}
             studentId={selectedStudentId}
-            onBuy={() => setPassPurchaseOpen(true)}
+            onBuy={() => { setPassPurchaseTarget(null); setPassPurchaseOpen(true); }}
           />
         ) : null}
         {view === "studentCourses" ? (
@@ -1222,7 +1224,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           <StudentCourseBooking
             data={data}
             studentId={selectedStudentId}
-            onChoose={(id) => setBookingRunId(id)}
+            onChoose={(id) => { setPassPurchaseTarget(null); setBookingDelivery("onsite"); setBookingSessionId(""); setBookingRunId(id); }}
           />
         ) : null}
         {view === "studentLessonBooking" ? (
@@ -1231,7 +1233,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
             studentId={selectedStudentId}
             onChoose={(id) => {
               const session = data.sessions.find(item => get(item, "id") === id);
-              if (session) { setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
+              if (session) { setPassPurchaseTarget(null); setBookingDelivery("onsite"); setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
             }}
           />
         ) : null}
@@ -1269,16 +1271,14 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           studentId={selectedStudentId}
           busy={busy}
           run={run}
-          initialRunId={passPurchaseRunId}
-          initialMonths={passPurchaseMonths}
+          target={passPurchaseTarget}
           onClose={() => {
             setPassPurchaseOpen(false);
-            setPassPurchaseRunId("");
-            setPassPurchaseMonths(1);
           }}
+          onComplete={() => { setPassPurchaseOpen(false); setPassPurchaseTarget(null); setBookingRunId(""); setBookingSessionId(""); }}
         />
       ) : null}
-      {bookingRunId ? (
+      {bookingRunId && !passPurchaseOpen ? (
         <CourseBookingDialog
           data={data}
           studentId={selectedStudentId}
@@ -1286,14 +1286,14 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           sessionId={bookingSessionId}
           busy={busy}
           run={run}
-          onBuyPass={(runId, months) => {
-            setBookingRunId("");
-            setBookingSessionId("");
-            setPassPurchaseRunId(runId);
-            setPassPurchaseMonths(months);
+          delivery={bookingDelivery}
+          onDeliveryChange={setBookingDelivery}
+          resumePayment={Boolean(passPurchaseTarget)}
+          onBuyPass={(target) => {
+            setPassPurchaseTarget(target);
             setPassPurchaseOpen(true);
           }}
-          onClose={() => { setBookingRunId(""); setBookingSessionId(""); }}
+          onClose={() => { setBookingRunId(""); setBookingSessionId(""); setPassPurchaseTarget(null); }}
         />
       ) : null}
       {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
@@ -2049,342 +2049,88 @@ function StudyReservations({ data, studentId, busy, run }: { data: PortalData; s
 }
 
 function PassPurchaseDialog({
-  data,
-  studentId,
-  busy,
-  run,
-  initialRunId,
-  initialMonths,
-  onClose,
+  data, studentId, busy, run, target, onClose, onComplete,
 }: {
-  data: PortalData;
-  studentId: string;
-  busy: boolean;
+  data: PortalData; studentId: string; busy: boolean;
   run: (action: string, values?: Row) => Promise<boolean>;
-  initialRunId: string;
-  initialMonths: number;
-  onClose: () => void;
+  target: BookingTarget | null; onClose: () => void; onComplete: () => void;
 }) {
   const clockNow = useClock();
   const dialogRef = useDialogFocus<HTMLElement>(onClose, busy);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [requestKey] = useState(() => crypto.randomUUID());
-  const [productId, setProductId] = useState(initialRunId ? "pass-monthly" : get(data.passProducts[0], "id"));
-  const [runId, setRunId] = useState(initialRunId);
-  const [reservationMonths, setReservationMonths] = useState(initialMonths);
-  const mode = "onsite";
-  const [method, setMethod] = useState("duitnow_qr");
-  const [proofReference, setProofReference] = useState("");
-  const [note, setNote] = useState("");
-  const product = data.passProducts.find(
-    (item) => get(item, "id") === productId,
-  );
-  const openRuns = data.runs
-    .filter((item) => !["finished", "cancelled"].includes(get(item, "status")))
-    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const canLockOnsite = Number(product?.onsite_credits ?? 0) > 0 && get(product, "validity_type") === "calendar_month";
-  const selectedRun = openRuns.find((item) => get(item, "id") === runId);
-  const selectedSessions = data.sessions
-    .filter((item) => get(item, "class_run_id") === runId && get(item, "status") !== "cancelled" && asTime(item.starts_at) > clockNow)
-    .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const coursePeriod = selectedSessions.length
-    ? `${malaysiaDate(selectedSessions[0].starts_at)} - ${malaysiaDate(selectedSessions[selectedSessions.length - 1].starts_at)}`
-    : "Course dates will be confirmed after you choose a class";
-  const courseMonths = selectedSessions.length ? monthCount(get(selectedSessions[0], "starts_at"), get(selectedSessions.at(-1), "starts_at")) : 1;
-  function submit(payNow: boolean) {
-    if (!product) return;
-    void run("purchasePass", {
-      requestKey,
-      studentId,
-      passProductId: productId,
-      runId: canLockOnsite && reservationMonths >= courseMonths ? runId || undefined : undefined,
-      deliveryMode: "onsite",
-      reservationMonths,
-      passStartAt: selectedSessions.find(session => asTime(session.starts_at) > Date.now())?.starts_at,
-      payNow,
-      method,
-      proofReference,
-      note,
-    }).then(saved => { if (saved) onClose(); });
+  const [method, setMethod] = useState("pay_at_campus");
+  const [error, setError] = useState("");
+  const selectedRun = data.runs.find(item => get(item, "id") === target?.runId);
+  const selectedSessions = data.sessions.filter(session =>
+    get(session, "class_run_id") === target?.runId &&
+    (!target?.sessionId || get(session, "id") === target.sessionId) &&
+    !["cancelled", "completed"].includes(get(session, "status")) && asTime(session.starts_at) > clockNow,
+  ).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
+  const firstDay = selectedSessions.length ? get(selectedSessions[0], "starts_at").slice(0, 10) : malaysiaDay();
+  const months = selectedSessions.length ? monthCount(firstDay, get(selectedSessions.at(-1), "starts_at")) : 1;
+  const cards = data.passes.filter(card => get(card, "student_id") === studentId);
+  const dates = selectedSessions.filter(session => !data.bookings.some(booking =>
+    get(booking, "student_id") === studentId && get(booking, "class_session_id") === get(session, "id") &&
+    get(booking, "status") === "booked" && get(booking, "delivery_mode") === target?.deliveryMode,
+  )).map(session => get(session, "starts_at"));
+  const offers = data.passProducts.filter(product => get(product, "status") === "active").map(product => {
+    const periods = get(product, "validity_type") === "calendar_month" ? months : 1;
+    const coverage = target ? creditCoverage([...cards, ...passOfferCards(product, firstDay, periods)], dates, target.deliveryMode) : null;
+    const suitable = !target || Boolean(dates.length && !coverage?.missing && Number(product[target.deliveryMode + "_credits"]) > 0);
+    return { product, periods, coverage, suitable };
+  });
+  const [productId, setProductId] = useState(() => get(
+    offers.find(offer => offer.suitable && get(offer.product, "validity_type") === "calendar_month")?.product ??
+    offers.find(offer => offer.suitable)?.product, "id",
+  ));
+  const chosen = offers.find(offer => get(offer.product, "id") === productId);
+  const existingOrder = data.passOrders.find(order => get(order, "request_key") === studentId + ":" + requestKey);
+  const paidOrder = get(existingOrder, "status") === "paid";
+  async function submit() {
+    if (!chosen || busy) return;
+    setError("");
+    const saved = paidOrder
+      ? await run("recordPassPayment", { passOrderId: get(existingOrder, "id") })
+      : await run("purchasePass", {
+          requestKey, studentId, passProductId: productId,
+          runId: target?.runId, sessionId: target?.sessionId, deliveryMode: target?.deliveryMode,
+          reservationMonths: chosen.periods, passStartAt: firstDay,
+          payNow: method !== "pay_at_campus", method,
+        });
+    if (saved) onComplete();
+    else setError("The booking is not complete. Check the message above. A paid order will not be charged again.");
   }
-  return (
-    <div
-      className="payment-dialog-backdrop pass-purchase-backdrop"
-      role="presentation"
-      onMouseDown={onClose}
-    >
-      <section
-        ref={dialogRef}
-        className="pass-purchase-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Buy learning pass"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header>
-          <div>
-            <span>LEARNING PASS</span>
-            <h3>
-              {step === 1
-                ? "Choose your learning credits"
-                    : step === 2
-                  ? "Choose your onsite course"
-                    : step === 3
-                    ? "Reserve your course time"
-                    : "Review and pay"}
-            </h3>
-            <p>Step {step} of 4</p>
-          </div>
-          <button
-            className="header-icon"
-            type="button"
-            onClick={onClose}
-            title="Close"
-          >
-            <X size={17} />
-          </button>
-        </header>
-        <div className="pass-stepper">
-          {[1, 2, 3, 4].map((value) => (
-            <i
-              key={value}
-              className={value === step ? "active" : value < step ? "done" : ""}
-            >
-              {value}
-            </i>
-          ))}
-        </div>
-        <main>
-          {step === 1 ? (
-            <div className="pass-choice-grid">
-              {data.passProducts.map((item) => (
-                <button
-                  type="button"
-                  key={get(item, "id")}
-                  className={productId === get(item, "id") ? "selected" : ""}
-                  onClick={() => {
-                    setProductId(get(item, "id"));
-                    if (get(item, "validity_type") !== "calendar_month") setReservationMonths(1);
-                    if (!Number(item.onsite_credits) || get(item, "validity_type") !== "calendar_month") setRunId("");
-                  }}
-                >
-                  <Banknote size={21} />
-                  <strong>{get(item, "name")}</strong>
-                  <p>{get(item, "description")}</p>
-                  <div>
-                    <span>{get(item, "onsite_credits")} onsite</span>
-                    <span>{get(item, "online_credits")} online</span>
-                    <span>{get(item, "study_credits")} study</span>
-                  </div>
-                  <b>{amount(item.price)}</b>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {step === 2 ? (
-            <div className="pass-class-step">
-              <p className="step-intro">
-                You can book each lesson manually later, but we recommend
-                locking an onsite class now so you have a seat.
-              </p>
-              <div className="pass-run-list">
-                {openRuns.map((item) => (
-                  <button
-                    type="button"
-                    key={get(item, "id")}
-                    className={runId === get(item, "id") ? "selected" : ""}
-                    style={eventStyle(item)}
-                    onClick={() => setRunId(get(item, "id"))}
-                  >
-                    <CourseVisual
-                      course={{
-                        title: get(item, "course_title"),
-                        subject: get(item, "subject"),
-                        display_color: get(item, "run_course_color"),
-                      }}
-                    />
-                    <div>
-                      <strong>{get(item, "course_title")}</strong>
-                      <p>{get(item, "name")} · {get(item, "teacher_name") || "Teacher to be confirmed"}</p>
-                      <small>
-                        {get(item, "student_count")}/{get(item, "capacity")}{" "}
-                        places filled · {get(item, "session_count")} lessons
-                      </small>
-                    </div>
-                    <aside className="pass-run-seat">
-                      <strong>{Math.max(0, Number(get(item, "capacity")) - Number(get(item, "student_count")))}</strong>
-                      <span>seats left</span>
-                      {Number(get(item, "capacity")) > 0 && (Number(get(item, "capacity")) - Number(get(item, "student_count"))) / Number(get(item, "capacity")) < 0.2 ? <em>Few left</em> : null}
-                    </aside>
-                    <ChevronRight size={17} />
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className={`skip-course-button ${!runId ? "selected" : ""}`}
-                onClick={() => setRunId("")}
-              >
-                I will choose a class later <ChevronRight size={16} />
-              </button>
-            </div>
-          ) : null}
-          {step === 3 ? (
-            <div className="pass-mode-step">
-              <p className="step-intro">
-                {selectedRun
-                  ? "Choose passes for the full course period, or buy one month and book individual lessons later."
-                  : "You have not locked an onsite course yet. Your credits will be ready when you choose one."}
-              </p>
-              {selectedRun ? <section className="pass-reservation-course" style={eventStyle(selectedRun)}>
-                <CourseVisual course={{ title: get(selectedRun, "course_title"), subject: get(selectedRun, "subject"), display_color: get(selectedRun, "run_course_color") }} />
-                <div><span>CURRENT COURSE</span><strong>{get(selectedRun, "course_title")}</strong><p>{get(selectedRun, "name")}</p><small>{coursePeriod}</small></div>
-              </section> : null}
-              {selectedRun ? <div className="pass-mode-grid">
-                <button
-                  type="button"
-                  className={reservationMonths === courseMonths ? "selected" : ""}
-                  onClick={() => setReservationMonths(courseMonths)}
-                >
-                  <CalendarDays size={24} />
-                  <strong>Cover the course: {courseMonths} month{courseMonths === 1 ? "" : "s"}</strong>
-                  <span>
-                    Pay {amount(Number(product?.price || 0) * courseMonths)} in total. Each month has its own credits and expiry.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={reservationMonths === 1 && courseMonths > 1 ? "selected" : ""}
-                  disabled={courseMonths === 1}
-                  onClick={() => setReservationMonths(1)}
-                >
-                  <Clock3 size={24} />
-                  <strong>Buy one month only</strong>
-                  <span>
-                    Book individual lessons later. This does not reserve the full course.
-                  </span>
-                </button>
-              </div> : null}
-            </div>
-          ) : null}
-          {step === 4 ? (
-            <div className="pass-checkout-step">
-              <section className="pass-checkout-summary">
-                <div>
-                  <span>PASS</span>
-                  <strong>{get(product, "name")}</strong>
-                </div>
-                <b>{amount(Number(product?.price || 0) * reservationMonths)}</b>
-                <p>
-                  {runId
-                    ? `Class selected: ${get(
-                        openRuns.find((item) => get(item, "id") === runId),
-                        "course_title",
-                      )} · Onsite`
-                    : "Class selection saved for later"}
-                </p>
-              </section>
-              <label className="form-field">
-                <span>Payment method</span>
-                <select
-                  value={method}
-                  onChange={(event) => setMethod(event.target.value)}
-                >
-                  <option value="duitnow_qr">DuitNow QR</option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="fpx">FPX / online banking</option>
-                  <option value="tng_ewallet">TNG eWallet</option>
-                  <option value="grabpay">GrabPay</option>
-                  <option value="cash">Cash</option>
-                  <option value="pay_at_campus">Pay at campus later</option>
-                </select>
-              </label>
-              <label className="form-field">
-                <span>Payment reference</span>
-                <input
-                  value={proofReference}
-                  onChange={(event) => setProofReference(event.target.value)}
-                  placeholder="Optional reference"
-                />
-              </label>
-              <label className="form-field">
-                <span>Note</span>
-                <input
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Optional note"
-                />
-              </label>
-            </div>
-          ) : null}
-        </main>
-        <footer>
-          {step > 1 ? (
-            <button
-              className="quiet-button"
-              type="button"
-              onClick={() => setStep((value) => value - 1)}
-            >
-              Back
-            </button>
-          ) : (
-            <span />
-          )}
-          {step === 2 ? (
-            <div className="pass-checkout-actions">
-              <button
-                className="quiet-button"
-                type="button"
-                onClick={() => {
-                  setRunId("");
-                  setStep(4);
-                }}
-              >
-                Choose later
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={canLockOnsite && !runId}
-                onClick={() => setStep(3)}
-              >
-                Continue <ChevronRight size={16} />
-              </button>
-            </div>
-          ) : step < 4 ? (
-            <button
-              className="primary-button"
-              type="button"
-              disabled={!product}
-              onClick={() => setStep((value) => value + 1)}
-            >
-              Continue <ChevronRight size={16} />
-            </button>
-          ) : (
-            <div className="pass-checkout-actions">
-              <button
-                className="quiet-button"
-                type="button"
-                disabled={busy}
-                onClick={() => submit(false)}
-              >
-                Pay at campus later
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={busy}
-                onClick={() => submit(true)}
-              >
-                <Check size={16} />
-                Demo: confirm {amount(Number(product?.price || 0) * reservationMonths)}
-              </button>
-            </div>
-          )}
-        </footer>
-      </section>
-    </div>
-  );
+  return <div className="payment-dialog-backdrop pass-purchase-backdrop" role="presentation" onMouseDown={() => { if (!busy) onClose(); }}>
+    <section ref={dialogRef} className="pass-purchase-dialog" role="dialog" aria-modal="true" aria-label="Buy learning pass" onMouseDown={event => event.stopPropagation()}>
+      <header><div><span>BUY A PASS</span><h3>{step === 1 ? "Choose your pass" : "Review and pay"}</h3><p>{target ? "Your course selection is saved" : "Add learning credits"}</p></div><button className="header-icon" type="button" disabled={busy} onClick={onClose} aria-label="Close"><X size={17} /></button></header>
+      <main>
+        {target && selectedRun ? <section className="booking-selection-summary">
+          <BookOpen size={21} /><div><strong>{get(selectedRun, "course_title")}</strong><span>{get(selectedRun, "name")}</span><small>{target.deliveryMode === "online" ? "Live online" : "Onsite class"} · {selectedSessions.length} lesson{selectedSessions.length === 1 ? "" : "s"} · {malaysiaDate(firstDay)}</small></div><Check size={18} />
+        </section> : null}
+        {error ? <p className="dialog-error" role="alert">{error}</p> : null}
+        {step === 1 ? <div className="pass-choice-grid">{offers.map(offer => <button
+          key={get(offer.product, "id")} type="button"
+          className={productId === get(offer.product, "id") ? "selected" : ""}
+          disabled={busy || paidOrder || !offer.suitable}
+          onClick={() => setProductId(get(offer.product, "id"))}
+        >
+          <Banknote size={21} /><strong>{get(offer.product, "name")}</strong>
+          <p>{get(offer.product, "validity_type") === "calendar_month" ? offer.periods + " calendar month(s), from the 1st" : get(offer.product, "validity_days") + " days from " + malaysiaDate(firstDay)}</p>
+          <div><span>{Number(offer.product.onsite_credits) * offer.periods} onsite</span><span>{Number(offer.product.online_credits) * offer.periods} online</span><span>{Number(offer.product.study_credits) * offer.periods} study</span></div>
+          <b>{amount(Number(offer.product.price) * offer.periods)}</b>
+          {!offer.suitable ? <small>Not enough valid credits for this selection</small> : null}
+        </button>)}</div> : chosen ? <div className="pass-checkout-step">
+          <section className="pass-checkout-summary"><div><span>PASS</span><strong>{get(chosen.product, "name")}</strong></div><b>{amount(Number(chosen.product.price) * chosen.periods)}</b><p>{chosen.periods} period(s) · {Number(chosen.product.onsite_credits) * chosen.periods} onsite · {Number(chosen.product.online_credits) * chosen.periods} online · {Number(chosen.product.study_credits) * chosen.periods} study</p></section>
+          {paidOrder ? <p className="booking-already-purchased">Pass paid. Retry your saved booking without paying again.</p> : <label className="form-field"><span>Payment</span><select value={method} disabled={busy} onChange={event => setMethod(event.target.value)}><option value="pay_at_campus">Pay at campus later</option><option value="demo">Demo: confirm payment now</option></select></label>}
+        </div> : null}
+      </main>
+      <footer><button type="button" className="quiet-button" disabled={busy || paidOrder} onClick={() => step === 2 ? setStep(1) : onClose()}><ChevronLeft size={16} />Back</button>
+        {step === 1 ? <button type="button" className="primary-button" disabled={busy || !chosen?.suitable} onClick={() => setStep(2)}>Continue <ChevronRight size={16} /></button>
+        : <button type="button" className="primary-button" disabled={busy || (!paidOrder && !chosen?.suitable)} onClick={() => void submit()}><Check size={16} />{busy ? "Saving..." : paidOrder ? "Retry booking" : method === "pay_at_campus" ? "Save order" : target ? "Confirm payment & book" : "Confirm payment"}</button>}
+      </footer>
+    </section>
+  </div>;
 }
 
 function StudentCourses({
@@ -2538,7 +2284,7 @@ function StudentCourseBooking({
           {availableRuns.map((item) => {
             const enrollment = data.enrollments.find(row => get(row, "student_id") === studentId && get(row, "class_run_id") === get(item, "id") && get(row, "status") === "enrolled");
             const used = enrolled.has(get(item, "id")) && Boolean(get(enrollment, "pass_id") || get(enrollment, "invoice_status") === "paid");
-            const pending = Boolean(enrollment && !used);
+            const pending = Boolean((enrollment && !used) || pendingPassForSelection(data, studentId, get(item, "id")));
             const capacity = Number(get(item, "capacity"));
             const filled = Number(get(item, "student_count"));
             const seats = Math.max(0, capacity - filled);
@@ -2666,67 +2412,86 @@ function StudentLessonBooking({
   );
 }
 
+function pendingPassForSelection(data: PortalData, studentId: string, runId: string, sessionId = "") {
+  return data.passOrders.find(order => {
+    if (get(order, "student_id") !== studentId || get(order, "selected_run_id") !== runId || get(order, "status") === "paid") return false;
+    try {
+      const snapshot = JSON.parse(get(order, "offer_snapshot") || "{}");
+      return (snapshot.booking?.sessionId || "") === sessionId;
+    } catch { return false; }
+  });
+}
+
 function CourseBookingDialog({
   data, studentId, runId, sessionId = "", busy, run, onBuyPass, onClose,
+  delivery, onDeliveryChange, resumePayment = false,
 }: {
   data: PortalData; studentId: string; runId: string; sessionId?: string; busy: boolean;
   run: (action: string, values?: Row) => Promise<boolean>;
-  onBuyPass: (runId: string, months: number) => void; onClose: () => void;
+  onBuyPass: (target: BookingTarget) => void; onClose: () => void;
+  delivery: "onsite" | "online"; onDeliveryChange: (mode: "onsite" | "online") => void; resumePayment?: boolean;
 }) {
   const clockNow = useClock();
   const dialogRef = useDialogFocus<HTMLElement>(onClose, busy);
-  const [delivery, setDelivery] = useState<"onsite" | "online">("onsite");
+  const [step, setStep] = useState<2 | 3>(resumePayment ? 3 : 2);
+  const [payment, setPayment] = useState<"balance" | "new">("balance");
   const [error, setError] = useState("");
   const item = data.runs.find(row => get(row, "id") === runId);
-  const allSessions = data.sessions.filter(row => get(row, "class_run_id") === runId && get(row, "status") !== "cancelled").sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
+  const allSessions = data.sessions.filter(row => get(row, "class_run_id") === runId && !["cancelled", "completed"].includes(get(row, "status"))).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
   const sessions = sessionId ? allSessions.filter(row => get(row, "id") === sessionId) : allSessions.filter(row => asTime(row.starts_at) > clockNow);
   const first = sessions[0];
   const last = sessions.at(-1);
-  const day = first ? String(first.starts_at).slice(0, 10) : malaysiaDay();
-  const passMonths = first && last ? monthCount(get(first, "starts_at"), get(last, "starts_at")) : 1;
-  const validCards = data.passes.filter(pass => get(pass, "student_id") === studentId && get(pass, "status") === "active" && get(pass, "valid_from") <= day && get(pass, "valid_until") >= day);
-  const balances = { onsite: 0, online: 0 };
-  for (const pass of validCards) for (const mode of ["onsite", "online"] as const) balances[mode] += Number(pass[mode + "_available"] ?? pass[mode + "_remaining"] ?? 0);
+  const cards = data.passes.filter(pass => get(pass, "student_id") === studentId);
+  const targetDates = sessions.filter(session => !data.bookings.some(booking => get(booking, "student_id") === studentId && get(booking, "class_session_id") === get(session, "id") && get(booking, "status") === "booked" && get(booking, "delivery_mode") === delivery)).map(session => get(session, "starts_at"));
+  const coverage = { onsite: creditCoverage(cards, targetDates, "onsite"), online: creditCoverage(cards, targetDates, "online") };
+  const canUseBalance = coverage[delivery].missing === 0 && sessions.length > 0;
   const enrollment = data.enrollments.find(row => get(row, "student_id") === studentId && get(row, "class_run_id") === runId && get(row, "status") === "enrolled");
   const paid = Boolean(enrollment && (get(enrollment, "invoice_status") === "paid" || get(enrollment, "pass_id")));
   const unpaid = Boolean(enrollment && !paid);
+  const pendingPass = pendingPassForSelection(data, studentId, runId, sessionId);
+  const awaitingPayment = unpaid || Boolean(pendingPass);
   const booking = sessionId ? data.bookings.find(row => get(row, "student_id") === studentId && get(row, "class_session_id") === sessionId && get(row, "status") === "booked") : undefined;
   const owns = sessionId ? Boolean(booking) : paid;
-  const monthly = data.passProducts.find(row => get(row, "id") === "pass-monthly");
-  const direct = allSessions.length ? Math.round(Number(item?.price || 0) * sessions.length / allSessions.length * 100) / 100 : 0;
   const teacherId = first ? get(first, "teacher_id") : get(item, "teacher_id");
   const teacher = data.teachers.find(row => get(row, "id") === teacherId) ?? (get(first, "teacher_name") ? { id: teacherId, name: get(first, "teacher_name") } : undefined);
   async function submit(action: string, values: Row) {
     setError("");
-    const saved = await run(action, values);
-    if (saved) onClose();
-    else setError("Unable to complete this request. Check the message above, then try again.");
+    if (await run(action, values)) onClose();
+    else setError("Your booking was not completed. Check the message above and try again.");
   }
   if (!item) return null;
-  return (
-    <div className="payment-dialog-backdrop" onMouseDown={() => { if (!busy) onClose(); }}>
-      <section ref={dialogRef} className="course-booking-dialog" role="dialog" aria-modal="true" aria-label={sessionId ? "Book a lesson" : "Book a course"} onMouseDown={event => event.stopPropagation()}>
-        <header><div><span>{sessionId ? "LESSON BOOKING" : "COURSE BOOKING"}</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")} · {first && last ? `${malaysiaDate(first.starts_at)}${sessionId ? " · " + timePart(first.starts_at) : " - " + malaysiaDate(last.starts_at)}` : "No upcoming lessons"}</p></div><button type="button" className="header-icon" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
-        <main>
-          {teacher ? <div className="booking-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><div><strong>{get(teacher, "name")}</strong><p>{get(teacher, "bio")}</p></div></div> : null}
-          {error ? <p className="dialog-error" role="alert">{error}</p> : null}
-          {owns ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>{sessionId ? get(booking, "delivery_mode") === "online" ? "Online lesson" : "Onsite lesson" : "Your lessons are in My timetable."}</p></div></section>
-          : unpaid ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment</strong><p>{amount(Number(enrollment?.total_amount || 0) - Number(enrollment?.paid_amount || 0))} remaining · Pay at campus</p></div></section>
-          : <>
-            <section className="booking-delivery">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" className={delivery === mode ? "selected" : ""} aria-pressed={delivery === mode} onClick={() => setDelivery(mode)}>{mode === "onsite" ? <Building2 size={20} /> : <BookOpen size={20} />}<strong>{mode === "onsite" ? "Onsite class" : "Live online"}</strong><span>{balances[mode]} available for this date</span></button>)}</section>
-            {!sessionId ? <section className="booking-price-compare"><article><span>BUY THIS COURSE</span><strong>{amount(direct)}</strong><p>{sessions.length} upcoming lessons</p><button className="primary-button" type="button" disabled={busy || !sessions.length} onClick={() => void submit("enrollStudentWithPayment", { studentId, runId, deliveryMode: delivery, contractedFee: direct, payNow: false })}>Enroll · pay later</button></article><article className="featured"><span>{passMonths}-MONTH LEARNING PASS</span><strong>{amount(Number(monthly?.price || 0) * passMonths)}</strong><p>{Number(monthly?.onsite_credits || 0) * passMonths} onsite + {Number(monthly?.online_credits || 0) * passMonths} online + {Number(monthly?.study_credits || 0) * passMonths} study visits</p><button className="quiet-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Choose Pass</button></article></section> : null}
-          </>}
-        </main>
-        <footer>
-          {booking && get(booking, "delivery_mode") === "online" ? <button className="primary-button" disabled={busy} onClick={() => void submit("useOnlineCredit", { studentId, sessionId })}><DoorOpen size={16} />Join online lesson</button> : null}
-          {booking && first && asTime(first.starts_at) > clockNow ? <button className="quiet-button" disabled={busy} onClick={() => void submit("requestLeave", { studentId, sessionId })}>Cancel this lesson</button> : null}
-          {owns ? <button className="quiet-button" onClick={onClose}>Close</button> : unpaid ? <button className="primary-button" disabled={busy} onClick={() => void submit("recordPayment", { invoiceId: get(enrollment, "invoice_id"), method: "demo", note: "Demo payment" })}>Demo: confirm payment</button>
-          : balances[delivery] > 0 ? <button className="primary-button" disabled={busy || !sessions.length} onClick={() => void submit(sessionId ? "bookLesson" : "bookCourseWithCredit", { studentId, runId, sessionId, deliveryMode: delivery })}><Check size={16} />{sessionId ? "Book this lesson" : "Reserve course with pass"}</button>
-          : <button className="primary-button" onClick={() => onBuyPass(sessionId ? "" : runId, passMonths)}>Buy a pass</button>}
-        </footer>
-      </section>
-    </div>
-  );
+  return <div className="payment-dialog-backdrop" onMouseDown={() => { if (!busy) onClose(); }}>
+    <section ref={dialogRef} className="course-booking-dialog" role="dialog" aria-modal="true" aria-label={sessionId ? "Book a lesson" : "Book a course"} onMouseDown={event => event.stopPropagation()}>
+      <header><div><span>{sessionId ? "LESSON BOOKING" : "COURSE BOOKING"}</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")}</p>{!owns && !awaitingPayment ? <small>Step {step} of 3 · {step === 2 ? "Choose how to attend" : "Choose how to pay"}</small> : null}</div><button type="button" className="header-icon" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
+      <main>
+        <div className="booking-selection-summary"><CalendarDays size={20} /><div><strong>{first && last ? malaysiaDate(first.starts_at) + (sessionId ? " · " + timePart(first.starts_at) : " - " + malaysiaDate(last.starts_at)) : "No upcoming lessons"}</strong><small>{sessions.length} lesson{sessions.length === 1 ? "" : "s"}{step === 3 ? " · " + (delivery === "onsite" ? "Onsite" : "Live online") : ""}</small></div></div>
+        {teacher ? <div className="booking-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><div><strong>{get(teacher, "name")}</strong><p>{get(teacher, "bio")}</p></div></div> : null}
+        {error ? <p className="dialog-error" role="alert">{error}</p> : null}
+        {owns ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>Your lessons are in My timetable.</p></div></section>
+        : awaitingPayment ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment</strong><p>{amount(Number((pendingPass || enrollment)?.total_amount || 0) - Number((pendingPass || enrollment)?.paid_amount || 0))} remaining · Pay at campus</p>{pendingPass ? <small>{get(pendingPass, "product_name")} · {get(pendingPass, "delivery_mode") === "online" ? "Live online" : "Onsite"} · Course selection saved</small> : null}</div></section>
+        : step === 2 ? <section className="booking-delivery" aria-label="Attendance mode">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" disabled={busy} className={delivery === mode ? "selected" : ""} aria-pressed={delivery === mode} onClick={() => onDeliveryChange(mode)}>{mode === "onsite" ? <Building2 size={20} /> : <BookOpen size={20} />}<strong>{mode === "onsite" ? "Onsite class" : "Live online"}</strong></button>)}</section>
+        : <section className="booking-payment-options" aria-label="Payment choice">
+          <button className={payment === "balance" ? "selected" : ""} type="button" aria-pressed={payment === "balance"} disabled={busy} onClick={() => setPayment("balance")}>
+            <Banknote size={21} /><strong>Use existing pass balance</strong>
+            <div className="booking-credit-balances"><span><Building2 size={16} /><b>{coverage.onsite.available}</b> onsite</span><span><BookOpen size={16} /><b>{coverage.online.available}</b> online</span></div>
+            <small>Available for the selected lesson dates</small>
+            <p>{coverage[delivery].required} {delivery} credits needed{canUseBalance ? "" : " · " + coverage[delivery].missing + " more needed"}</p>
+          </button>
+          <button className={payment === "new" ? "selected" : ""} type="button" aria-pressed={payment === "new"} disabled={busy} onClick={() => setPayment("new")}><Plus size={21} /><strong>Buy a new pass</strong><p>Keep this course and attendance mode</p></button>
+        </section>}
+      </main>
+      <footer>
+        {booking && get(booking, "delivery_mode") === "online" ? <button className="primary-button" disabled={busy} onClick={() => void submit("useOnlineCredit", { studentId, sessionId })}><DoorOpen size={16} />Join online lesson</button> : null}
+        {booking && first && asTime(first.starts_at) > clockNow ? <button className="quiet-button" disabled={busy} onClick={() => void submit("requestLeave", { studentId, sessionId })}>Cancel this lesson</button> : null}
+        {owns ? <button className="quiet-button" onClick={onClose}>Close</button> : awaitingPayment ? <button className="primary-button" disabled={busy} onClick={() => void submit(pendingPass ? "recordPassPayment" : "recordPayment", { passOrderId: get(pendingPass, "id"), invoiceId: get(enrollment, "invoice_id"), method: "demo", note: "Demo payment" })}>Demo: confirm payment</button> : <>
+          <button type="button" className="quiet-button" disabled={busy} onClick={() => step === 3 ? setStep(2) : onClose()}><ChevronLeft size={16} />Back</button>
+          {step === 2 ? <button type="button" className="primary-button" disabled={busy || !sessions.length || Boolean(first && asTime(first.starts_at) <= clockNow)} onClick={() => setStep(3)}>Continue <ChevronRight size={16} /></button>
+          : payment === "new" ? <button type="button" className="primary-button" disabled={busy || !sessions.length} onClick={() => onBuyPass({ runId, sessionId: sessionId || undefined, deliveryMode: delivery })}>Choose pass <ChevronRight size={16} /></button>
+          : <button type="button" className="primary-button" disabled={busy || !canUseBalance} onClick={() => void submit(sessionId ? "bookLesson" : "bookCourseWithCredit", { studentId, runId, sessionId, deliveryMode: delivery })}><Check size={16} />Confirm booking</button>}
+        </>}
+      </footer>
+    </section>
+  </div>;
 }
 
 function StudentTimetableV2({

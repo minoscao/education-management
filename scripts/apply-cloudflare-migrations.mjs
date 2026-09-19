@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { shouldMigrateRemote } from "./cloudflare-build-context.mjs";
 
 const ROOT = process.cwd();
 const WRANGLER_CONFIG = resolve(ROOT, "wrangler.jsonc");
@@ -9,14 +10,7 @@ const TARGET_BINDING = "DB";
 
 const npxBin = process.platform === "win32" ? "npx.cmd" : "npx";
 
-const isRemoteBuild = Boolean(
-  process.env.CI ||
-    process.env.CF_PAGES ||
-    process.env.CF_WORKERS_CI ||
-    process.env.CLOUDFLARE_ACCOUNT_ID ||
-    process.env.CLOUDFLARE_API_TOKEN ||
-    process.env.CLOUDFLARE_D1_DATABASE_ID,
-);
+const isRemoteBuild = shouldMigrateRemote();
 
 const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 

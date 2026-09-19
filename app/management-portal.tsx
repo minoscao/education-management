@@ -55,6 +55,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { malaysiaDay, monthCount } from "./lib/learning-store";
+import { useDialogFocus } from "./lib/use-dialog-focus";
+import { useClock } from "./lib/use-clock";
+import { useStoredChoice } from "./lib/use-stored-choice";
+import { createPortal } from "react-dom";
 
 type Row = Record<string, unknown>;
 type Language = "en" | "zh";
@@ -98,6 +103,8 @@ type Detail = {
 } | null;
 
 type PortalData = {
+  bookings: Row[];
+  studyBookings: Row[];
   terms: Row[];
   courses: Row[];
   courseLessons: Row[];
@@ -149,6 +156,8 @@ type PortalData = {
 };
 
 const emptyData: PortalData = {
+  bookings: [],
+  studyBookings: [],
   terms: [],
   courses: [],
   courseLessons: [],
@@ -648,9 +657,9 @@ function scheduleWindow(
   };
 }
 
-export function ManagementPortal() {
+export function ManagementPortal({ initialView = "dashboard" }: { initialView?: View }) {
   const [data, setData] = useState<PortalData>(emptyData);
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useState<View>(initialView);
   const [role, setRole] = useState<Role>("admin");
   const [language, setLanguage] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
@@ -667,13 +676,16 @@ export function ManagementPortal() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [selectedTeacherId, setSelectedTeacherId] = useState("");
-  const [studentTheme, setStudentTheme] = useState<StudentTheme>("sky");
+  const [preferredStudentId, setSelectedStudentId] = useState("");
+  const [preferredTeacherId, setSelectedTeacherId] = useState("");
+  const selectedStudentId = get(data.students.find(item => get(item, "id") === preferredStudentId) ?? data.students[0], "id");
+  const selectedTeacherId = get(data.teachers.find(item => get(item, "id") === preferredTeacherId) ?? data.teachers[0], "id");
+  const [studentTheme, setStudentTheme] = useStoredChoice<StudentTheme>("student-portal-theme", ["sky", "ocean", "mint"], "sky");
   const [passPurchaseOpen, setPassPurchaseOpen] = useState(false);
   const [passPurchaseRunId, setPassPurchaseRunId] = useState("");
   const [passPurchaseMonths, setPassPurchaseMonths] = useState(1);
   const [bookingRunId, setBookingRunId] = useState("");
+  const [bookingSessionId, setBookingSessionId] = useState("");
   const t = copy[language];
 
   async function load() {
@@ -727,7 +739,7 @@ export function ManagementPortal() {
     }
   }
 
-  async function run(action: string, values: Row = {}) {
+  async function run(action: string, values: Row = {}): Promise<boolean> {
     setBusy(true);
     setMessage("");
     const previousAttendance =
@@ -754,6 +766,8 @@ export function ManagementPortal() {
       });
       const payload = (await response.json()) as PortalData & {
         error?: string;
+        joinUrl?: string;
+        notice?: string;
         attendanceUpdate?: {
           studentBookingId?: string;
           status?: string;
@@ -778,7 +792,7 @@ export function ManagementPortal() {
           ),
         }));
         setMessage(language === "en" ? "Attendance updated" : "已更新考勤");
-        return;
+        return true;
       }
       setData((current) => ({
         ...payload,
@@ -787,13 +801,16 @@ export function ManagementPortal() {
           : current.attendance,
       }));
       if (payload.attendance.length) setAttendanceLoaded(true);
-      setMessage(language === "en" ? "Saved" : "已保存");
+      setMessage(payload.notice || (language === "en" ? "Saved" : "已保存"));
+      if (payload.joinUrl) window.location.assign(payload.joinUrl);
+      return true;
     } catch (error) {
       if (previousAttendance)
         setData((current) => ({ ...current, attendance: previousAttendance }));
       setMessage(
         error instanceof Error ? error.message : "Unable to save changes",
       );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -803,29 +820,15 @@ export function ManagementPortal() {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, []);
-  useEffect(() => {
-    const saved = window.localStorage.getItem("student-portal-theme");
-    if (saved === "sky" || saved === "ocean" || saved === "mint")
-      setStudentTheme(saved);
-  }, []);
-  useEffect(() => {
-    window.localStorage.setItem("student-portal-theme", studentTheme);
-  }, [studentTheme]);
-  useEffect(() => {
-    if (!data.students.some((item) => get(item, "id") === selectedStudentId))
-      setSelectedStudentId(get(data.students[0], "id"));
-  }, [data.students, selectedStudentId]);
-  useEffect(() => {
-    if (!data.teachers.some((item) => get(item, "id") === selectedTeacherId))
-      setSelectedTeacherId(get(data.teachers[0], "id"));
-  }, [data.teachers, selectedTeacherId]);
 
   const attendanceNeeded =
     role !== "admin" ||
     ["calendar", "campus", "reports"].includes(view) ||
     detail !== null;
   useEffect(() => {
-    if (attendanceNeeded) void loadAttendance();
+    if (!attendanceNeeded) return;
+    const timer = window.setTimeout(() => void loadAttendance(), 0);
+    return () => window.clearTimeout(timer);
   }, [attendanceNeeded, attendanceLoaded]);
 
   const filteredStudents = useMemo(
@@ -991,7 +994,7 @@ export function ManagementPortal() {
                       ? "MANAGE"
                       : "SETUP"}
             </p>
-            <h1>{pageTitle(view, t)}</h1>
+            <h1>{pageTitle(view, t)} <span className="demo-badge">Demo</span></h1>
           </div>
           <div className="header-tools">
             {role === "student" ? (
@@ -1043,16 +1046,11 @@ export function ManagementPortal() {
                 </b>
               ) : null}
             </button>
-            {message ? (
-              <span
-                className={
-                  message === "Saved" || message === "已保存"
-                    ? "save-message ok"
-                    : "save-message error"
-                }
-              >
-                {message}
-              </span>
+            {message ? createPortal(
+              <div className={`portal-feedback ${["Saved", "已保存", "Attendance updated", "已更新考勤"].includes(message) ? "is-success" : "is-error"}`} role="alert">
+                <span>{message}</span>
+                <button className="header-icon" type="button" aria-label="Dismiss message" onClick={() => setMessage("")}><X size={16} /></button>
+              </div>, document.body,
             ) : null}
             <button
               className="language-toggle"
@@ -1200,6 +1198,8 @@ export function ManagementPortal() {
         {view === "studentPasses" ? (
           <StudentPasses
             data={data}
+            run={run}
+            busy={busy}
             studentId={selectedStudentId}
             onBuy={() => setPassPurchaseOpen(true)}
           />
@@ -1228,7 +1228,10 @@ export function ManagementPortal() {
           <StudentLessonBooking
             data={data}
             studentId={selectedStudentId}
-            onChoose={(id) => setBookingRunId(id)}
+            onChoose={(id) => {
+              const session = data.sessions.find(item => get(item, "id") === id);
+              if (session) { setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
+            }}
           />
         ) : null}
         {view === "studentCalendar" ? (
@@ -1279,15 +1282,17 @@ export function ManagementPortal() {
           data={data}
           studentId={selectedStudentId}
           runId={bookingRunId}
+          sessionId={bookingSessionId}
           busy={busy}
           run={run}
           onBuyPass={(runId, months) => {
             setBookingRunId("");
+            setBookingSessionId("");
             setPassPurchaseRunId(runId);
             setPassPurchaseMonths(months);
             setPassPurchaseOpen(true);
           }}
-          onClose={() => setBookingRunId("")}
+          onClose={() => { setBookingRunId(""); setBookingSessionId(""); }}
         />
       ) : null}
       {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
@@ -1326,7 +1331,7 @@ function PortalLoading({ refreshing }: { refreshing: boolean }) {
   );
 }
 
-function pageTitle(view: View, t: typeof copy.en) {
+function pageTitle(view: View, t: (typeof copy)[Language]) {
   const titles: Record<View, string> = {
     dashboard: "Dashboard",
     calendar: "Schedule",
@@ -1495,9 +1500,9 @@ function studentLearning(data: PortalData, studentId = "") {
           get(item, "status") === "enrolled",
       )
     : [];
-  const runIds = new Set(enrollments.map((item) => get(item, "class_run_id")));
+  const bookedIds = new Set(data.bookings.filter(item => get(item, "student_id") === get(student, "id") && get(item, "status") === "booked").map(item => get(item, "class_session_id")));
   const sessions = data.sessions
-    .filter((item) => runIds.has(get(item, "class_run_id")))
+    .filter((item) => bookedIds.has(get(item, "id")) && get(item, "status") !== "cancelled")
     .sort((left, right) =>
       get(left, "starts_at").localeCompare(get(right, "starts_at")),
     );
@@ -1513,8 +1518,9 @@ function AdminDashboard({
   onOpen: (id: string) => void;
   onNavigate: (view: View) => void;
 }) {
+  const clockNow = useClock();
   const upcoming = data.sessions
-    .filter((item) => asTime(item.starts_at) >= Date.now())
+    .filter((item) => asTime(item.starts_at) >= clockNow)
     .slice(0, 5);
   const activeCourses = data.courses
     .map((course) => {
@@ -1525,7 +1531,7 @@ function AdminDashboard({
             get(run, "status") !== "finished",
         )
         .filter(
-          (run) => !asTime(run.ends_at) || asTime(run.ends_at) >= Date.now(),
+          (run) => !asTime(run.ends_at) || asTime(run.ends_at) >= clockNow,
         )
         .sort(
           (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
@@ -1717,12 +1723,13 @@ function StudentHome({
   onOpenClass: (id: string) => void;
   onBuyPass: () => void;
 }) {
+  const clockNow = useClock();
   const { student, enrollments, sessions } = studentLearning(data, studentId);
   const next =
     sessions.find(
       (item) =>
         new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
-        Date.now(),
+        clockNow,
     ) ?? sessions[0];
   const attended = data.attendance.filter(
     (item) =>
@@ -1850,12 +1857,13 @@ function StudentHome({
 }
 
 function activePasses(data: PortalData, studentId: string) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = malaysiaDay();
   return data.passes.filter(
     (pass) =>
       get(pass, "student_id") === studentId &&
       get(pass, "status") === "active" &&
       get(pass, "credit_type") !== "package" &&
+      get(pass, "valid_from") <= today &&
       get(pass, "valid_until") >= today,
   );
 }
@@ -1863,11 +1871,11 @@ function activePasses(data: PortalData, studentId: string) {
 function passCreditDetails(pass: Row) {
   const type = get(pass, "credit_type") || "bundle";
   if (type === "onsite")
-    return { label: "Onsite lessons", remaining: Number(pass.onsite_remaining || 0), Icon: Building2 };
+    return { label: "Onsite lessons", remaining: Number(pass.onsite_available ?? pass.onsite_remaining ?? 0), Icon: Building2 };
   if (type === "online")
-    return { label: "Online lessons", remaining: Number(pass.online_remaining || 0), Icon: BookOpen };
+    return { label: "Online lessons", remaining: Number(pass.online_available ?? pass.online_remaining ?? 0), Icon: BookOpen };
   if (type === "study")
-    return { label: "Study access", remaining: Number(pass.study_remaining || 0), Icon: School };
+    return { label: "Study access", remaining: Number(pass.study_available ?? pass.study_remaining ?? 0), Icon: School };
   return { label: "Learning credits", remaining: Number(pass.onsite_remaining || 0) + Number(pass.online_remaining || 0) + Number(pass.study_remaining || 0), Icon: Banknote };
 }
 
@@ -1881,23 +1889,23 @@ function StudentPassSummary({
   onBuy: () => void;
 }) {
   const passes = activePasses(data, studentId);
-  const totals = passes.reduce(
+  const totals = passes.reduce<{ onsite: number; online: number; study: number }>(
     (value, pass) => ({
-      onsite: value.onsite + Number(pass.onsite_remaining || 0),
-      online: value.online + Number(pass.online_remaining || 0),
-      study: value.study + Number(pass.study_remaining || 0),
+      onsite: value.onsite + Number(pass.onsite_available ?? pass.onsite_remaining ?? 0),
+      online: value.online + Number(pass.online_available ?? pass.online_remaining ?? 0),
+      study: value.study + Number(pass.study_available ?? pass.study_remaining ?? 0),
     }),
     { onsite: 0, online: 0, study: 0 },
   );
-  const latest = passes[0];
+  const latest = [...passes].sort((a, b) => get(a, "valid_until").localeCompare(get(b, "valid_until")))[0];
   return (
     <section className="student-pass-summary">
       <div className="student-pass-summary-copy">
         <span>MY LEARNING PASS</span>
-        <h3>{latest ? latest.name : "Get ready to learn"}</h3>
+        <h3>{latest ? "Your available learning credits" : "Get ready to learn"}</h3>
         <p>
           {latest
-            ? `Valid until ${malaysiaDate(latest.valid_until)}`
+            ? `Next expiry: ${malaysiaDate(latest.valid_until)}`
             : "Choose a monthly pass or add only the credits you need."}
         </p>
       </div>
@@ -1927,12 +1935,16 @@ function StudentPasses({
   data,
   studentId,
   onBuy,
+  run,
+  busy,
 }: {
   data: PortalData;
   studentId: string;
   onBuy: () => void;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  busy: boolean;
 }) {
-  const passes = activePasses(data, studentId);
+  const passes = data.passes.filter(pass => get(pass, "student_id") === studentId && get(pass, "status") === "active" && get(pass, "credit_type") !== "package" && get(pass, "valid_until") >= malaysiaDay());
   return (
     <section className="student-portal student-pass-page">
       <section className="student-simple-heading">
@@ -1947,6 +1959,8 @@ function StudentPasses({
         </button>
       </section>
       <StudentPassSummary data={data} studentId={studentId} onBuy={onBuy} />
+      <OrderList rows={data.passOrders.filter(order => get(order, "student_id") === studentId)} busy={busy} onConfirm={id => run("recordPassPayment", { passOrderId: id, method: "demo", note: "Demo payment" })} />
+      <StudyReservations data={data} studentId={studentId} busy={busy} run={run} />
       <section className="student-learning-section">
         <div className="student-section-title">
           <div>
@@ -1992,13 +2006,15 @@ function StudentPasses({
 
 function StudentCreditCard({ pass }: { pass: Row }) {
   const credit = passCreditDetails(pass);
+  const reserved = Number(pass[`${get(pass, "credit_type")}_remaining`] ?? 0) - credit.remaining;
   const Icon = credit.Icon;
   return (
     <article key={get(pass, "id")} className="student-pass-card">
       <div>
         <span>{get(pass, "product_code")}</span>
         <h4>{get(pass, "name")}</h4>
-        <p>Valid until {malaysiaDate(pass.valid_until)}</p>
+        <p>{malaysiaDate(pass.valid_from)} - {malaysiaDate(pass.valid_until)}</p>
+        {get(pass, "valid_from") > malaysiaDay() ? <Status value="upcoming" /> : null}
       </div>
       <div className="pass-credit-grid pass-credit-card-amount">
         <span>
@@ -2006,9 +2022,29 @@ function StudentCreditCard({ pass }: { pass: Row }) {
           <b>{credit.remaining}</b>
           {credit.label}
         </span>
+        {reserved > 0 ? <small>{reserved} reserved for upcoming visits</small> : null}
       </div>
     </article>
   );
+}
+
+function OrderList({ rows, busy, onConfirm }: { rows: Row[]; busy: boolean; onConfirm: (id: string) => Promise<boolean> }) {
+  if (!rows.length) return null;
+  return <section className="student-learning-section"><h3>Pass orders</h3><div className="table-scroll"><table className="data-table"><thead><tr><th>Order</th><th>Learner</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map(order => <tr key={get(order, "id")}><td>{get(order, "product_name")}<small>{get(order, "reservation_months")} month(s)</small></td><td>{get(order, "student_name")}</td><td>{amount(order.total_amount)}</td><td><Status value={get(order, "status")} /></td><td>{get(order, "status") !== "paid" ? <button type="button" className="quiet-button" disabled={busy} onClick={() => void onConfirm(get(order, "id"))}>Demo: confirm payment</button> : <span>Paid</span>}</td></tr>)}</tbody></table></div></section>;
+}
+
+function StudyReservations({ data, studentId, busy, run }: { data: PortalData; studentId: string; busy: boolean; run: (action: string, values?: Row) => Promise<boolean> }) {
+  const [error, setError] = useState("");
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const saved = await run("bookStudy", { ...values, studentId, requestKey, startsAt: String(values.startsAt).replace("T", " "), endsAt: String(values.endsAt).replace("T", " ") });
+    setError(saved ? "" : "Study booking was not completed. Check availability and credits, then try again.");
+    if (saved) setRequestKey(crypto.randomUUID());
+  }
+  const bookings = data.studyBookings.filter(row => get(row, "student_id") === studentId);
+  return <section className="student-learning-section"><h3><School size={19} /> Book study access</h3><form className="study-booking-form" onSubmit={event => void submit(event)}><label>Room<select name="classroomId" required>{data.classrooms.map(room => <option key={get(room, "id")} value={get(room, "id")}>{get(room, "name")}</option>)}</select></label><label>From<input type="datetime-local" name="startsAt" required /></label><label>Until<input type="datetime-local" name="endsAt" required /></label><button className="primary-button" disabled={busy}>Reserve with 1 study credit</button></form>{error ? <p role="alert" className="dialog-error">{error}</p> : null}<div className="table-scroll"><table className="data-table"><tbody>{bookings.map(booking => <tr key={get(booking, "id")}><td>{get(booking, "classroom_name")}</td><td>{malaysiaDate(booking.starts_at)} · {timeRange(booking)}</td><td><Status value={get(booking, "status")} /></td><td>{get(booking, "status") === "booked" ? <><button type="button" className="quiet-button" disabled={busy} onClick={() => void run("useStudyCredit", { studentId, studentBookingId: get(booking, "id") })}>Check in</button><button type="button" className="quiet-button" disabled={busy} onClick={() => void run("cancelStudy", { studentId, studentBookingId: get(booking, "id") })}>Cancel</button></> : null}</td></tr>)}</tbody></table></div></section>;
 }
 
 function PassPurchaseDialog({
@@ -2023,58 +2059,52 @@ function PassPurchaseDialog({
   data: PortalData;
   studentId: string;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   initialRunId: string;
   initialMonths: number;
   onClose: () => void;
 }) {
+  const clockNow = useClock();
+  const dialogRef = useDialogFocus<HTMLElement>(onClose, busy);
   const [step, setStep] = useState(1);
-  const [productId, setProductId] = useState(initialRunId ? "pass-monthly" : "");
+  const [requestKey] = useState(() => crypto.randomUUID());
+  const [productId, setProductId] = useState(initialRunId ? "pass-monthly" : get(data.passProducts[0], "id"));
   const [runId, setRunId] = useState(initialRunId);
   const [reservationMonths, setReservationMonths] = useState(initialMonths);
   const mode = "onsite";
   const [method, setMethod] = useState("duitnow_qr");
   const [proofReference, setProofReference] = useState("");
   const [note, setNote] = useState("");
-  useEffect(() => {
-    if (!productId && data.passProducts[0])
-      setProductId(get(data.passProducts[0], "id"));
-  }, [data.passProducts, productId]);
-  useEffect(() => {
-    if (initialRunId) {
-      setProductId("pass-monthly");
-      setRunId(initialRunId);
-      setReservationMonths(initialMonths);
-    }
-  }, [initialRunId, initialMonths]);
   const product = data.passProducts.find(
     (item) => get(item, "id") === productId,
   );
   const openRuns = data.runs
     .filter((item) => !["finished", "cancelled"].includes(get(item, "status")))
     .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const canLockOnsite = Number(product?.onsite_credits ?? 0) > 0;
+  const canLockOnsite = Number(product?.onsite_credits ?? 0) > 0 && get(product, "validity_type") === "calendar_month";
   const selectedRun = openRuns.find((item) => get(item, "id") === runId);
   const selectedSessions = data.sessions
-    .filter((item) => get(item, "class_run_id") === runId)
+    .filter((item) => get(item, "class_run_id") === runId && get(item, "status") !== "cancelled" && asTime(item.starts_at) > clockNow)
     .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
   const coursePeriod = selectedSessions.length
     ? `${malaysiaDate(selectedSessions[0].starts_at)} - ${malaysiaDate(selectedSessions[selectedSessions.length - 1].starts_at)}`
     : "Course dates will be confirmed after you choose a class";
+  const courseMonths = selectedSessions.length ? monthCount(get(selectedSessions[0], "starts_at"), get(selectedSessions.at(-1), "starts_at")) : 1;
   function submit(payNow: boolean) {
     if (!product) return;
     void run("purchasePass", {
+      requestKey,
       studentId,
       passProductId: productId,
-      runId: runId || undefined,
+      runId: canLockOnsite && reservationMonths >= courseMonths ? runId || undefined : undefined,
       deliveryMode: "onsite",
       reservationMonths,
-      passStartAt: selectedSessions[0]?.starts_at,
+      passStartAt: selectedSessions.find(session => asTime(session.starts_at) > Date.now())?.starts_at,
       payNow,
       method,
       proofReference,
       note,
-    }).then(onClose);
+    }).then(saved => { if (saved) onClose(); });
   }
   return (
     <div
@@ -2083,6 +2113,7 @@ function PassPurchaseDialog({
       onMouseDown={onClose}
     >
       <section
+        ref={dialogRef}
         className="pass-purchase-dialog"
         role="dialog"
         aria-modal="true"
@@ -2132,7 +2163,8 @@ function PassPurchaseDialog({
                   className={productId === get(item, "id") ? "selected" : ""}
                   onClick={() => {
                     setProductId(get(item, "id"));
-                    if (!Number(item.onsite_credits)) setRunId("");
+                    if (get(item, "validity_type") !== "calendar_month") setReservationMonths(1);
+                    if (!Number(item.onsite_credits) || get(item, "validity_type") !== "calendar_month") setRunId("");
                   }}
                 >
                   <Banknote size={21} />
@@ -2175,7 +2207,7 @@ function PassPurchaseDialog({
                       <p>{get(item, "name")} · {get(item, "teacher_name") || "Teacher to be confirmed"}</p>
                       <small>
                         {get(item, "student_count")}/{get(item, "capacity")}{" "}
-                        places filled 路 {get(item, "session_count")} lessons
+                        places filled · {get(item, "session_count")} lessons
                       </small>
                     </div>
                     <aside className="pass-run-seat">
@@ -2200,7 +2232,7 @@ function PassPurchaseDialog({
             <div className="pass-mode-step">
               <p className="step-intro">
                 {selectedRun
-                  ? "Keep your preferred onsite time while you pay your Pass month by month."
+                  ? "Choose passes for the full course period, or buy one month and book individual lessons later."
                   : "You have not locked an onsite course yet. Your credits will be ready when you choose one."}
               </p>
               {selectedRun ? <section className="pass-reservation-course" style={eventStyle(selectedRun)}>
@@ -2210,24 +2242,25 @@ function PassPurchaseDialog({
               {selectedRun ? <div className="pass-mode-grid">
                 <button
                   type="button"
-                  className={reservationMonths === 3 ? "selected" : ""}
-                  onClick={() => setReservationMonths(3)}
+                  className={reservationMonths === courseMonths ? "selected" : ""}
+                  onClick={() => setReservationMonths(courseMonths)}
                 >
                   <CalendarDays size={24} />
-                  <strong>Lock the next 3 months</strong>
+                  <strong>Cover the course: {courseMonths} month{courseMonths === 1 ? "" : "s"}</strong>
                   <span>
-                    Keep your course place. Your Pass is still paid monthly.
+                    Pay {amount(Number(product?.price || 0) * courseMonths)} in total. Each month has its own credits and expiry.
                   </span>
                 </button>
                 <button
                   type="button"
-                  className={reservationMonths === 1 ? "selected" : ""}
+                  className={reservationMonths === 1 && courseMonths > 1 ? "selected" : ""}
+                  disabled={courseMonths === 1}
                   onClick={() => setReservationMonths(1)}
                 >
                   <Clock3 size={24} />
-                  <strong>Keep it monthly</strong>
+                  <strong>Buy one month only</strong>
                   <span>
-                    Reserve this month only and decide again next month.
+                    Book individual lessons later. This does not reserve the full course.
                   </span>
                 </button>
               </div> : null}
@@ -2246,7 +2279,7 @@ function PassPurchaseDialog({
                     ? `Class selected: ${get(
                         openRuns.find((item) => get(item, "id") === runId),
                         "course_title",
-                      )} 路 ${mode === "online" ? "Online" : "Onsite"}`
+                      )} · Onsite`
                     : "Class selection saved for later"}
                 </p>
               </section>
@@ -2343,7 +2376,7 @@ function PassPurchaseDialog({
                 onClick={() => submit(true)}
               >
                 <Check size={16} />
-                Pay {amount(Number(product?.price || 0) * reservationMonths)}
+                Demo: confirm {amount(Number(product?.price || 0) * reservationMonths)}
               </button>
             </div>
           )}
@@ -2502,15 +2535,17 @@ function StudentCourseBooking({
       {mode === "list" ? (
         <div className="student-booking-gallery">
           {availableRuns.map((item) => {
-            const used = enrolled.has(get(item, "id"));
+            const enrollment = data.enrollments.find(row => get(row, "student_id") === studentId && get(row, "class_run_id") === get(item, "id") && get(row, "status") === "enrolled");
+            const used = enrolled.has(get(item, "id")) && Boolean(get(enrollment, "pass_id") || get(enrollment, "invoice_status") === "paid");
+            const pending = Boolean(enrollment && !used);
             const capacity = Number(get(item, "capacity"));
             const filled = Number(get(item, "student_count"));
             const seats = Math.max(0, capacity - filled);
             return (
-              <button key={get(item, "id")} type="button" disabled={used} className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
+              <button key={get(item, "id")} type="button" className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
                 <CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "subject"), display_color: get(item, "run_course_color") }} />
                 <div>
-                  <span>{used ? "ALREADY PURCHASED" : "AVAILABLE CLASS"}</span>
+                  <span>{used ? "ALREADY PURCHASED" : pending ? "AWAITING PAYMENT" : "AVAILABLE CLASS"}</span>
                   <h3>{get(item, "course_title")}</h3>
                   <p>{get(item, "name")}</p>
                   <small>{get(item, "teacher_name") || "Teacher to be confirmed"} · {get(item, "session_count")} lessons</small>
@@ -2553,20 +2588,12 @@ function StudentLessonBooking({
       .filter((run) => !["finished", "cancelled"].includes(get(run, "status")))
       .map((run) => get(run, "id")),
   );
-  const enrolledRuns = new Set(
-    data.enrollments
-      .filter(
-        (item) =>
-          get(item, "student_id") === studentId &&
-          get(item, "status") === "enrolled",
-      )
-      .map((item) => get(item, "class_run_id")),
-  );
   const sessions = data.sessions
     .filter((session) => {
       const timestamp = asTime(session.starts_at);
       return (
         openRunIds.has(get(session, "class_run_id")) &&
+        !["cancelled", "completed"].includes(get(session, "status")) &&
         timestamp >= start &&
         timestamp < end
       );
@@ -2604,11 +2631,11 @@ function StudentLessonBooking({
                   {daySessions.map((session) => {
                     const run = courseRun(get(session, "class_run_id"));
                     const teacher = teacherFor(session);
-                    const purchased = enrolledRuns.has(get(session, "class_run_id"));
+                    const purchased = data.bookings.some(booking => get(booking, "student_id") === studentId && get(booking, "class_session_id") === get(session, "id") && get(booking, "status") === "booked");
                     const availableSeats = Math.max(
                       0,
                       Number(get(run || {}, "capacity")) -
-                        Number(get(run || {}, "student_count")),
+                        data.bookings.filter(booking => get(booking, "class_session_id") === get(session, "id") && get(booking, "status") === "booked" && get(booking, "delivery_mode") === "onsite").length,
                     );
                     return (
                       <button
@@ -2616,14 +2643,14 @@ function StudentLessonBooking({
                         type="button"
                         className={`student-week-lesson ${purchased ? "is-purchased" : ""}`}
                         style={eventStyle(session)}
-                        disabled={purchased}
-                        onClick={() => onChoose(get(session, "class_run_id"))}
+                        disabled={!purchased && asTime(session.starts_at) <= Date.now()}
+                        onClick={() => onChoose(get(session, "id"))}
                       >
                         <span className="student-week-time">{timePart(session.starts_at)}</span>
                         <strong>{get(session, "course_title")}</strong>
                         <small>{get(session, "topic")}</small>
                         <div className="student-week-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><span><b>{get(teacher, "name")}</b><em>{get(teacher, "bio") || "Your lesson teacher"}</em></span></div>
-                        <footer>{purchased ? <span>Already purchased</span> : <><span>{availableSeats} seats left</span><b>Book lesson</b></>}</footer>
+                        <footer>{purchased ? <span>Lesson booked</span> : <><span>{availableSeats} seats left</span><b>Book lesson</b></>}</footer>
                       </button>
                     );
                   })}
@@ -2639,58 +2666,63 @@ function StudentLessonBooking({
 }
 
 function CourseBookingDialog({
-  data,
-  studentId,
-  runId,
-  busy,
-  run,
-  onBuyPass,
-  onClose,
+  data, studentId, runId, sessionId = "", busy, run, onBuyPass, onClose,
 }: {
-  data: PortalData;
-  studentId: string;
-  runId: string;
-  busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
-  onBuyPass: (runId: string, months: number) => void;
-  onClose: () => void;
+  data: PortalData; studentId: string; runId: string; sessionId?: string; busy: boolean;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  onBuyPass: (runId: string, months: number) => void; onClose: () => void;
 }) {
+  const clockNow = useClock();
+  const dialogRef = useDialogFocus<HTMLElement>(onClose, busy);
   const [delivery, setDelivery] = useState<"onsite" | "online">("onsite");
-  const item = data.runs.find((row) => get(row, "id") === runId);
-  const sessions = data.sessions.filter((row) => get(row, "class_run_id") === runId).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
-  const dateMonths = new Set(sessions.map((session) => String(get(session, "starts_at")).slice(0, 7)));
-  const passMonths = Math.max(1, dateMonths.size);
-  const cards = activePasses(data, studentId);
-  const credits = cards.reduce((total, pass) => total + Number(delivery === "online" ? pass.online_remaining : pass.onsite_remaining || 0), 0);
-  const monthly = data.passProducts.find((product) => get(product, "id") === "pass-monthly");
-  const direct = Number(get(item, "price"));
-  const perLesson = sessions.length ? direct / sessions.length : direct;
-  const passTotal = Number(monthly?.price || 0) * passMonths;
+  const [error, setError] = useState("");
+  const item = data.runs.find(row => get(row, "id") === runId);
+  const allSessions = data.sessions.filter(row => get(row, "class_run_id") === runId && get(row, "status") !== "cancelled").sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
+  const sessions = sessionId ? allSessions.filter(row => get(row, "id") === sessionId) : allSessions.filter(row => asTime(row.starts_at) > clockNow);
   const first = sessions[0];
   const last = sessions.at(-1);
-  const alreadyPurchased = data.enrollments.some(
-    (enrollment) =>
-      get(enrollment, "student_id") === studentId &&
-      get(enrollment, "class_run_id") === runId &&
-      get(enrollment, "status") === "enrolled",
-  );
+  const day = first ? String(first.starts_at).slice(0, 10) : malaysiaDay();
+  const passMonths = first && last ? monthCount(get(first, "starts_at"), get(last, "starts_at")) : 1;
+  const validCards = data.passes.filter(pass => get(pass, "student_id") === studentId && get(pass, "status") === "active" && get(pass, "valid_from") <= day && get(pass, "valid_until") >= day);
+  const balances = { onsite: 0, online: 0 };
+  for (const pass of validCards) for (const mode of ["onsite", "online"] as const) balances[mode] += Number(pass[mode + "_available"] ?? pass[mode + "_remaining"] ?? 0);
+  const enrollment = data.enrollments.find(row => get(row, "student_id") === studentId && get(row, "class_run_id") === runId && get(row, "status") === "enrolled");
+  const paid = Boolean(enrollment && (get(enrollment, "invoice_status") === "paid" || get(enrollment, "pass_id")));
+  const unpaid = Boolean(enrollment && !paid);
+  const booking = sessionId ? data.bookings.find(row => get(row, "student_id") === studentId && get(row, "class_session_id") === sessionId && get(row, "status") === "booked") : undefined;
+  const owns = sessionId ? Boolean(booking) : paid;
+  const monthly = data.passProducts.find(row => get(row, "id") === "pass-monthly");
+  const direct = allSessions.length ? Math.round(Number(item?.price || 0) * sessions.length / allSessions.length * 100) / 100 : 0;
+  const teacherId = first ? get(first, "teacher_id") : get(item, "teacher_id");
+  const teacher = data.teachers.find(row => get(row, "id") === teacherId) ?? (get(first, "teacher_name") ? { id: teacherId, name: get(first, "teacher_name") } : undefined);
+  async function submit(action: string, values: Row) {
+    setError("");
+    const saved = await run(action, values);
+    if (saved) onClose();
+    else setError("Unable to complete this request. Check the message above, then try again.");
+  }
   if (!item) return null;
   return (
-    <div className="payment-dialog-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="course-booking-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-        <header><div><span>COURSE BOOKING</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")} · {first && last ? `${malaysiaDate(first.starts_at)} - ${malaysiaDate(last.starts_at)}` : "Dates to be confirmed"}</p></div><button type="button" className="header-icon" onClick={onClose}><X size={17} /></button></header>
+    <div className="payment-dialog-backdrop" onMouseDown={() => { if (!busy) onClose(); }}>
+      <section ref={dialogRef} className="course-booking-dialog" role="dialog" aria-modal="true" aria-label={sessionId ? "Book a lesson" : "Book a course"} onMouseDown={event => event.stopPropagation()}>
+        <header><div><span>{sessionId ? "LESSON BOOKING" : "COURSE BOOKING"}</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")} · {first && last ? `${malaysiaDate(first.starts_at)}${sessionId ? " · " + timePart(first.starts_at) : " - " + malaysiaDate(last.starts_at)}` : "No upcoming lessons"}</p></div><button type="button" className="header-icon" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
         <main>
-          {alreadyPurchased ? (
-            <section className="booking-already-purchased">
-              <span><Check size={19} /></span>
-              <div><strong>Already purchased</strong><p>You are already enrolled in this class. Your lessons are ready in My courses and My timetable.</p></div>
-            </section>
-          ) : <>
-          <section className="booking-delivery"><button type="button" className={delivery === "onsite" ? "selected" : ""} onClick={() => setDelivery("onsite")}><Building2 size={20} /><strong>Onsite class</strong><span>{credits} onsite credits available</span></button><button type="button" className={delivery === "online" ? "selected" : ""} onClick={() => setDelivery("online")}><BookOpen size={20} /><strong>Live online</strong><span>{credits} online credits available</span></button></section>
-          <section className="booking-price-compare"><article><span>BUY THIS COURSE</span><strong>{amount(direct)}</strong><p>{amount(perLesson)} × {sessions.length} lessons</p><button className="primary-button" type="button" disabled={busy} onClick={() => void run("enrollStudentWithPayment", { studentId, runId, contractedFee: direct, payNow: false }).then(onClose)}>Enroll · pay later</button></article><article className="featured"><span>{passMonths}-MONTH LEARNING PASS</span><strong>{amount(passTotal)}</strong><p>{passMonths} calendar month{passMonths > 1 ? "s" : ""} · {Number(monthly?.onsite_credits || 0) * passMonths} onsite + {Number(monthly?.online_credits || 0) * passMonths} online + {Number(monthly?.study_credits || 0) * passMonths} study visits</p><button className="quiet-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Choose Pass</button></article></section>
+          {teacher ? <div className="booking-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><div><strong>{get(teacher, "name")}</strong><p>{get(teacher, "bio")}</p></div></div> : null}
+          {error ? <p className="dialog-error" role="alert">{error}</p> : null}
+          {owns ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>{sessionId ? get(booking, "delivery_mode") === "online" ? "Online lesson" : "Onsite lesson" : "Your lessons are in My timetable."}</p></div></section>
+          : unpaid ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment</strong><p>{amount(Number(enrollment?.total_amount || 0) - Number(enrollment?.paid_amount || 0))} remaining · Pay at campus</p></div></section>
+          : <>
+            <section className="booking-delivery">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" className={delivery === mode ? "selected" : ""} aria-pressed={delivery === mode} onClick={() => setDelivery(mode)}>{mode === "onsite" ? <Building2 size={20} /> : <BookOpen size={20} />}<strong>{mode === "onsite" ? "Onsite class" : "Live online"}</strong><span>{balances[mode]} available for this date</span></button>)}</section>
+            {!sessionId ? <section className="booking-price-compare"><article><span>BUY THIS COURSE</span><strong>{amount(direct)}</strong><p>{sessions.length} upcoming lessons</p><button className="primary-button" type="button" disabled={busy || !sessions.length} onClick={() => void submit("enrollStudentWithPayment", { studentId, runId, deliveryMode: delivery, contractedFee: direct, payNow: false })}>Enroll · pay later</button></article><article className="featured"><span>{passMonths}-MONTH LEARNING PASS</span><strong>{amount(Number(monthly?.price || 0) * passMonths)}</strong><p>{Number(monthly?.onsite_credits || 0) * passMonths} onsite + {Number(monthly?.online_credits || 0) * passMonths} online + {Number(monthly?.study_credits || 0) * passMonths} study visits</p><button className="quiet-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Choose Pass</button></article></section> : null}
           </>}
         </main>
-        <footer>{alreadyPurchased ? <button className="quiet-button" type="button" onClick={onClose}>Back to courses</button> : credits > 0 ? <button className="primary-button" type="button" disabled={busy} onClick={() => void run("bookCourseWithCredit", { studentId, runId, deliveryMode: delivery }).then(onClose)}><Check size={16} />{delivery === "online" ? "Join online class" : "Reserve onsite seat"}</button> : <button className="primary-button" type="button" onClick={() => onBuyPass(runId, passMonths)}>Buy a pass to continue</button>}</footer>
+        <footer>
+          {booking && get(booking, "delivery_mode") === "online" ? <button className="primary-button" disabled={busy} onClick={() => void submit("useOnlineCredit", { studentId, sessionId })}><DoorOpen size={16} />Join online lesson</button> : null}
+          {booking && first && asTime(first.starts_at) > clockNow ? <button className="quiet-button" disabled={busy} onClick={() => void submit("requestLeave", { studentId, sessionId })}>Cancel this lesson</button> : null}
+          {owns ? <button className="quiet-button" onClick={onClose}>Close</button> : unpaid ? <button className="primary-button" disabled={busy} onClick={() => void submit("recordPayment", { invoiceId: get(enrollment, "invoice_id"), method: "demo", note: "Demo payment" })}>Demo: confirm payment</button>
+          : balances[delivery] > 0 ? <button className="primary-button" disabled={busy || !sessions.length} onClick={() => void submit(sessionId ? "bookLesson" : "bookCourseWithCredit", { studentId, runId, sessionId, deliveryMode: delivery })}><Check size={16} />{sessionId ? "Book this lesson" : "Reserve course with pass"}</button>
+          : <button className="primary-button" onClick={() => onBuyPass(sessionId ? "" : runId, passMonths)}>Buy a pass</button>}
+        </footer>
       </section>
     </div>
   );
@@ -2704,7 +2736,7 @@ function StudentTimetableV2({
 }: {
   data: PortalData;
   studentId: string;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onOpen: (id: string) => void;
 }) {
   const { student, sessions } = studentLearning(data, studentId);
@@ -2806,7 +2838,7 @@ function StudentTimetableList({
   sessions: Row[];
   attendance: Row[];
   studentId: string;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onOpen: (id: string) => void;
 }) {
   const [menuId, setMenuId] = useState("");
@@ -2916,6 +2948,7 @@ function TeacherHome({
   teacherId: string;
   onOpen: (id: string) => void;
 }) {
+  const clockNow = useClock();
   const teacher =
     data.teachers.find((item) => get(item, "id") === teacherId) ??
     data.teachers[0];
@@ -2932,7 +2965,7 @@ function TeacherHome({
     .filter(
       (item) =>
         new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
-        Date.now(),
+        clockNow,
     )
     .slice(0, 4);
   return (
@@ -3025,7 +3058,7 @@ function CalendarView({
 }: {
   data: PortalData;
   sessions?: Row[];
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   language: Language;
   onOpen: (id: string) => void;
   onReschedule: (id: string, startsAt: string) => void;
@@ -3344,7 +3377,7 @@ function TimeCalendar({
   anchor: Date;
   events: Row[];
   window: ScheduleWindow;
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   language: Language;
   onOpen: (id: string) => void;
   onReschedule: (id: string, startsAt: string) => void;
@@ -3395,7 +3428,7 @@ function YearCalendar({
 }: {
   anchor: Date;
   events: Row[];
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   language: Language;
   onSelectDate: (date: Date) => void;
 }) {
@@ -3476,7 +3509,7 @@ function MonthCalendar({
 }: {
   anchor: Date;
   events: Row[];
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   language: Language;
   onOpen: (id: string) => void;
   onSelectDate: (date: Date) => void;
@@ -3816,7 +3849,7 @@ function ResourceCalendar({
   resources: CalendarResource[];
   kind: ResourceKind;
   window: ScheduleWindow;
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   language: Language;
   onOpen: (id: string) => void;
 }) {
@@ -3911,10 +3944,10 @@ function DayTimeline({
   columns: CalendarResource[];
   eventsForColumn: (column: CalendarResource) => Row[];
   window: ScheduleWindow;
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   onOpen: (id: string) => void;
 }) {
-  const visible = columns.length
+  const visible: CalendarResource[] = columns.length
     ? columns
     : [{ id: "none", name: c.allSchedule, icon: "classroom" }];
   const bodyStyle = {
@@ -4023,7 +4056,7 @@ function ResourceMatrix({
   resources: CalendarResource[];
   columns: Date[];
   eventsFor: (resource: CalendarResource) => Row[];
-  c: typeof calendarText.en;
+  c: (typeof calendarText)[Language];
   language: Language;
   onOpen: (id: string) => void;
   compact?: boolean;
@@ -4141,6 +4174,11 @@ function SmartDatePicker({
   const selected = fromKey(value);
   const today = toKey(new Date());
   const selectedKey = toKey(selected);
+  const [previousSelectedKey, setPreviousSelectedKey] = useState(selectedKey);
+  if (previousSelectedKey !== selectedKey) {
+    setPreviousSelectedKey(selectedKey);
+    setVisibleMonth(startOfMonth(selected));
+  }
   const coloursByDate = useMemo(
     () =>
       events.reduce<Record<string, string[]>>((result, event) => {
@@ -4153,9 +4191,6 @@ function SmartDatePicker({
       }, {}),
     [events],
   );
-  useEffect(() => {
-    setVisibleMonth(startOfMonth(selected));
-  }, [selectedKey]);
   useEffect(() => {
     if (!open) return;
     const closeOnOutsidePress = (event: PointerEvent) => {
@@ -4281,10 +4316,11 @@ function CampusView({
   onOpenRoom,
 }: {
   data: PortalData;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   loading: boolean;
   onOpenRoom: (id: string) => void;
 }) {
+  const clockNow = useClock();
   const [campusId, setCampusId] = useState("");
   const [viewDate, setViewDate] = useState(() => toKey(new Date()));
   const [timeMode, setTimeMode] = useState<"now" | "day">("now");
@@ -4300,7 +4336,7 @@ function CampusView({
   const tomorrow = toKey(addDays(new Date(), 1));
   const referenceTime =
     timeMode === "now"
-      ? Date.now()
+      ? clockNow
       : new Date(`${viewDate}T00:00:00`).getTime();
   const label =
     timeMode === "now"
@@ -4432,6 +4468,7 @@ function LegacyFloorMap({
   onSelectRoom?: (id: string) => void;
   onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
 }) {
+  const clockNow = useClock();
   const mapRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<
     Record<string, { x: number; y: number }>
@@ -4504,7 +4541,7 @@ function LegacyFloorMap({
       event.currentTarget.releasePointerCapture(event.pointerId);
     onMoveRoom?.(room, position);
   }
-  const now = referenceTime ?? Date.now();
+  const now = referenceTime ?? clockNow;
   function roomSchedule(room: Row) {
     const roomSessions = sessions
       .filter(
@@ -4696,6 +4733,7 @@ function LegacyFloorMapDense({
   onSelectRoom?: (id: string) => void;
   onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
 }) {
+  const clockNow = useClock();
   const mapRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [positions, setPositions] = useState<
@@ -4709,7 +4747,7 @@ function LegacyFloorMapDense({
     baseY: number;
     last: { x: number; y: number };
   } | null>(null);
-  const now = referenceTime ?? Date.now();
+  const now = referenceTime ?? clockNow;
   const density = zoom >= 1.2 ? "all" : zoom >= 0.82 ? "focus" : "now";
   const zoomPercent = Math.round(zoom * 100);
   function point(room: Row) {
@@ -5068,6 +5106,7 @@ function FloorMap({
   onSelectRoom?: (id: string) => void;
   onMoveRoom?: (room: Row, position: { x: number; y: number }) => void;
 }) {
+  const clockNow = useClock();
   const mapRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [positions, setPositions] = useState<
@@ -5081,7 +5120,7 @@ function FloorMap({
     baseY: number;
     last: { x: number; y: number };
   } | null>(null);
-  const now = referenceTime ?? Date.now();
+  const now = referenceTime ?? clockNow;
   const isToday = !viewDate || viewDate === toKey(new Date());
   const density = !isToday
     ? "day"
@@ -5091,7 +5130,7 @@ function FloorMap({
         ? "focus"
         : "now";
   useEffect(() => {
-    const viewport = mapRef.current?.closest(".map-viewport");
+    const viewport = mapRef.current?.closest<HTMLElement>(".map-viewport");
     if (!viewport || !showSchedule) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -5108,9 +5147,6 @@ function FloorMap({
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
   }, [showSchedule]);
-  useEffect(() => {
-    if (zoom < 1) setZoom(1);
-  }, [zoom]);
   useEffect(() => {
     const scroll = mapRef.current?.closest(
       ".map-scroll",
@@ -5864,7 +5900,7 @@ function DirectoryView({
   type: "student" | "teacher";
   rows: Row[];
   data: PortalData;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpen: (id: string) => void;
 }) {
   const isStudent = type === "student";
@@ -6046,9 +6082,9 @@ function DirectoryViewV2({
   type: "student" | "teacher";
   rows: Row[];
   data: PortalData;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onOpen: (id: string) => void;
   onCreate?: () => void;
 }) {
@@ -6316,9 +6352,9 @@ function CourseManager({
   onOpen,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpen: (id: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -6386,9 +6422,9 @@ function CourseCatalogue({
   onOpen,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpen: (id: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -6525,16 +6561,16 @@ function CourseForm({
   close,
   t,
 }: {
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
   close: () => void;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
 }) {
   const [color, setColor] = useState(defaultCourseColour);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("createCourse", { ...values, color }).then(close);
+    void run("createCourse", { ...values, color }).then(saved => { if (saved) close(); });
   }
   return (
     <form className="inline-form course-form" onSubmit={submit}>
@@ -6624,9 +6660,9 @@ function ClassroomManager({
   onOpenRoom,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpenRoom: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -6666,7 +6702,7 @@ function ClassroomManager({
   function createRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("createClassroom", values).then(() => setAdding(false));
+    void run("createClassroom", values).then(saved => saved && setAdding(false));
   }
   function saveCampus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6675,7 +6711,7 @@ function ClassroomManager({
     void run(action, {
       ...values,
       campusId: campusForm === "edit" ? get(campus, "id") : undefined,
-    }).then(() => setCampusForm(null));
+    }).then(saved => saved && setCampusForm(null));
   }
   function uploadFloorplan(file?: File) {
     if (!file || !campus) return;
@@ -6907,9 +6943,9 @@ function ClassManager({
   onOpenCourse,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpenCourse: (id: string) => void;
 }) {
   return (
@@ -6931,9 +6967,9 @@ function CourseRunLibrary({
   onOpenCourse,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onOpenCourse: (id: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -6943,7 +6979,7 @@ function CourseRunLibrary({
   function createRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("createClassRun", values).then(() => setAdding(false));
+    void run("createClassRun", values).then(saved => saved && setAdding(false));
   }
   const courseGroups = data.courses
     .map((course) => ({
@@ -7233,9 +7269,9 @@ function LegacyCourseRunEditor({
 }: {
   runItem: Row;
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
@@ -7255,7 +7291,7 @@ function LegacyCourseRunEditor({
   function createSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("createSession", { ...values, runId }).then(() =>
+    void run("createSession", { ...values, runId }).then(saved => saved &&
       setAddingLesson(false),
     );
   }
@@ -7422,9 +7458,9 @@ function CourseRunEditor({
 }: {
   runItem: Row;
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
@@ -7463,7 +7499,7 @@ function CourseRunEditor({
   function createSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("createSession", { ...values, runId }).then(() =>
+    void run("createSession", { ...values, runId }).then(saved => saved &&
       setAddingLesson(false),
     );
   }
@@ -7752,9 +7788,9 @@ function EnrollmentManager({
   t,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
 }) {
   const [startAfter, setStartAfter] = useState("");
   const [endBefore, setEndBefore] = useState("");
@@ -8110,11 +8146,12 @@ function EnrollmentDialog({
 }: {
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   initialRun?: Row;
   courseId?: string;
   onClose: () => void;
 }) {
+  const [requestKey] = useState(() => crypto.randomUUID());
   const availableRuns = (
     courseId
       ? data.runs.filter((item) => get(item, "course_id") === courseId)
@@ -8155,12 +8192,6 @@ function EnrollmentDialog({
   const original = Number(selected?.price || 0);
   const finalPrice = Math.max(0, original - discount);
   const [amountReceived, setAmountReceived] = useState(finalPrice);
-  useEffect(() => {
-    setDiscount(0);
-    setAmountReceived(Number(selected?.price || 0));
-    setStudentId("");
-    setQuickStudent(null);
-  }, [runId]);
   function changeDiscount(value: number) {
     const next = Math.max(0, Math.min(value, original));
     setDiscount(next);
@@ -8172,6 +8203,7 @@ function EnrollmentDialog({
     const collectNow = mode === "now";
     void run("enrollStudentWithPayment", {
       ...values,
+      requestKey,
       runId: get(selected, "id"),
       studentId: quickStudent ? "" : studentId,
       studentName: quickStudent?.name ?? "",
@@ -8182,7 +8214,7 @@ function EnrollmentDialog({
       discount: collectNow ? discount : 0,
       amount: collectNow ? amountReceived : 0,
       payNow: collectNow,
-    }).then(onClose);
+    }).then(saved => { if (saved) onClose(); });
   }
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
@@ -8224,7 +8256,13 @@ function EnrollmentDialog({
                     get(runItem, "id") === get(selected, "id") ? "active" : ""
                   }
                   style={eventStyle(runItem)}
-                  onClick={() => setRunId(get(runItem, "id"))}
+                  onClick={() => {
+                    setRunId(get(runItem, "id"));
+                    setDiscount(0);
+                    setAmountReceived(Number(runItem.price || 0));
+                    setStudentId("");
+                    setQuickStudent(null);
+                  }}
                 >
                   <strong>{get(runItem, "name")}</strong>
                   <span>{classDateRange(lessons)}</span>
@@ -8423,7 +8461,7 @@ function EnrollmentDialog({
                         FPX / online banking
                       </option>
                       <option value="touch_n_go_ewallet">
-                        Touch 'n Go eWallet
+                        Touch &apos;n Go eWallet
                       </option>
                       <option value="grabpay">GrabPay</option>
                       <option value="debit_credit_card">
@@ -8605,7 +8643,7 @@ function PaymentWorkspace({
   busy,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
   const [statementOpen, setStatementOpen] = useState(false);
@@ -8613,11 +8651,11 @@ function PaymentWorkspace({
   const [paymentQuery, setPaymentQuery] = useState("");
   const [paymentFrom, setPaymentFrom] = useState("");
   const [paymentTo, setPaymentTo] = useState("");
-  const invoiced = data.invoices.reduce(
+  const invoiced = [...data.invoices, ...data.passOrders].reduce(
     (sum, item) => sum + Number(item.total_amount || 0),
     0,
   );
-  const received = data.invoices.reduce(
+  const received = [...data.invoices, ...data.passOrders].reduce(
     (sum, item) => sum + Number(item.paid_amount || 0),
     0,
   );
@@ -8690,7 +8728,7 @@ function PaymentWorkspace({
           icon={<ReceiptText size={19} />}
           label="Invoiced"
           value={amount(invoiced)}
-          note="Course contracts"
+          note="Course and pass orders"
           tone="blue"
         />
         <DashboardMetric
@@ -8719,6 +8757,7 @@ function PaymentWorkspace({
         />
       </div>
       <section className="management-panel payment-ledger-panel">
+        <OrderList rows={data.passOrders} busy={busy} onConfirm={id => run("recordPassPayment", { passOrderId: id, method: "cash" })} />
         <div className="panel-row">
           <div>
             <h3>Payment records</h3>
@@ -8994,7 +9033,7 @@ type ReportDefinition = {
   rows: Row[];
 };
 
-function ReportView({ data, t }: { data: PortalData; t: typeof copy.en }) {
+function ReportView({ data, t }: { data: PortalData; t: (typeof copy)[Language] }) {
   const [category, setCategory] = useState<
     "overview" | "students" | "teaching" | "finance" | "resources"
   >("overview");
@@ -9021,16 +9060,16 @@ function ReportView({ data, t }: { data: PortalData; t: typeof copy.en }) {
     );
   }
   const categories = [
-    ["overview", "Overview", "Campus health", <LayoutGrid size={18} />],
-    ["students", "Students", "Enrolment & progress", <UsersRound size={18} />],
+    ["overview", "Overview", "Campus health", <LayoutGrid key="overview" size={18} />],
+    ["students", "Students", "Enrolment & progress", <UsersRound key="students" size={18} />],
     [
       "teaching",
       "Teaching",
       "Lessons & attendance",
-      <ClipboardCheck size={18} />,
+      <ClipboardCheck key="teaching" size={18} />,
     ],
-    ["finance", "Finance", "Payments & balances", <ReceiptText size={18} />],
-    ["resources", "Resources", "Rooms & capacity", <DoorOpen size={18} />],
+    ["finance", "Finance", "Payments & balances", <ReceiptText key="finance" size={18} />],
+    ["resources", "Resources", "Rooms & capacity", <DoorOpen key="resources" size={18} />],
   ] as const;
   return (
     <section className="operation-stack report-workspace">
@@ -9670,7 +9709,7 @@ function SettingsView({
   busy,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
   const [start, setStart] = useState(data.settings.businessHours.start);
@@ -9773,7 +9812,7 @@ function EmailSettings({
   busy,
 }: {
   data: PortalData;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
   const mail = data.settings.mail;
@@ -9844,7 +9883,7 @@ function EmailSettings({
     </section>
   );
 }
-function MetricPills({ data, t }: { data: PortalData; t: typeof copy.en }) {
+function MetricPills({ data, t }: { data: PortalData; t: (typeof copy)[Language] }) {
   return (
     <div className="metric-pills">
       <span>
@@ -9892,9 +9931,9 @@ function LegacyDetailSheet({
 }: {
   detail: Exclude<Detail, null>;
   data: PortalData;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   close: () => void;
 }) {
   const item =
@@ -10135,7 +10174,7 @@ function CourseCatalogueDrawer({
   detail: Exclude<Detail, null>;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   close: () => void;
   closeAll: () => void;
   openDetail: (detail: Exclude<Detail, null>) => void;
@@ -10695,9 +10734,10 @@ function CourseRunDetailWorkspace({
   lessonTemplates: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
+  const clockNow = useClock();
   const rooms = Array.from(
     new Set(
       lessons.map((lesson) => get(lesson, "classroom_name")).filter(Boolean),
@@ -10716,7 +10756,7 @@ function CourseRunDetailWorkspace({
     Number(course.default_sessions || lessonTemplates.length || 0),
   );
   const completed = lessons.filter(
-    (lesson) => asTime(lesson.ends_at || lesson.starts_at) < Date.now(),
+    (lesson) => asTime(lesson.ends_at || lesson.starts_at) < clockNow,
   ).length;
   const [adjustingLessons, setAdjustingLessons] = useState(false);
   if (tab === "students")
@@ -10937,7 +10977,7 @@ function ClassLessonAdjustmentDialog({
   lessons: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [editing, setEditing] = useState<Row | null>(null);
@@ -11127,6 +11167,7 @@ function ClassScheduleBrowser({
   openDetail: (detail: Exclude<Detail, null>) => void;
   allClasses?: boolean;
 }) {
+  const clockNow = useClock();
   const [mode, setMode] = useState<"calendar" | "cards" | "list">("calendar");
   const [phase, setPhase] = useState<"all" | "active" | "finished">("all");
   const [anchor, setAnchor] = useState(() =>
@@ -11137,8 +11178,8 @@ function ClassScheduleBrowser({
       (lesson) =>
         phase === "all" ||
         (phase === "finished"
-          ? asTime(lesson.ends_at || lesson.starts_at) < Date.now()
-          : asTime(lesson.ends_at || lesson.starts_at) >= Date.now()),
+          ? asTime(lesson.ends_at || lesson.starts_at) < clockNow
+          : asTime(lesson.ends_at || lesson.starts_at) >= clockNow),
     )
     .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
   const sorted = [...lessons].sort(
@@ -11189,7 +11230,7 @@ function ClassScheduleBrowser({
               {
                 lessons.filter(
                   (lesson) =>
-                    asTime(lesson.ends_at || lesson.starts_at) >= Date.now(),
+                    asTime(lesson.ends_at || lesson.starts_at) >= clockNow,
                 ).length
               }
             </b>
@@ -11204,7 +11245,7 @@ function ClassScheduleBrowser({
               {
                 lessons.filter(
                   (lesson) =>
-                    asTime(lesson.ends_at || lesson.starts_at) < Date.now(),
+                    asTime(lesson.ends_at || lesson.starts_at) < clockNow,
                 ).length
               }
             </b>
@@ -11230,7 +11271,7 @@ function ClassScheduleBrowser({
               </div>
               <Status
                 value={
-                  asTime(lesson.ends_at || lesson.starts_at) < Date.now()
+                  asTime(lesson.ends_at || lesson.starts_at) < clockNow
                     ? "completed"
                     : "scheduled"
                 }
@@ -11260,7 +11301,6 @@ function ClassScheduleBrowser({
               日历
             </button>
             <button
-              className={mode === "cards" ? "active" : ""}
               type="button"
               onClick={() => setMode("cards")}
             >
@@ -11321,15 +11361,6 @@ function ClassScheduleBrowser({
             onSelectDate={() => undefined}
           />
         </>
-      ) : mode === "cards" ? (
-        <InteractiveLessonSequence
-          title=""
-          sessions={sorted}
-          expanded
-          onOpen={(lesson) =>
-            openDetail({ kind: "session", id: get(lesson, "id") })
-          }
-        />
       ) : (
         <ClassLessonBrowseGrid lessons={sorted} openDetail={openDetail} />
       )}
@@ -11357,7 +11388,7 @@ function CourseCatalogueContent({
   enrolled: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
   if (tab === "course")
@@ -11470,7 +11501,7 @@ function CourseLessonPlan({
   intakes: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState<CourseLessonDraft[]>(() =>
@@ -11482,12 +11513,6 @@ function CourseLessonPlan({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [quickFill, setQuickFill] = useState(false);
-  useEffect(() => {
-    if (!editing)
-      setDrafts(
-        templateDrafts(lessonTemplates, Number(course.default_minutes || 90)),
-      );
-  }, [lessonTemplates, course, editing]);
   function update(index: number, patch: Partial<CourseLessonDraft>) {
     setDrafts((items) =>
       items.map((item, itemIndex) =>
@@ -11514,7 +11539,7 @@ function CourseLessonPlan({
     void run("saveCourseLessons", {
       courseId: get(course, "id"),
       lessonPlan: JSON.stringify(drafts),
-    }).then(() => setEditing(false));
+    }).then(saved => saved && setEditing(false));
   }
   function toggle(index: number) {
     setSelectedIds((items) =>
@@ -11864,7 +11889,11 @@ function CourseLessonPlan({
           <button
             className="primary-button"
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setDrafts(templateDrafts(lessonTemplates, Number(course.default_minutes || 90)));
+              setSelectedIds([]);
+              setEditing(true);
+            }}
           >
             <Settings2 size={15} />
             Edit lesson plan
@@ -12054,7 +12083,7 @@ function CourseIntakeLibrary({
   lessonTemplates: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -12078,10 +12107,6 @@ function CourseIntakeLibrary({
   const missingLessonCount = selected
     ? Math.max(0, lessonTemplates.length - selectedLessons.length)
     : 0;
-  useEffect(() => {
-    if (selected && get(selected, "id") !== selectedId)
-      setSelectedId(get(selected, "id"));
-  }, [selected, selectedId]);
   const activeLibrary = (
     <>
       <section className="course-dashboard-strip classes">
@@ -12411,9 +12436,9 @@ function CourseIntakeLibrary({
             lessons={selectedLessons}
             selectedIds={selectedLessonIds}
             onSelect={setSelectedLessonIds}
+            data={data}
             busy={busy}
             run={run}
-            openDetail={openDetail}
           />
         </section>
       ) : (
@@ -12462,7 +12487,7 @@ function CourseEditDialog({
 }: {
   course: Row;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [colour, setColour] = useState(
@@ -12475,7 +12500,7 @@ function CourseEditDialog({
       ...values,
       courseId: get(course, "id"),
       color: colour,
-    }).then(onClose);
+    }).then(saved => { if (saved) onClose(); });
   }
   function remove() {
     if (
@@ -12483,7 +12508,7 @@ function CourseEditDialog({
         "Delete this course? Courses with enrolled students cannot be deleted.",
       )
     )
-      void run("deleteCourse", { courseId: get(course, "id") }).then(onClose);
+      void run("deleteCourse", { courseId: get(course, "id") }).then(saved => { if (saved) onClose(); });
   }
   if (true)
     return (
@@ -12689,7 +12714,7 @@ function ClassCreateDialog({
   course: Row;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
 }) {
   function create(event: FormEvent<HTMLFormElement>) {
@@ -12817,7 +12842,7 @@ function ClassAssignmentPanel({
   selectedLessonIds: string[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   const first = lessons[0];
   const teacherBooking = data.teacherBookings.find(
@@ -12932,7 +12957,7 @@ function ClassLessonGrid({
   onSelect: (ids: string[]) => void;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   const [modifyLesson, setModifyLesson] = useState<Row | null>(null);
   const ordered = [...lessons].sort(
@@ -13132,13 +13157,13 @@ function LessonModifyDialog({
   lesson: Row;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
   draftStartsAt?: string;
 }) {
   const [saveRequested, setSaveRequested] = useState(false);
-  const signature = `${get(lesson, "starts_at")}|${get(lesson, "ends_at")}|${get(lesson, "teacher_id")}|${get(lesson, "classroom_id")}|${get(lesson, "topic")}`;
-  const initialSignature = useRef(signature).current;
+  const signature = `${get(lesson, "starts_at")}|${get(lesson, "ends_at")}|${get(lesson, "teacher_id")}|${get(lesson, "classroom_id")}|${get(lesson, "topic")}|${get(lesson, "online_url")}`;
+  const [initialSignature] = useState(signature);
   const startDefault =
     draftStartsAt || get(lesson, "starts_at").replace(" ", "T");
   const duration = Math.max(
@@ -13189,6 +13214,7 @@ function LessonModifyDialog({
             defaultValue={get(lesson, "topic")}
             required
           />
+          <FormField name="onlineUrl" label="Online classroom link" type="url" defaultValue={get(lesson, "online_url")} />
           <label className="form-field">
             <span>Date & start time</span>
             <input
@@ -13263,7 +13289,8 @@ function ClassSettingsDialog({
   lessons: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  openDetail: (detail: Exclude<Detail, null>) => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"all" | "individual">("all");
@@ -13400,7 +13427,7 @@ function ClassScheduleDialog({
   missingCount?: number;
   totalCount?: number;
   busy?: boolean;
-  run?: (action: string, values?: Row) => Promise<void>;
+  run?: (action: string, values?: Row) => Promise<boolean>;
   onOpen: (detail: Exclude<Detail, null>) => void;
   onClose: () => void;
   onQuick: () => void;
@@ -13530,7 +13557,7 @@ function QuickScheduleDialog({
   defaultDuration?: number;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [enabled, setEnabled] = useState(false);
@@ -13776,7 +13803,7 @@ function QuickScheduleDialog({
       ),
       startTime: start,
       durationMinutes: duration,
-    }).then(onClose);
+    }).then(saved => { if (saved) onClose(); });
   }
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
@@ -14014,7 +14041,7 @@ function CourseProductSettings({
 }: {
   course: Row;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   const [colour, setColour] = useState(
     get(course, "display_color") || defaultCourseColour,
@@ -14105,10 +14132,11 @@ function StudentClassDrawer({
   detail: Exclude<Detail, null>;
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   close: () => void;
   closeAll: () => void;
 }) {
+  const clockNow = useClock();
   const [tab, setTab] = useState("summary");
   const [leaveLesson, setLeaveLesson] = useState<Row | null>(null);
   const runItem = data.runs.find((row) => get(row, "id") === detail.id);
@@ -14141,7 +14169,7 @@ function StudentClassDrawer({
   const attended = attendance.filter((row) =>
     ["present", "late"].includes(get(row, "status")),
   ).length;
-  const upcoming = sessions.find((row) => asTime(row.starts_at) >= Date.now());
+  const upcoming = sessions.find((row) => asTime(row.starts_at) >= clockNow);
   const outstanding = invoice
     ? Math.max(0, Number(invoice.total_amount) - Number(invoice.paid_amount))
     : 0;
@@ -14254,7 +14282,7 @@ function StudentClassDrawer({
               sessionId: get(leaveLesson, "id"),
               studentId: get(student, "id"),
               note,
-            }).then(() => setLeaveLesson(null))
+            }).then(saved => saved && setLeaveLesson(null))
           }
         />
       ) : null}
@@ -14383,7 +14411,8 @@ function StudentClassLessons({
   onRequestLeave: (lesson: Row) => void;
   title?: string;
 }) {
-  const now = Date.now();
+  const clockNow = useClock();
+  const now = clockNow;
   return (
     <section className="sheet-section lesson-sequence">
       <div className="sheet-section-title">
@@ -14450,7 +14479,7 @@ function StudentClassMaterials({ sessions }: { sessions: Row[] }) {
       <div className="materials-empty">
         <BookOpen size={23} />
         <strong>No materials shared yet</strong>
-        <p>Your teacher's slides, worksheets and homework will appear here.</p>
+        <p>Your teacher&apos;s slides, worksheets and homework will appear here.</p>
       </div>
       {sessions.length ? (
         <div className="material-lesson-hint">
@@ -14540,9 +14569,9 @@ function DetailSheet({
 }: {
   detail: Exclude<Detail, null>;
   data: PortalData;
-  t: typeof copy.en;
+  t: (typeof copy)[Language];
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   close: () => void;
   closeAll: () => void;
   openDetail: (detail: Exclude<Detail, null>) => void;
@@ -14591,6 +14620,28 @@ function DetailSheet({
   }
   if (detail.kind === "studentCreate")
     return <StudentCreateDrawer busy={busy} run={run} close={close} />;
+  return <EntityDetailSheet detail={detail} data={data} t={t} busy={busy} run={run} close={close} closeAll={closeAll} openDetail={openDetail} />;
+}
+
+function EntityDetailSheet({
+  detail,
+  data,
+  t,
+  busy,
+  run,
+  close,
+  closeAll,
+  openDetail,
+}: {
+  detail: Exclude<Detail, null>;
+  data: PortalData;
+  t: (typeof copy)[Language];
+  busy: boolean;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  close: () => void;
+  closeAll: () => void;
+  openDetail: (detail: Exclude<Detail, null>) => void;
+}) {
   const item =
     detail.kind === "session"
       ? data.sessions.find((row) => get(row, "id") === detail.id)
@@ -14598,9 +14649,7 @@ function DetailSheet({
         ? data.students.find((row) => get(row, "id") === detail.id)
         : detail.kind === "teacher"
           ? data.teachers.find((row) => get(row, "id") === detail.id)
-          : detail.kind === "course"
-            ? data.runs.find((row) => get(row, "id") === detail.id)
-            : data.classrooms.find((row) => get(row, "id") === detail.id);
+          : data.classrooms.find((row) => get(row, "id") === detail.id);
   const [tab, setTab] = useState("summary");
   const [modifySession, setModifySession] = useState(
     detail.edit && detail.kind === "session",
@@ -14641,13 +14690,9 @@ function DetailSheet({
         )
       : [];
   const runLessons =
-    detail.kind === "course"
-      ? data.sessions.filter((row) => get(row, "class_run_id") === detail.id)
-      : [];
+    [];
   const runStudents =
-    detail.kind === "course"
-      ? data.enrollments.filter((row) => get(row, "class_run_id") === detail.id)
-      : [];
+    [];
   const sessionRoster =
     detail.kind === "session"
       ? data.attendance.filter(
@@ -14655,7 +14700,7 @@ function DetailSheet({
         )
       : [];
   const title =
-    detail.kind === "session" || detail.kind === "course"
+    detail.kind === "session"
       ? get(item, "course_title")
       : get(item, "name");
   const subtitle =
@@ -14667,9 +14712,7 @@ function DetailSheet({
           ? get(item, "subject")
           : `${get(item, "location")} · ${get(item, "capacity")} seats`;
   const courseSubtitle =
-    detail.kind === "course"
-      ? `${get(item, "name")} - ${get(item, "term_name")}`
-      : subtitle;
+    subtitle;
   const courseSessions =
     detail.kind === "session"
       ? data.sessions.filter(
@@ -14696,16 +14739,7 @@ function DetailSheet({
           ]
         : detail.kind === "session"
           ? [{ id: "summary", label: "Summary" }]
-          : detail.kind === "course"
-            ? [
-                { id: "summary", label: "Summary" },
-                {
-                  id: "students",
-                  label: "Students",
-                  count: runStudents.length,
-                },
-              ]
-            : [
+          : [
                 { id: "summary", label: "Summary" },
                 {
                   id: "schedule",
@@ -14734,11 +14768,11 @@ function DetailSheet({
       if (photo instanceof File && photo.size)
         values.avatarUrl = await fileAsDataUrl(photo);
       delete values.avatarFile;
-      await run(detail.kind === "student" ? "updateStudent" : "updateTeacher", {
+      const saved = await run(detail.kind === "student" ? "updateStudent" : "updateTeacher", {
         ...values,
         [detail.kind === "student" ? "studentId" : "teacherId"]: detail.id,
       });
-      setEditing(false);
+      if (saved) setEditing(false);
     } catch {
       /* The shared save message reports the server-side error. */
     }
@@ -14765,8 +14799,6 @@ function DetailSheet({
                 <div className="entity-icon">
                   {detail.kind === "session" ? (
                     <ClipboardCheck size={22} />
-                  ) : detail.kind === "course" ? (
-                    <BookOpen size={22} />
                   ) : (
                     <DoorOpen size={22} />
                   )}
@@ -14776,9 +14808,7 @@ function DetailSheet({
                 <span className="sheet-eyebrow">
                   {detail.kind === "session"
                     ? "Lesson"
-                    : detail.kind === "course"
-                      ? "Class intake"
-                      : detail.kind === "student"
+                    : detail.kind === "student"
                         ? "Student"
                         : detail.kind === "teacher"
                           ? "Teacher"
@@ -14786,16 +14816,10 @@ function DetailSheet({
                 </span>
                 <h2 className="entity-title">
                   {title}
-                  {detail.kind === "course" ? (
-                    <span className="class-name-chip" style={eventStyle(item)}>
-                      {get(item, "name")}
-                    </span>
-                  ) : null}
+                  {null}
                 </h2>
                 <p>
-                  {detail.kind === "course"
-                    ? get(item, "term_name")
-                    : courseSubtitle}
+                  {courseSubtitle}
                 </p>
               </div>
             </div>
@@ -14881,18 +14905,7 @@ function DetailSheet({
                   openDetail={openDetail}
                 />
               ) : null}
-              {detail.kind === "course" ? (
-                <CourseDetailContent
-                  tab={tab}
-                  item={item}
-                  lessons={runLessons}
-                  students={runStudents}
-                  data={data}
-                  busy={busy}
-                  run={run}
-                  openDetail={openDetail}
-                />
-              ) : null}
+              {null}
               {detail.kind === "room" ? (
                 <RoomDetailContent
                   tab={tab}
@@ -14986,7 +14999,7 @@ function StudentCreateDrawer({
   close,
 }: {
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   close: () => void;
 }) {
   const [error, setError] = useState("");
@@ -15000,14 +15013,14 @@ function StudentCreateDrawer({
         photo instanceof File && photo.size
           ? await fileAsDataUrl(photo)
           : String(form.get("avatarUrl") || "sprite:0");
-      await run("createStudent", {
+      const saved = await run("createStudent", {
         name: String(form.get("name") || ""),
         level: String(form.get("level") || ""),
         phone: String(form.get("phone") || ""),
         email: String(form.get("email") || ""),
         avatarUrl,
       });
-      close();
+      if (saved) close();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -15123,11 +15136,11 @@ function DetailTabs({
   active: string;
   onChange: (value: string) => void;
   tabs: { id: string; label: string; count?: number }[];
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   return (
     <nav className="detail-tabs-right" aria-label="Details sections">
-      <button
+      {onClose ? <button
         className="drawer-close-tab"
         type="button"
         onClick={onClose}
@@ -15135,7 +15148,7 @@ function DetailTabs({
         aria-label="Close details"
       >
         <ChevronRight size={20} />
-      </button>
+      </button> : null}
       {tabs
         .filter((tab) => tab.id !== "income")
         .map((tab) => (
@@ -15201,14 +15214,15 @@ function CourseDetailContent({
   students: Row[];
   data: PortalData;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
+  const clockNow = useClock();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
-  const now = Date.now();
+  const now = clockNow;
   const manuallyCurrent = lessons.find(
     (lesson) => get(lesson, "status") === "current",
   );
@@ -15424,7 +15438,7 @@ function StudentDetailContent({
   outstanding: number;
   busy: boolean;
   saveProfile: (event: FormEvent<HTMLFormElement>) => void;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
   const activeEnrollments = enrollments
@@ -15512,7 +15526,7 @@ function StudentSummaryCard({
   outstanding: number;
   busy: boolean;
   saveProfile: (event: FormEvent<HTMLFormElement>) => void;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   const email =
     get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`;
@@ -15609,7 +15623,7 @@ function PaymentLedger({
 }: {
   invoices: Row[];
   payments: Row[];
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
   actionLabel?: string;
 }) {
@@ -15721,10 +15735,12 @@ function PaymentDialog({
   onClose,
 }: {
   invoice: Row;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogFocus<HTMLFormElement>(onClose, busy);
+  const [requestKey] = useState(() => crypto.randomUUID());
   const original = Number(invoice.total_amount);
   const alreadyPaid = Number(invoice.paid_amount);
   const [discount, setDiscount] = useState(0);
@@ -15746,10 +15762,11 @@ function PaymentDialog({
     const values = Object.fromEntries(new FormData(event.currentTarget));
     void run("recordPayment", {
       ...values,
+      requestKey,
       invoiceId: get(invoice, "id"),
       discount,
       amount: amountReceived,
-    }).then(onClose);
+    }).then(saved => { if (saved) onClose(); });
   }
   return (
     <div
@@ -15758,6 +15775,10 @@ function PaymentDialog({
       onMouseDown={onClose}
     >
       <form
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Record payment"
         className="payment-dialog"
         onSubmit={submit}
         onMouseDown={(event) => event.stopPropagation()}
@@ -15808,7 +15829,7 @@ function PaymentDialog({
               <option value="duitnow_qr">DuitNow QR</option>
               <option value="duitnow_transfer">DuitNow transfer</option>
               <option value="fpx_online_banking">FPX / online banking</option>
-              <option value="touch_n_go_ewallet">Touch 'n Go eWallet</option>
+              <option value="touch_n_go_ewallet">Touch &apos;n Go eWallet</option>
               <option value="grabpay">GrabPay</option>
               <option value="debit_credit_card">Debit / credit card</option>
               <option value="cash">Cash</option>
@@ -15864,7 +15885,7 @@ function CommunicationPanel({
 }: {
   item: Row;
   messages: Row[];
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
   const email =
@@ -16302,8 +16323,8 @@ function SessionDetailContent({
   enrollStudentId: string;
   setEnrollStudentId: (value: string) => void;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
-  t: typeof copy.en;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  t: (typeof copy)[Language];
   onSaved: () => void;
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
@@ -16463,20 +16484,21 @@ function SessionDetailContent({
 
 function InteractiveLessonSequence({
   sessions,
-  currentId,
+  currentId = "",
   expanded = false,
   title,
   onOpen,
   onSetCurrent,
 }: {
   sessions: Row[];
-  currentId: string;
+  currentId?: string;
   expanded?: boolean;
   title?: string;
   onOpen?: (session: Row) => void;
   onSetCurrent?: (session: Row) => void;
 }) {
-  const now = Date.now();
+  const clockNow = useClock();
+  const now = clockNow;
   const ordered = [...sessions].sort(
     (left, right) => asTime(left.starts_at) - asTime(right.starts_at),
   );
@@ -16575,7 +16597,8 @@ function LessonSequence({
   title?: string;
   onOpen?: (session: Row) => void;
 }) {
-  const now = Date.now();
+  const clockNow = useClock();
+  const now = clockNow;
   const upcoming = sessions.find((session) => asTime(session.starts_at) > now);
   const rows = expanded
     ? sessions
@@ -16787,8 +16810,8 @@ function SessionSummary({
   enrollStudentId: string;
   setEnrollStudentId: (value: string) => void;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
-  t: typeof copy.en;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  t: (typeof copy)[Language];
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
   return (
@@ -16882,8 +16905,8 @@ function ClassRegister({
 }: {
   roster: Row[];
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
-  t: typeof copy.en;
+  run: (action: string, values?: Row) => Promise<boolean>;
+  t: (typeof copy)[Language];
   openDetail: (detail: Exclude<Detail, null>) => void;
 }) {
   return (
@@ -16977,7 +17000,7 @@ function SessionEnrollment({
   enrollStudentId: string;
   setEnrollStudentId: (value: string) => void;
   busy: boolean;
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
 }) {
   return (
     <section className="sheet-section">
@@ -17094,7 +17117,7 @@ function ListSection({
   );
 }
 
-type GridColumn = { key: string; label: string; width?: number };
+type GridColumn = { key: string; label: string; width?: number; status?: boolean; money?: boolean };
 
 function defaultColumnWidth(column: GridColumn) {
   if (column.width) return column.width;
@@ -17106,27 +17129,28 @@ function defaultColumnWidth(column: GridColumn) {
   return column.width || 148;
 }
 
-function ResizableDataTable({
-  columns,
-  rows,
-  empty,
-  renderCell,
-  onRowClick,
-}: {
+type ResizableDataTableProps = {
   columns: GridColumn[];
   rows: Row[];
   empty: string;
   renderCell: (row: Row, column: GridColumn) => ReactNode;
   onRowClick?: (row: Row) => void;
-}) {
-  const signature = columns.map((column) => column.key).join("|");
+};
+
+function ResizableDataTable(props: ResizableDataTableProps) {
+  const signature = props.columns.map(column => `${column.key}:${column.width ?? "auto"}`).join("|");
+  return <ResizableDataTableBody key={signature} {...props} />;
+}
+
+function ResizableDataTableBody({
+  columns,
+  rows,
+  empty,
+  renderCell,
+  onRowClick,
+}: ResizableDataTableProps) {
   const [widths, setWidths] = useState(() => columns.map(defaultColumnWidth));
   const widthsRef = useRef(widths);
-  useEffect(() => {
-    const next = columns.map(defaultColumnWidth);
-    widthsRef.current = next;
-    setWidths(next);
-  }, [signature]);
   const totalWidth = widths.reduce((total, width) => total + width, 0);
 
   function resizeColumn(
@@ -17269,7 +17293,7 @@ function InvoiceTable({
   busy,
 }: {
   rows: Row[];
-  run: (action: string, values?: Row) => Promise<void>;
+  run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
   const [invoiceToPay, setInvoiceToPay] = useState<Row | null>(null);

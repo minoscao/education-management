@@ -1,5 +1,5 @@
-import { AdminConsole } from "../admin-console";
+import { redirect } from "next/navigation";
 
 export default function TeacherBookingsPage() {
-  return <AdminConsole activeTable="teacherBookings" />;
+  redirect("/?view=calendar");
 }

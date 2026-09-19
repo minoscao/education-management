@@ -1,8 +1,12 @@
 import { env } from "cloudflare:workers";
+import { LearningStore, type Database } from "../../lib/learning-store";
+import { findResourceConflicts as findConflicts } from "../../lib/resource-conflicts";
 
 type Row = Record<string, unknown>;
 
 type ActionPayload = {
+  requestKey?: string;
+  onlineUrl?: string;
   action?: string;
   courseId?: string;
   runId?: string;
@@ -85,6 +89,8 @@ function db() {
   if (!env.DB) throw new Error("Database connection is unavailable.");
   return env.DB;
 }
+
+function learning() { return new LearningStore(db() as unknown as Database); }
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -246,6 +252,7 @@ async function resetSeedMarkers() {
 }
 
 async function seedDatabase() {
+  await learning().prepareLegacySchema();
   const [ready, runtimeReady, passSchemaReady] = await Promise.all([
     row<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [
       portalBootstrapKey,
@@ -636,6 +643,10 @@ async function ensureTeachingConfiguration() {
     "CREATE TABLE IF NOT EXISTS teacher_languages (teacher_id text NOT NULL, language_id text NOT NULL, PRIMARY KEY (teacher_id, language_id))",
   );
   await executeBatchInChunks([
+    {
+      sql: "INSERT OR IGNORE INTO teaching_languages (id, code, name, display_color) VALUES ('lang-ce', 'CE', 'Mandarin + English', '#2563EB'), ('lang-me', 'ME', 'Bahasa + English', '#D97706'), ('lang-zh', 'ZH', 'Chinese only', '#0F766E')",
+      values: [],
+    },
     {
       sql: "UPDATE teaching_languages SET display_color = '#2563EB' WHERE id = 'lang-ce'",
       values: [],
@@ -4980,18 +4991,11 @@ async function updateSession(payload: ActionPayload) {
       throw new Error(`${student.name} is already booked for this time.`);
   }
   const nextTopic = payload.topic?.trim() || current.topic;
-  await execute(
-    "UPDATE class_sessions SET topic = ?, starts_at = ?, ends_at = ?, status = 'scheduled' WHERE id = ?",
-    [nextTopic, startsAt, endsAt, payload.sessionId],
-  );
-  await execute(
-    "UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?",
-    [payload.classroomId, startsAt, endsAt, payload.sessionId],
-  );
-  await execute(
-    "UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?",
-    [payload.teacherId, startsAt, endsAt, payload.sessionId],
-  );
+  await executeBatch([
+    { sql: "UPDATE class_sessions SET topic = ?, starts_at = ?, ends_at = ?, online_url = COALESCE(?, online_url), status = 'scheduled' WHERE id = ?", values: [nextTopic, startsAt, endsAt, payload.onlineUrl?.trim() ?? null, payload.sessionId] },
+    { sql: "UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", values: [payload.classroomId, startsAt, endsAt, payload.sessionId] },
+    { sql: "UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", values: [payload.teacherId, startsAt, endsAt, payload.sessionId] },
+  ]);
   const classroom = await row<{ name: string }>(
     "SELECT name FROM classrooms WHERE id = ?",
     [payload.classroomId],
@@ -5043,28 +5047,12 @@ async function cancelSession(payload: ActionPayload) {
   );
   if (!current) throw new Error("Lesson not found.");
   if (current.status === "cancelled") return;
-  await execute("UPDATE class_sessions SET status = 'cancelled' WHERE id = ?", [
-    payload.sessionId,
+  await executeBatch([
+    { sql: "UPDATE class_sessions SET status = 'cancelled' WHERE id = ?", values: [payload.sessionId] },
+    { sql: "UPDATE class_resource_bookings SET status = 'cancelled' WHERE class_session_id = ?", values: [payload.sessionId] },
+    { sql: "UPDATE class_teacher_bookings SET status = 'cancelled' WHERE class_session_id = ?", values: [payload.sessionId] },
+    { sql: "INSERT INTO class_session_changes (id, class_session_id, change_type, original_session_no, original_topic, original_starts_at, original_ends_at) VALUES (?, ?, 'cancelled', ?, ?, ?, ?)", values: [id('session-change'), payload.sessionId, current.session_no, current.topic, current.starts_at, current.ends_at] },
   ]);
-  await execute(
-    "UPDATE class_resource_bookings SET status = 'cancelled' WHERE class_session_id = ?",
-    [payload.sessionId],
-  );
-  await execute(
-    "UPDATE class_teacher_bookings SET status = 'cancelled' WHERE class_session_id = ?",
-    [payload.sessionId],
-  );
-  await execute(
-    "INSERT INTO class_session_changes (id, class_session_id, change_type, original_session_no, original_topic, original_starts_at, original_ends_at) VALUES (?, ?, 'cancelled', ?, ?, ?, ?)",
-    [
-      id("session-change"),
-      payload.sessionId,
-      current.session_no,
-      current.topic,
-      current.starts_at,
-      current.ends_at,
-    ],
-  );
 }
 
 async function swapSessionOrder(payload: ActionPayload) {
@@ -5780,12 +5768,15 @@ async function enrollStudent(
 async function createStudentForEnrollment(payload: ActionPayload) {
   const label = payload.studentName?.trim();
   if (!label) throw new Error("Please select or add a student.");
-  const studentId = id("student");
+  const requestKey = payload.requestKey;
+  if (requestKey && !/^[a-zA-Z0-9_-]{8,100}$/.test(requestKey))
+    throw new Error("Please reopen enrolment and try again.");
+  const studentId = requestKey ? `student-enrol-${requestKey}` : id("student");
   await execute(
-    "INSERT INTO students (id, code, name, level, guardian_phone, email, avatar_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO students (id, code, name, level, guardian_phone, email, avatar_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
     [
       studentId,
-      `STU-${Date.now().toString().slice(-6)}`,
+      `STU-${requestKey ?? crypto.randomUUID()}`,
       label,
       payload.studentLevel?.trim() || "Year 7",
       payload.studentPhone?.trim() || "",
@@ -5798,575 +5789,64 @@ async function createStudentForEnrollment(payload: ActionPayload) {
 }
 
 async function enrollStudentWithPayment(payload: ActionPayload) {
-  const studentId =
-    payload.studentId || (await createStudentForEnrollment(payload));
-  const payNow = payload.payNow === true || payload.payNow === "true";
-  const fee = number(payload.contractedFee, number(payload.price));
-  const result = await enrollStudent(
-    payload.runId,
-    studentId,
-    fee || undefined,
-  );
-  if (payNow) await recordPayment({ ...payload, invoiceId: result.invoiceId });
+  const studentId = payload.studentId || (await createStudentForEnrollment(payload));
+  const result = await learning().enrollCourse(studentId, payload.runId ?? "", deliveryMode(payload.deliveryMode), "course", payload.contractedFee === undefined ? undefined : number(payload.contractedFee));
+  if (payload.payNow === true || payload.payNow === "true")
+    await recordPayment({ ...payload, discount: payload.contractedFee === undefined ? payload.discount : 0, invoiceId: result.invoiceId });
 }
 
 async function recordPayment(payload: ActionPayload) {
-  if (!payload.invoiceId) throw new Error("Invoice not found.");
-  const invoice = await row<{
-    id: string;
-    student_id: string;
-    enrollment_id: string;
-    total_amount: number;
-    paid_amount: number;
-  }>(
-    "SELECT id, student_id, enrollment_id, total_amount, paid_amount FROM student_invoices WHERE id = ?",
-    [payload.invoiceId],
-  );
-  if (!invoice) throw new Error("Invoice not found.");
-  const discount = Math.min(
-    Math.max(0, number(payload.discount)),
-    Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)),
-  );
-  const adjustedTotal =
-    Math.round((number(invoice.total_amount) - discount) * 100) / 100;
-  const remaining = Math.max(0, adjustedTotal - number(invoice.paid_amount));
-  const amount = Math.min(
-    Math.max(0.01, number(payload.amount, remaining)),
-    remaining,
-  );
-  const paid = Math.round((number(invoice.paid_amount) + amount) * 100) / 100;
-  const status = paid >= adjustedTotal ? "paid" : "partly_paid";
-  await execute(
-    "INSERT INTO student_payments (id, invoice_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-    [
-      id("payment"),
-      invoice.id,
-      invoice.student_id,
-      amount,
-      payload.method || "duitnow_qr",
-      payload.proofReference?.trim() ?? "",
-      payload.note?.trim() ?? "",
-    ],
-  );
-  await execute(
-    "UPDATE student_invoices SET total_amount = ?, paid_amount = ?, status = ? WHERE id = ?",
-    [adjustedTotal, paid, status, invoice.id],
-  );
+  await learning().payInvoice({
+    invoiceId: payload.invoiceId ?? "", requestKey: payload.requestKey ?? id("payment"),
+    amount: payload.amount === undefined ? undefined : number(payload.amount),
+    discount: payload.discount === undefined ? undefined : number(payload.discount),
+    method: payload.method, reference: payload.proofReference, note: payload.note,
+  });
 }
 
 async function setAttendance(payload: ActionPayload) {
-  if (!payload.studentBookingId) throw new Error("Student booking not found.");
-  const nextStatus = payload.attendanceStatus ?? "present";
-  const current = await row<{ status: string }>(
-    "SELECT status FROM class_attendance WHERE student_booking_id = ?",
-    [payload.studentBookingId],
-  );
-  if (
-    ["present", "late"].includes(nextStatus) &&
-    !["present", "late"].includes(current?.status ?? "")
-  ) {
-    const booking = await row<{
-      pass_id: string | null;
-      delivery_mode: string;
-      student_id: string;
-    }>(
-      "SELECT class_enrollments.pass_id, class_enrollments.delivery_mode, class_student_bookings.student_id FROM class_student_bookings JOIN class_enrollments ON class_enrollments.id = class_student_bookings.enrollment_id WHERE class_student_bookings.id = ?",
-      [payload.studentBookingId],
-    );
-    if (booking?.pass_id && booking.delivery_mode !== "online") {
-      const alreadyUsed = await row<{ id: string }>(
-        "SELECT id FROM pass_credit_uses WHERE student_booking_id = ?",
-        [payload.studentBookingId],
-      );
-      if (!alreadyUsed) {
-        const creditType = deliveryMode(booking.delivery_mode);
-        const column =
-          creditType === "online" ? "online_remaining" : "onsite_remaining";
-        const pass = await row<{
-          status: string;
-          valid_until: string;
-          remaining: number;
-        }>(
-          `SELECT status, valid_until, ${column} AS remaining FROM student_passes WHERE id = ? AND student_id = ?`,
-          [booking.pass_id, booking.student_id],
-        );
-        if (
-          !pass ||
-          pass.status !== "active" ||
-          pass.valid_until < localDate(0, "00:00").slice(0, 10) ||
-          number(pass.remaining) < 1
-        )
-          throw new Error(
-            `No ${creditType} pass credit is available for this lesson.`,
-          );
-        await execute(
-          `UPDATE student_passes SET ${column} = ${column} - 1 WHERE id = ?`,
-          [booking.pass_id],
-        );
-        await execute(
-          "INSERT INTO pass_credit_uses (id, pass_id, student_booking_id, credit_type, amount) VALUES (?, ?, ?, ?, 1)",
-          [
-            id("pass-use"),
-            booking.pass_id,
-            payload.studentBookingId,
-            creditType,
-          ],
-        );
-      }
-    }
-  }
-  await execute(
-    "UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?",
-    [nextStatus, payload.note?.trim() ?? "", payload.studentBookingId],
-  );
+  await learning().markAttendance(payload.studentBookingId ?? "", payload.attendanceStatus ?? "present", payload.note ?? "");
 }
 
 async function requestLeave(payload: ActionPayload) {
-  if (!payload.sessionId || !payload.studentId)
-    throw new Error("Lesson booking not found.");
-  const booking = await row<{ id: string }>(
-    "SELECT id FROM class_student_bookings WHERE class_session_id = ? AND student_id = ?",
-    [payload.sessionId, payload.studentId],
-  );
-  if (!booking) throw new Error("Lesson booking not found.");
-  const note = payload.note?.trim() || "Requested by student";
-  await execute(
-    "UPDATE class_attendance SET status = ?, note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?",
-    ["leave", note, booking.id],
-  );
-  const [student, teacher] = await Promise.all([
-    row<{ name: string }>("SELECT name FROM students WHERE id = ?", [
-      payload.studentId,
-    ]),
-    row<{ teacher_id: string }>(
-      "SELECT teacher_id FROM class_teacher_bookings WHERE class_session_id = ? LIMIT 1",
-      [payload.sessionId],
-    ),
-  ]);
-  if (teacher?.teacher_id)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'teacher', ?, ?, ?, 'unread')",
-      [
-        id("notice"),
-        teacher.teacher_id,
-        "Leave request",
-        `${student?.name || "A student"} requested leave. ${note}`,
-      ],
-    );
+  await learning().cancelLesson(payload.studentId ?? "", payload.sessionId ?? "", payload.note ?? "");
 }
 
-function passValidity(product: {
-  validity_type: string;
-  validity_days: number;
-}, anchor?: string, calendarMonths = 1) {
-  const parsed = anchor ? new Date(`${anchor.slice(0, 10)}T12:00:00`) : new Date();
-  const today = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  const yyyy = today.getFullYear();
-  const month = today.getMonth();
-  const date = (value: Date) =>
-    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  if (product.validity_type === "calendar_month")
-    return {
-      from: `${yyyy}-${String(month + 1).padStart(2, "0")}-01`,
-      until: date(new Date(yyyy, month + Math.max(1, calendarMonths), 0)),
-    };
-  const until = new Date(
-    yyyy,
-    month,
-    today.getDate() + Math.max(1, number(product.validity_days, 90)) - 1,
-  );
-  return { from: date(today), until: date(until) };
-}
 
-async function enrollWithPass(
-  runId: string | undefined,
-  studentId: string,
-  passId: string,
-  selectedMode: "onsite" | "online",
-) {
-  if (!runId) return;
-  const pass = await row<{
-    id: string;
-    onsite_remaining: number;
-    online_remaining: number;
-    status: string;
-    valid_until: string;
-  }>(
-    "SELECT id, onsite_remaining, online_remaining, status, valid_until FROM student_passes WHERE id = ? AND student_id = ?",
-    [passId, studentId],
-  );
-  if (
-    !pass ||
-    pass.status !== "active" ||
-    pass.valid_until < localDate(0, "00:00").slice(0, 10)
-  )
-    throw new Error("This pass is not active. Please complete payment first.");
-  const remaining =
-    selectedMode === "online"
-      ? number(pass.online_remaining)
-      : number(pass.onsite_remaining);
-  if (remaining < 1)
-    throw new Error(
-      `This pass has no ${selectedMode} lesson credits remaining.`,
-    );
-  const existing = await row<{ id: string }>(
-    "SELECT id FROM class_enrollments WHERE class_run_id = ? AND student_id = ? AND status = 'enrolled'",
-    [runId, studentId],
-  );
-  if (existing) {
-    await execute(
-      "UPDATE class_enrollments SET pass_id = ?, delivery_mode = ? WHERE id = ?",
-      [passId, selectedMode, existing.id],
-    );
-    return;
-  }
-  await enrollStudent(runId, studentId, 0, true, {
-    passId,
-    delivery: selectedMode,
-    skipInvoice: true,
-  });
-}
 
-async function consumeLatestCredit(
-  studentId: string,
-  type: "online" | "study",
-  payload: ActionPayload,
-) {
-  const column = type === "online" ? "online_remaining" : "study_remaining";
-  const pass = await row<{
-    id: string;
-    valid_until: string;
-  }>(
-    `SELECT id, valid_until FROM student_passes WHERE student_id = ? AND credit_type = ? AND status = 'active' AND valid_until >= ? AND ${column} > 0 ORDER BY valid_until ASC, created_at ASC LIMIT 1`,
-    [studentId, type, localDate(0, "00:00").slice(0, 10)],
-  );
-  if (!pass)
-    throw new Error(
-      type === "online"
-        ? "No online class credit is available. Buy a pass to join."
-        : "No study access credit is available. Buy a pass to book study access.",
-    );
-  await execute(
-    `UPDATE student_passes SET ${column} = ${column} - 1 WHERE id = ?`,
-    [pass.id],
-  );
-  await execute(
-    "INSERT INTO student_credit_uses (id, pass_id, student_id, class_run_id, class_session_id, credit_type, amount, used_at) VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)",
-    [
-      id("credit-use"),
-      pass.id,
-      studentId,
-      payload.runId || null,
-      payload.sessionId || null,
-      type,
-    ],
-  );
-}
 
 async function bookCourseWithCredit(payload: ActionPayload) {
-  if (!payload.studentId || !payload.runId)
-    throw new Error("Choose a learner and course first.");
-  const type = deliveryMode(payload.deliveryMode);
-  const column = type === "online" ? "online_remaining" : "onsite_remaining";
-  const pass = await row<{ id: string }>(
-    `SELECT id FROM student_passes WHERE student_id = ? AND credit_type = ? AND status = 'active' AND valid_until >= ? AND ${column} > 0 ORDER BY valid_until ASC, created_at ASC LIMIT 1`,
-    [payload.studentId, type, localDate(0, "00:00").slice(0, 10)],
-  );
-  if (!pass)
-    throw new Error(
-      `No ${type} credit is available. Buy a pass or choose direct course payment.`,
-    );
-  await enrollWithPass(payload.runId, payload.studentId, pass.id, type);
-  if (type === "online")
-    await consumeLatestCredit(payload.studentId, "online", payload);
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, ?, ?, 'unread')",
-    [
-      id("notification"),
-      payload.studentId,
-      type === "online" ? "Online class opened" : "Onsite seat reserved",
-      type === "online"
-        ? "One online class credit has been used."
-        : "Your onsite seat is reserved. The credit is used when you attend.",
-    ],
-  );
+  await learning().enrollCourse(payload.studentId ?? "", payload.runId ?? "", deliveryMode(payload.deliveryMode), "pass");
 }
 
 async function purchasePass(payload: ActionPayload) {
-  if (!payload.studentId || !payload.passProductId)
-    throw new Error("Choose a pass and learner first.");
-  const product = await row<{
-    id: string;
-    name: string;
-    onsite_credits: number;
-    online_credits: number;
-    study_credits: number;
-    validity_type: string;
-    validity_days: number;
-    price: number;
-  }>("SELECT * FROM pass_products WHERE id = ? AND status = 'active'", [
-    payload.passProductId,
-  ]);
-  if (!product) throw new Error("This pass is no longer available.");
-  const payNow = payload.payNow === true || payload.payNow === "true";
-  const reservationMonths = Math.max(1, Math.floor(number(payload.reservationMonths, 1)));
-  const { from, until } = passValidity(
-    product,
-    payload.passStartAt,
-    reservationMonths,
-  );
-  const passId = id("student-pass-package");
-  const orderId = id("pass-order");
-  const total = Math.max(0, number(product.price)) * reservationMonths;
-  const selectedMode = deliveryMode(payload.deliveryMode);
-  if (payload.runId && number(product.onsite_credits) < 1)
-    throw new Error("Choose a pass with onsite credits to reserve this class.");
-  try {
-    await execute(
-      "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, credits_total, valid_from, valid_until, onsite_remaining, online_remaining, study_remaining, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        passId,
-        orderId,
-        payload.studentId,
-        product.id,
-        product.name,
-        "package",
-        0,
-        from,
-        until,
-        0,
-        0,
-        0,
-        payNow ? "fulfilled" : "pending_payment",
-      ],
-    );
-    await execute(
-      "INSERT INTO pass_orders (id, pass_id, student_id, product_id, selected_run_id, delivery_mode, reservation_months, total_amount, paid_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        orderId,
-        passId,
-        payload.studentId,
-        product.id,
-        payload.runId || null,
-        payload.runId ? selectedMode : null,
-        reservationMonths,
-        total,
-        payNow ? total : 0,
-        payNow ? "paid" : "unpaid",
-      ],
-    );
-    if (payNow) {
-      await execute(
-        "INSERT INTO pass_payments (id, order_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-        [
-          id("pass-payment"),
-          orderId,
-          payload.studentId,
-          total,
-          payload.method || "duitnow_qr",
-          payload.proofReference?.trim() ?? "",
-          payload.note?.trim() ?? "",
-        ],
-      );
-      const cards = await issuePassCards({
-        orderId,
-        studentId: payload.studentId,
-        product: {
-          ...product,
-          onsite_credits: number(product.onsite_credits) * reservationMonths,
-          online_credits: number(product.online_credits) * reservationMonths,
-          study_credits: number(product.study_credits) * reservationMonths,
-        },
-        from,
-        until,
-      });
-      await enrollWithPass(
-        payload.runId,
-        payload.studentId,
-        cards.onsite ?? "",
-        selectedMode,
-      );
-    }
-  } catch (error) {
-    await execute("DELETE FROM pass_payments WHERE order_id = ?", [orderId]);
-    await execute("DELETE FROM pass_orders WHERE id = ?", [orderId]);
-    await execute("DELETE FROM student_passes WHERE order_id = ?", [orderId]);
-    throw error;
-  }
-  const learner = await row<{ name: string }>(
-    "SELECT name FROM students WHERE id = ?",
-    [payload.studentId],
-  );
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-    [
-      id("notification"),
-      "student",
-      payload.studentId,
-      payNow ? "Pass is ready" : "Pass payment saved",
-      payNow
-        ? `${product.name} is active until ${until}.`
-        : `${product.name} is waiting for payment.`,
-    ],
-  );
-  if (payload.runId && payNow)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) SELECT ?, 'admin', 'admin', ?, ?, 'unread' WHERE EXISTS (SELECT 1 FROM class_runs WHERE id = ?)",
-      [
-        id("notification"),
-        "New pass enrolment",
-        `${learner?.name ?? "A learner"} joined a class with ${product.name}.`,
-        payload.runId,
-      ],
-    );
+  const orderId = await learning().createPassOrder({
+    studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
+    requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
+    start: payload.passStartAt, runId: payload.runId, mode: payload.deliveryMode,
+  });
+  if (payload.payNow === true || payload.payNow === "true")
+    return await recordPassPayment({ ...payload, passOrderId: orderId });
+  return "Your unpaid order is saved. Credits will be issued after payment.";
 }
 
-type PassProductRecord = {
-  id: string;
-  name: string;
-  onsite_credits: number;
-  online_credits: number;
-  study_credits: number;
-  validity_type: string;
-  validity_days: number;
-  price: number;
-};
 
-function passCardName(
-  productName: string,
-  type: "onsite" | "online" | "study",
-  credits: number,
-) {
-  const label =
-    type === "onsite"
-      ? "Onsite class card"
-      : type === "online"
-        ? "Online class card"
-        : "Study access card";
-  return `${productName} · ${credits}-visit ${label}`;
-}
 
-async function issuePassCards({
-  orderId,
-  studentId,
-  product,
-  from,
-  until,
-}: {
-  orderId: string;
-  studentId: string;
-  product: PassProductRecord;
-  from: string;
-  until: string;
-}) {
-  const existing = await rows<{ id: string; credit_type: string }>(
-    "SELECT id, credit_type FROM student_passes WHERE order_id = ? AND credit_type IN ('onsite', 'online', 'study')",
-    [orderId],
-  );
-  const cardIds: Record<string, string> = Object.fromEntries(
-    existing.map((card) => [card.credit_type, card.id]),
-  );
-  const cards = [
-    ["onsite", number(product.onsite_credits)],
-    ["online", number(product.online_credits)],
-    ["study", number(product.study_credits)],
-  ] as const;
-  for (const [type, credits] of cards) {
-    if (credits < 1 || cardIds[type]) continue;
-    const cardId = id(`student-${type}-card`);
-    await execute(
-      "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, credits_total, valid_from, valid_until, onsite_remaining, online_remaining, study_remaining, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')",
-      [
-        cardId,
-        orderId,
-        studentId,
-        product.id,
-        passCardName(product.name, type, credits),
-        type,
-        credits,
-        from,
-        until,
-        type === "onsite" ? credits : 0,
-        type === "online" ? credits : 0,
-        type === "study" ? credits : 0,
-      ],
-    );
-    cardIds[type] = cardId;
-  }
-  return cardIds;
-}
 
 async function recordPassPayment(payload: ActionPayload) {
-  if (!payload.passOrderId) throw new Error("Pass order not found.");
-  const order = await row<{
-    id: string;
-    pass_id: string;
-    student_id: string;
-    selected_run_id: string | null;
-    delivery_mode: string | null;
-    total_amount: number;
-    status: string;
-    product_id: string;
-    name: string;
-    onsite_credits: number;
-    online_credits: number;
-    study_credits: number;
-    validity_type: string;
-    validity_days: number;
-    price: number;
-  }>(
-    "SELECT pass_orders.*, pass_products.name, pass_products.onsite_credits, pass_products.online_credits, pass_products.study_credits, pass_products.validity_type, pass_products.validity_days, pass_products.price FROM pass_orders JOIN pass_products ON pass_products.id = pass_orders.product_id WHERE pass_orders.id = ?",
-    [payload.passOrderId],
-  );
-  if (!order) throw new Error("Pass order not found.");
-  if (order.status === "paid") throw new Error("This pass order has already been paid.");
-  const product: PassProductRecord = {
-    id: order.product_id,
-    name: order.name,
-    onsite_credits: order.onsite_credits,
-    online_credits: order.online_credits,
-    study_credits: order.study_credits,
-    validity_type: order.validity_type,
-    validity_days: order.validity_days,
-    price: order.price,
-  };
-  const validity = passValidity(product);
-  await execute(
-    "INSERT INTO pass_payments (id, order_id, student_id, amount, method, proof_reference, note, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-    [
-      id("pass-payment"),
-      order.id,
-      order.student_id,
-      number(order.total_amount),
-      payload.method || "cash",
-      payload.proofReference?.trim() ?? "",
-      payload.note?.trim() ?? "",
-    ],
-  );
-  await execute(
-    "UPDATE pass_orders SET status = 'paid', paid_amount = total_amount WHERE id = ?",
-    [order.id],
-  );
-  await execute("UPDATE student_passes SET status = 'fulfilled' WHERE id = ?", [
-    order.pass_id,
-  ]);
-  const cards = await issuePassCards({
-    orderId: order.id,
-    studentId: order.student_id,
-    product,
-    from: validity.from,
-    until: validity.until,
-  });
-  if (order.selected_run_id && order.delivery_mode === "onsite" && cards.onsite)
-    await enrollWithPass(order.selected_run_id, order.student_id, cards.onsite, "onsite");
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, 'Pass is ready', ?, 'unread')",
-    [
-      id("notification"),
-      order.student_id,
-      `${product.name} credits are now active until ${validity.until}.`,
-    ],
-  );
+  const orderId = payload.passOrderId ?? "";
+  await learning().payPass(orderId, payload.method, payload.proofReference, payload.note);
+  const order = await row<{ student_id: string; selected_run_id: string | null; delivery_mode: string }>(
+    "SELECT student_id, selected_run_id, delivery_mode FROM pass_orders WHERE id = ?", [orderId]);
+  if (!order?.selected_run_id) return "Payment confirmed. Your learning credits are ready.";
+  let body = "Your pass is ready and your course seats are reserved.";
+  try {
+    await learning().enrollCourse(order.student_id, order.selected_run_id, deliveryMode(order.delivery_mode), "pass");
+  } catch (error) {
+    body = "Your pass is ready. Course reservation needs attention: " + (error instanceof Error ? error.message : "Please contact the campus.");
+  }
+  await execute("INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, 'Pass order updated', ?, 'unread') ON CONFLICT(id) DO UPDATE SET body = excluded.body, status = 'unread'", [orderId + ":notice", order.student_id, body]);
+  return body;
 }
 
 async function ensurePassData() {
@@ -6852,6 +6332,9 @@ async function readAttendance() {
 
 async function readPortal(includeAttendance = false) {
   await seedDatabase();
+  await learning().migrateLegacyCards();
+  const bookings = await rows("SELECT * FROM class_student_bookings ORDER BY created_at DESC");
+  const studyBookings = await rows("SELECT b.*, c.name AS classroom_name FROM study_bookings b JOIN classrooms c ON c.id = b.classroom_id ORDER BY starts_at");
   const [
     terms,
     courses,
@@ -6925,7 +6408,10 @@ async function readPortal(includeAttendance = false) {
     rows(
       "SELECT * FROM pass_products WHERE status = 'active' ORDER BY sort_order, name",
     ),
-    rows(`SELECT student_passes.*, pass_products.code AS product_code, pass_products.description AS product_description, pass_products.price AS product_price
+    rows(`SELECT student_passes.*, pass_products.code AS product_code, pass_products.description AS product_description, pass_products.price AS product_price,
+          onsite_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = student_passes.id AND e.status = 'reserved' AND e.credit_type = 'onsite') AS onsite_available,
+          online_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = student_passes.id AND e.status = 'reserved' AND e.credit_type = 'online') AS online_available,
+          study_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = student_passes.id AND e.status = 'reserved' AND e.credit_type = 'study') AS study_available
           FROM student_passes JOIN pass_products ON pass_products.id = student_passes.product_id ORDER BY student_passes.created_at DESC`),
     rows(`SELECT pass_orders.*, pass_products.name AS product_name, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
           FROM pass_orders JOIN pass_products ON pass_products.id = pass_orders.product_id JOIN students ON students.id = pass_orders.student_id
@@ -6968,7 +6454,7 @@ async function readPortal(includeAttendance = false) {
       "Teacher",
     )),
   ];
-  const outstanding = invoices.reduce(
+  const outstanding = [...invoices, ...passOrders].reduce(
     (sum, invoice) =>
       sum +
       Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)),
@@ -7029,6 +6515,8 @@ async function readPortal(includeAttendance = false) {
     /* Use connection defaults. */
   }
   return Response.json({
+    bookings,
+    studyBookings,
     terms,
     courses,
     courseLessons,
@@ -7059,7 +6547,9 @@ async function readPortal(includeAttendance = false) {
       openRuns: runs.filter((item) => item.status === "open").length,
       sessionsThisWeek: sessions.filter(
         (item) =>
-          new Date(String(item.starts_at).replace(" ", "T")).getTime() <
+          item.status !== 'cancelled' &&
+          new Date(String(item.starts_at).replace(" ", "T") + '+08:00').getTime() >= Date.now() &&
+          new Date(String(item.starts_at).replace(" ", "T") + '+08:00').getTime() <
           Date.now() + 7 * 86400000,
       ).length,
       activeStudents: students.filter((item) => item.status === "active")
@@ -7070,38 +6560,6 @@ async function readPortal(includeAttendance = false) {
   });
 }
 
-async function findConflicts(
-  source: Row[],
-  idKey: string,
-  nameKey: string,
-  kind: string,
-) {
-  const conflicts: Row[] = [];
-  for (let left = 0; left < source.length; left += 1) {
-    for (let right = left + 1; right < source.length; right += 1) {
-      const a = source[left];
-      const b = source[right];
-      if (
-        a[idKey] === b[idKey] &&
-        overlaps(
-          String(a.starts_at),
-          String(a.ends_at),
-          String(b.starts_at),
-          String(b.ends_at),
-        )
-      ) {
-        conflicts.push({
-          kind,
-          resource: a[nameKey],
-          first: a.course_title,
-          second: b.course_title,
-          starts_at: a.starts_at,
-        });
-      }
-    }
-  }
-  return conflicts;
-}
 
 export async function GET(request: Request) {
   try {
@@ -7110,6 +6568,7 @@ export async function GET(request: Request) {
     }
     return await readPortal();
   } catch (error) {
+    console.error('Portal load failed', error);
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Unable to load data.",
@@ -7141,20 +6600,17 @@ export async function POST(request: Request) {
     }
     if (payload.action === "setAttendance") {
       await setAttendance(payload);
-      return Response.json({
-        attendanceUpdate: {
-          studentBookingId: payload.studentBookingId,
-          status: payload.attendanceStatus ?? "present",
-          note: payload.note ?? "",
-        },
-      });
+      return await readPortal(true);
     }
     if (payload.action === "createCourse") await createCourse(payload);
     if (payload.action === "saveCourseLessons")
       await saveCourseLessons(payload);
     if (payload.action === "createClassRun") await createClassRun(payload);
     if (payload.action === "createSession") await createSession(payload);
-    if (payload.action === "updateSession") await updateSession(payload);
+    if (payload.action === "updateSession") {
+      if (payload.onlineUrl && !/^https:\/\//i.test(payload.onlineUrl)) throw new Error("Use a secure https classroom link.");
+      await updateSession(payload);
+    }
     if (payload.action === "cancelSession") await cancelSession(payload);
     if (payload.action === "swapSessionOrder") await swapSessionOrder(payload);
     if (payload.action === "configureClassRun")
@@ -7166,15 +6622,23 @@ export async function POST(request: Request) {
     if (payload.action === "resortClassLessons")
       await resortClassLessons(payload);
     if (payload.action === "enrollStudent")
-      await enrollStudent(payload.runId, payload.studentId);
+      await learning().enrollCourse(payload.studentId ?? "", payload.runId ?? "", deliveryMode(payload.deliveryMode), 'course');
     if (payload.action === "enrollStudentWithPayment")
       await enrollStudentWithPayment(payload);
-    if (payload.action === "purchasePass") await purchasePass(payload);
-    if (payload.action === "recordPassPayment") await recordPassPayment(payload);
-    if (payload.action === "useOnlineCredit")
-      await consumeLatestCredit(payload.studentId ?? "", "online", payload);
-    if (payload.action === "useStudyCredit")
-      await consumeLatestCredit(payload.studentId ?? "", "study", payload);
+    if (payload.action === "purchasePass" || payload.action === "recordPassPayment") {
+      const notice = payload.action === "purchasePass" ? await purchasePass(payload) : await recordPassPayment(payload);
+      return Response.json({ ...(await (await readPortal(true)).json() as Row), notice });
+    }
+    if (payload.action === "bookLesson")
+      await learning().bookLesson(payload.studentId ?? "", payload.sessionId ?? "", deliveryMode(payload.deliveryMode));
+    if (payload.action === "useOnlineCredit") {
+      const joinUrl = await learning().joinOnline(payload.studentId ?? "", payload.sessionId ?? "");
+      return Response.json({ ...(await (await readPortal(true)).json() as Row), joinUrl });
+    }
+    if (payload.action === "bookStudy")
+      await learning().bookStudy(payload.studentId ?? "", payload.classroomId ?? "", payload.startsAt ?? "", payload.endsAt ?? "", payload.requestKey ?? "");
+    if (payload.action === "useStudyCredit" || payload.action === "cancelStudy")
+      await learning().updateStudy(payload.studentId ?? "", payload.studentBookingId ?? "", payload.action === "cancelStudy");
     if (payload.action === "bookCourseWithCredit")
       await bookCourseWithCredit(payload);
     if (payload.action === "recordPayment") await recordPayment(payload);
@@ -7205,11 +6669,7 @@ export async function POST(request: Request) {
       await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan")
       await updateCampusFloorplan(payload);
-    return await readPortal(
-      payload.action === "enrollStudent" ||
-        payload.action === "enrollStudentWithPayment" ||
-        payload.action === "purchasePass",
-    );
+    return await readPortal(true);
   } catch (error) {
     return Response.json(
       {

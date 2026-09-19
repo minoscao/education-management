@@ -1,5 +1,5 @@
-import { AdminConsole } from "../admin-console";
+import { redirect } from "next/navigation";
 
 export default function ClassroomsPage() {
-  return <AdminConsole activeTable="classrooms" />;
+  redirect("/?view=classrooms");
 }

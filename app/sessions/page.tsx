@@ -1,5 +1,5 @@
-import { AdminConsole } from "../admin-console";
+import { redirect } from "next/navigation";
 
 export default function SessionsPage() {
-  return <AdminConsole activeTable="sessions" />;
+  redirect("/?view=calendar");
 }

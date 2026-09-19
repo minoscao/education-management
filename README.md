@@ -23,10 +23,11 @@ npm install
 npm run dev
 ```
 
-Verify a production build:
+Verify the workflows and production build:
 
 ```bash
 npm test
+npm run build
 ```
 
 ## Cloudflare Setup
@@ -116,6 +117,11 @@ npx wrangler deploy
 uploading the Worker. The build also prepares the D1 binding and applies any
 pending D1 migrations before the Worker is uploaded.
 
+Automatic remote migrations run only on the Workers Builds production branch
+(`main`, or `CLOUDFLARE_PRODUCTION_BRANCH`). Local builds and preview branches do
+not migrate the live database. `APPLY_REMOTE_MIGRATIONS=1` is an explicit override;
+`APPLY_REMOTE_MIGRATIONS=0` disables the automatic step.
+
 If the D1 database already exists, the deploy step will try to find it by name.
 If Cloudflare does not expose that lookup to the build, add this environment
 variable:
@@ -150,7 +156,8 @@ The workflow builds the app, applies D1 migrations, and deploys the Worker.
 ```bash
 npm run dev                 # local development
 npm run build               # production build
-npm test                    # build + rendered HTML check
+npm test                    # workflow, migration and rendering regression tests
+npm run typecheck           # TypeScript verification
 npm run db:generate         # generate migrations after schema changes
 npm run db:migrate:local    # apply migrations to local D1
 npm run db:migrate:remote   # apply migrations to Cloudflare D1

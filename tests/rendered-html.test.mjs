@@ -14,7 +14,7 @@ test("renders the teaching portal from the home route", async () => {
     readProjectFile("app/management-portal.tsx"),
   ]);
 
-  assert.match(page, /<ManagementPortal\s*\/>/);
+  assert.match(page, /<ManagementPortal\s+initialView=/);
   assert.match(portal, /export function ManagementPortal/);
   assert.match(portal, /fetch\("\/api\/portal-data"/);
   assert.match(portal, /setData\(/);

@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
 /* Student learning passes */
+.portal-feedback { position: fixed; z-index: 1000; top: 16px; right: 16px; display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid #efb1b1; border-radius: 8px; background: #fff3f2; color: #8f2424; box-shadow: 0 8px 24px #17354a26; font-size: 14px; line-height: 1.5; }
+.portal-feedback span { overflow-wrap: anywhere; }
+.portal-feedback .header-icon { flex: 0 0 32px; }
+.portal-feedback.is-success { border-color: #88c8b1; background: #edf9f2; color: #17643d; }
+.student-portal { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.student-portal > section { min-width: 0; max-width: 100%; }
+.student-portal .table-scroll { max-width: 100%; overflow-x: auto; }
+@media(max-width:680px) {
+  .student-simple-heading { flex-wrap: wrap; }
+  .student-simple-heading > div { flex: 1 1 220px; min-width: 0; }
+  .student-simple-heading > button { margin-left: 0; }
+  .pass-checkout-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .pass-purchase-dialog footer { flex-wrap: wrap; gap: 8px; }
+}
 .student-pass-summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:18px;align-items:center;margin:18px 0;padding:20px;border:1px solid #b6dbef;border-radius:14px;background:linear-gradient(110deg,#ecfbff,#eef5ff);box-shadow:0 10px 24px rgba(15,92,135,.06)}
 .student-pass-summary-copy span,.student-simple-heading span,.student-section-title span,.pass-purchase-dialog header span,.pass-checkout-summary span{display:block;color:#0e8bad;font-size:11px;font-weight:800;letter-spacing:.08em}
 .student-pass-summary h3{margin:4px 0;color:#153a54;font-size:20px}.student-pass-summary p{margin:0;color:#587386;font-size:13px}.student-credit-row{display:flex;gap:8px;flex-wrap:wrap}.student-credit-row span,.pass-credit-grid span{display:flex;align-items:center;gap:5px;padding:7px 9px;border-radius:9px;background:#fff;color:#3e647a;font-size:12px;white-space:nowrap}.student-credit-row b,.pass-credit-grid b{color:#0b8daf;font-size:15px}.student-pass-page{padding-bottom:40px}.student-pass-page .student-pass-summary{margin-top:16px}.student-learning-section{margin-top:24px}.student-section-title{display:flex;justify-content:space-between;align-items:end;margin-bottom:12px}.student-section-title h3{margin:4px 0 0;color:#17394f;font-size:18px}.student-section-title>b{padding:6px 9px;border-radius:999px;background:#e0f6fb;color:#087c9e;font-size:12px}.pass-card-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.student-pass-card{display:grid;grid-template-columns:1fr auto;gap:16px;padding:18px;border:1px solid #c6e1ed;border-left:5px solid #0e9eb7;border-radius:12px;background:#fff}.student-pass-card h4{margin:5px 0;color:#153a54;font-size:17px}.student-pass-card p{margin:0;color:#617c8e;font-size:12px}.student-pass-card>div:first-child>span{color:#1085a2;font-size:11px;font-weight:800}.pass-credit-grid{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:end}.pass-product-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.pass-product-gallery article{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:14px;border:1px solid #d2e2ea;border-radius:12px;background:#fff}.pass-product-gallery svg{color:#0a98b4}.pass-product-gallery strong{display:block;color:#17394f}.pass-product-gallery p{margin:3px 0 0;color:#698193;font-size:12px}.pass-product-gallery>b{color:#007f9f;font-size:15px}
@@ -10,6 +24,8 @@
 @media(max-width:680px){.student-pass-summary{grid-template-columns:1fr}.student-pass-summary .primary-button{width:100%;justify-content:center}.student-pass-card{grid-template-columns:1fr}.pass-credit-grid{justify-content:start}.pass-choice-grid,.pass-mode-grid{grid-template-columns:1fr}.pass-purchase-dialog header,.pass-purchase-dialog main,.pass-purchase-dialog footer{padding-left:16px;padding-right:16px}}
 
 :root {
+  --font-geist-sans: Arial, Helvetica, sans-serif;
+  --font-geist-mono: Consolas, monospace;
   --background: #f3f6f8;
   --foreground: #17212b;
   --panel: #ffffff;
@@ -1895,7 +1911,20 @@ button.status-cell {
 .teacher-profile-bio { margin: 14px 0 0; padding: 12px 14px; border-left: 3px solid #7a59d8; border-radius: 0 6px 6px 0; background: #f7f3ff; color: #584a75; font-size: 12px; line-height: 1.55; }
 .student-simple-heading > div > p { margin: 4px 0 0; color: #63808a; font-size: 12px; }
 .student-week-booking { overflow: hidden; border: 1px solid #c9e4eb; border-radius: 9px; background: #fff; }.student-week-booking > header { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 58px; padding: 0 12px; border-bottom: 1px solid #dcecef; color: #264c57; }.student-week-booking > header > div { display: grid; min-width: 210px; gap: 2px; text-align: center; }.student-week-booking > header > div strong { font-size: 13px; }.student-week-booking > header > div span { color: #6d8991; font-size: 10px; }.student-week-booking > header .quiet-button { min-height: 30px; padding: 0 9px; font-size: 11px; }.student-week-grid { display: grid; grid-template-columns: repeat(7, minmax(155px, 1fr)); min-width: 1085px; }.student-week-grid > section { min-height: 360px; border-right: 1px solid #e0ecef; background: #fbfeff; }.student-week-grid > section:last-child { border-right: 0; }.student-week-grid > section.today { background: #f2fbff; }.student-week-grid > section > header { display: flex; align-items: center; justify-content: space-between; min-height: 45px; padding: 0 10px; border-bottom: 1px solid #dcecef; color: #648089; font-size: 10px; font-weight: 800; text-transform: uppercase; }.student-week-grid > section > header strong { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #e2f5f8; color: #0b839c; font-size: 12px; }.student-week-grid > section > div { display: grid; gap: 8px; padding: 8px; }.student-week-lesson { display: grid; gap: 5px; padding: 10px; border: 1px solid color-mix(in srgb, var(--course-colour, #168fa8) 36%, #cce4e8); border-left: 4px solid var(--course-colour, #168fa8); border-radius: 6px; background: color-mix(in srgb, var(--course-colour, #168fa8) 8%, white); color: #244955; cursor: pointer; text-align: left; transition: transform 150ms ease, box-shadow 150ms ease; }.student-week-lesson:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(18,79,94,.12); }.student-week-lesson.is-purchased { border-color: #9ed9ba; border-left-color: #1fa76d; background: #effaf4; cursor: default; }.student-week-lesson:disabled:hover { transform: none; box-shadow: none; }.student-week-time { color: #0d839e; font-size: 11px; font-weight: 900; }.student-week-lesson > strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.student-week-lesson > small { overflow: hidden; color: #66838b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.student-week-teacher { display: flex; align-items: center; gap: 6px; min-width: 0; padding-top: 2px; }.student-week-teacher .avatar-photo,.student-week-teacher img { width: 25px; height: 25px; border-radius: 6px; object-fit: cover; }.student-week-teacher span { display: grid; min-width: 0; }.student-week-teacher b,.student-week-teacher em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.student-week-teacher b { font-size: 10px; }.student-week-teacher em { color: #728b92; font-size: 9px; font-style: normal; }.student-week-lesson footer { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding-top: 5px; border-top: 1px solid rgba(63,124,138,.14); color: #638087; font-size: 9px; }.student-week-lesson footer b { color: #067b96; font-size: 10px; }.student-week-lesson.is-purchased footer span { color: #19895d; font-weight: 800; }.student-week-empty { margin: 18px 2px; color: #91a7ad; font-size: 10px; text-align: center; }
-@media (max-width: 850px) { .student-week-booking { overflow-x: auto; } }
+.student-week-booking { overflow-x: auto; }
+.booking-teacher { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.demo-badge { display: inline-block; vertical-align: middle; font-size: 11px; font-weight: 600; color: #77540c; background: #fff3cc; padding: 3px 7px; border-radius: 4px; }
+.study-booking-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 12px 0; }
+.study-booking-form label { display: grid; gap: 6px; flex: 1 1 180px; font-size: 13px; }
+.study-booking-form input, .study-booking-form select { min-width: 0; min-height: 38px; width: 100%; border: 1px solid #bad6df; border-radius: 5px; padding: 7px; background: white; }
+.student-learning-section td small { display: block; color: #526d79; }
+.booking-teacher img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+.booking-teacher p { margin: 4px 0 0; color: #4c6570; font-size: 13px; line-height: 1.5; }
+.dialog-error { color: #a52935; background: #fff1f2; padding: 10px 12px; border: 1px solid #efbdc4; border-radius: 6px; }
+.booking-already-purchased.is-unpaid { background: #fff5e6; border-color: #efc68c; color: #7d4b12; }
+.course-booking-dialog footer { flex-wrap: wrap; gap: 8px; }
+.course-booking-dialog button, .pass-purchase-dialog button { min-height: 38px; }
+@media (max-width: 600px) { .course-booking-dialog footer > button { flex: 1 1 140px; } }
 @media (max-width: 620px) { .student-booking-gallery,.booking-delivery,.booking-price-compare { grid-template-columns: 1fr; }.student-booking-card { grid-template-columns: 70px minmax(0,1fr); }.student-booking-card aside { grid-column: 2; justify-items: start; padding: 0 10px 10px; }.student-booking-card .course-visual { min-height: 100%; }.course-booking-dialog { width: calc(100vw - 18px); }.course-booking-dialog > header,.course-booking-dialog main,.course-booking-dialog > footer { padding-left: 15px; padding-right: 15px; } }
 .operation-app.role-admin {
   background: radial-gradient(circle at 92% 2%, rgba(112, 211, 230, .22), transparent 26rem), radial-gradient(circle at 22% 100%, rgba(92, 139, 222, .10), transparent 24rem), #f3f7f8;

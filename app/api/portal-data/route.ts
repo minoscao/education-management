@@ -6094,16 +6094,10 @@ async function updateEntity(payload: ActionPayload) {
     );
   }
   if (payload.action === "updateRun" && payload.runId) {
-    await execute(
-      "UPDATE class_runs SET name = ?, capacity = ?, price = ?, delivery_mode = COALESCE(?, delivery_mode) WHERE id = ?",
-      [
-        payload.name?.trim() || "Untitled class",
-        Math.max(1, number(payload.capacity, 1)),
-        number(payload.price),
-        payload.deliveryMode ? deliveryMode(payload.deliveryMode) : null,
-        payload.runId,
-      ],
-    );
+    await learning().updateRun({ id: payload.runId, name: payload.name || '', capacity: Number(payload.capacity), price: Number(payload.price), mode: payload.deliveryMode });
+  }
+  if (payload.action === "updateClassroom") {
+    await learning().updateClassroom({ id: payload.classroomId || '', name: payload.name || '', campusId: payload.campusId || '', capacity: Number(payload.capacity), location: payload.location || '', roomType: payload.roomType || '', resources: payload.resources || '' });
   }
   if (payload.action === "updateRunDeliveryMode" && payload.runId) {
     await execute("UPDATE class_runs SET delivery_mode = ? WHERE id = ?", [
@@ -6333,6 +6327,7 @@ async function readAttendance() {
 async function readPortal(includeAttendance = false) {
   await seedDatabase();
   await learning().migrateLegacyCards();
+  await learning().reconcileDemoEnrollments();
   const bookings = await rows("SELECT * FROM class_student_bookings ORDER BY created_at DESC");
   const studyBookings = await rows("SELECT b.*, c.name AS classroom_name FROM study_bookings b JOIN classrooms c ON c.id = b.classroom_id ORDER BY starts_at");
   const [
@@ -6647,6 +6642,7 @@ export async function POST(request: Request) {
     if (
       payload.action === "updateCourse" ||
       payload.action === "updateRun" ||
+      payload.action === "updateClassroom" ||
       payload.action === "updateStudent" ||
       payload.action === "updateTeacher"
     )

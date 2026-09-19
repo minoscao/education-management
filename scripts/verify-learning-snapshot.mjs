@@ -38,10 +38,15 @@ const adapter = {
 const store = new LearningStore(adapter);
 await store.prepareLegacySchema();
 await store.migrateLegacyCards();
+await store.reconcileDemoEnrollments();
+const repairedBookings = db.prepare('SELECT COUNT(*) AS n FROM class_student_bookings').get().n;
 await store.prepareLegacySchema();
 await store.migrateLegacyCards();
+await store.reconcileDemoEnrollments();
+assert.equal(db.prepare('SELECT COUNT(*) AS n FROM class_student_bookings').get().n, repairedBookings);
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM class_enrollments e WHERE e.id LIKE 'plan-enrollment-%' AND e.status = 'enrolled' AND NOT EXISTS (SELECT 1 FROM student_invoices i WHERE i.enrollment_id = e.id)").get().n, 0);
 assert.equal(db.prepare('SELECT COUNT(*) AS count FROM students').get().count, before);
 assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
-console.log(JSON.stringify({ studentsPreserved: before, migrations: 'ok', initializationRetry: 'ok', foreignKeys: 'ok' }));
+console.log(JSON.stringify({ studentsPreserved: before, bookings: repairedBookings, migrations: 'ok', initializationRetry: 'ok', foreignKeys: 'ok' }));
 db.close();

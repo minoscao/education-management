@@ -46,6 +46,7 @@ import {
   FlaskConical,
   Languages,
   PenTool,
+  Pencil,
 } from "lucide-react";
 import {
   FormEvent,
@@ -10162,6 +10163,44 @@ function LegacyDetailSheet({
   );
 }
 
+function DetailEditAction({ onClick, disabled, label = "编辑", editing = false }: {
+  onClick: () => void;
+  disabled?: boolean;
+  label?: string;
+  editing?: boolean;
+}) {
+  return <button className="quiet-button detail-edit-action" type="button" disabled={disabled} onClick={onClick}>
+    {editing ? <X size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
+    {editing ? "取消编辑" : label}
+  </button>;
+}
+
+type EditField = { name: string; label: string; value: string; type?: string; min?: string; step?: string; required?: boolean; options?: { value: string; label: string }[] };
+
+function RecordEditDialog({ title, fields, busy, onSave, onClose }: {
+  title: string;
+  fields: EditField[];
+  busy: boolean;
+  onSave: (values: Row) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const ref = useDialogFocus<HTMLFormElement>(onClose, busy);
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    if (await onSave(Object.fromEntries(new FormData(event.currentTarget)))) onClose();
+  }
+  return <div className="dialog-backdrop" role="presentation" onMouseDown={event => { event.stopPropagation(); if (!busy) onClose(); }}>
+    <form ref={ref} className="course-edit-dialog" role="dialog" aria-modal="true" aria-label={title} onSubmit={save} onMouseDown={event => event.stopPropagation()}>
+      <header><h3>{title}</h3><button className="header-icon" type="button" aria-label="关闭" disabled={busy} onClick={onClose}><X size={17} /></button></header>
+      <fieldset className="course-edit-grid record-edit-fields" disabled={busy}>
+        {fields.map(field => field.options ? <label key={field.name}><span>{field.label}</span><select name={field.name} defaultValue={field.value} required={field.required}>{field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label> : <FormField key={field.name} name={field.name} label={field.label} defaultValue={field.value} type={field.type} min={field.min} step={field.step} required={field.required} />)}
+      </fieldset>
+      <footer className="course-edit-footer"><div><button className="quiet-button" type="button" disabled={busy} onClick={onClose}>取消</button><button className="primary-button" type="submit" disabled={busy}><Check size={16} />{busy ? "保存中…" : "保存修改"}</button></div></footer>
+    </form>
+  </div>;
+}
+
 function CourseCatalogueDrawer({
   detail,
   data,
@@ -10185,6 +10224,7 @@ function CourseCatalogueDrawer({
   );
   const [tab, setTab] = useState("summary");
   const [editingCourse, setEditingCourse] = useState(false);
+  const [editingRun, setEditingRun] = useState(false);
   if (!course) return null;
   const intakes = data.runs.filter(
     (item) => get(item, "course_id") === detail.id,
@@ -10263,13 +10303,8 @@ function CourseCatalogueDrawer({
                 )}
               </div>
               <div className="entity-header-actions">
-                <button
-                  className="quiet-button"
-                  type="button"
-                  onClick={() => setEditingCourse(true)}
-                >
-                  课程设置
-                </button>
+                <DetailEditAction label="编辑课程" disabled={busy} onClick={() => setEditingCourse(true)} />
+                {selectedRun ? <DetailEditAction label="编辑班次" disabled={busy} onClick={() => setEditingRun(true)} /> : null}
                 <button
                   className="header-icon"
                   type="button"
@@ -10341,6 +10376,17 @@ function CourseCatalogueDrawer({
           onClose={() => setEditingCourse(false)}
         />
       ) : null}
+      {editingRun && selectedRun ? <RecordEditDialog
+        title="编辑班次"
+        fields={[
+          { name: "name", label: "班次名称", value: get(selectedRun, "name"), required: true },
+          { name: "capacity", label: "名额", value: get(selectedRun, "capacity"), type: "number", min: "1", step: "1", required: true },
+          { name: "price", label: "课程费用 (RM)", value: get(selectedRun, "price"), type: "number", min: "0", step: "0.01", required: true },
+        ]}
+        busy={busy}
+        onSave={values => run("updateRun", { ...values, runId: get(selectedRun, "id") })}
+        onClose={() => setEditingRun(false)}
+      /> : null}
     </div>
   );
 }
@@ -12490,6 +12536,7 @@ function CourseEditDialog({
   run: (action: string, values?: Row) => Promise<boolean>;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogFocus<HTMLFormElement>(onClose, busy);
   const [colour, setColour] = useState(
     get(course, "display_color") || defaultCourseColour,
   );
@@ -12515,17 +12562,21 @@ function CourseEditDialog({
       <div
         className="dialog-backdrop"
         role="presentation"
-        onMouseDown={onClose}
+        onMouseDown={event => { event.stopPropagation(); if (!busy) onClose(); }}
       >
         <form
+          ref={dialogRef}
           className="course-edit-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-label="编辑课程"
           onSubmit={save}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <header>
             <div>
-              <span>COURSE SETTINGS</span>
-              <h3>Edit course</h3>
+              <span>COURSE</span>
+              <h3>编辑课程</h3>
               <p>
                 Update this reusable course product. Lesson content is edited
                 separately in the Course plan.
@@ -12535,6 +12586,7 @@ function CourseEditDialog({
               className="header-icon"
               type="button"
               onClick={onClose}
+              disabled={busy}
               title="Close"
             >
               <X size={17} />
@@ -14654,7 +14706,7 @@ function EntityDetailSheet({
   const [modifySession, setModifySession] = useState(
     detail.edit && detail.kind === "session",
   );
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(Boolean(detail.edit));
   const [enrollStudentId, setEnrollStudentId] = useState("");
   if (!item) return null;
   const studentEnrollments =
@@ -14686,7 +14738,7 @@ function EntityDetailSheet({
   const roomLessons =
     detail.kind === "room"
       ? data.sessions.filter(
-          (row) => get(row, "classroom_name") === get(item, "name"),
+          (row) => get(row, "classroom_id") === detail.id,
         )
       : [];
   const runLessons =
@@ -14824,24 +14876,12 @@ function EntityDetailSheet({
               </div>
             </div>
             <div className="entity-header-actions">
-              {detail.kind === "student" || detail.kind === "teacher" ? (
-                <button
-                  className="quiet-button"
-                  type="button"
-                  onClick={() => setEditing(!editing)}
-                >
-                  {editing ? "Cancel edit" : "Edit profile"}
-                </button>
+              {detail.kind === "student" || detail.kind === "teacher" || detail.kind === "room" ? (
+                <DetailEditAction disabled={busy} editing={editing} onClick={() => { setEditing(!editing); setTab("summary"); }} />
               ) : null}
               {detail.kind === "session" ? (
                 <>
-                  <button
-                    className="quiet-button"
-                    type="button"
-                    onClick={() => setModifySession(true)}
-                  >
-                    Modify
-                  </button>
+                  <DetailEditAction disabled={busy} onClick={() => setModifySession(true)} />
                   <button
                     className="primary-button"
                     type="button"
@@ -14934,6 +14974,20 @@ function EntityDetailSheet({
           onClose={() => setModifySession(false)}
         />
       ) : null}
+      {editing && detail.kind === "room" ? <RecordEditDialog
+        title="编辑教室"
+        fields={[
+          { name: "name", label: "教室名称", value: get(item, "name"), required: true },
+          { name: "location", label: "位置", value: get(item, "location") },
+          { name: "campusId", label: "中心", value: get(item, "campus_id"), required: true, options: data.campuses.map(campus => ({ value: get(campus, "id"), label: get(campus, "name") })) },
+          { name: "capacity", label: "座位数", value: get(item, "capacity"), type: "number", min: "1", step: "1", required: true },
+          { name: "roomType", label: "类型", value: get(item, "room_type"), required: true },
+          { name: "resources", label: "设备", value: get(item, "resources") },
+        ]}
+        busy={busy}
+        onSave={values => run("updateClassroom", { ...values, classroomId: detail.id })}
+        onClose={() => setEditing(false)}
+      /> : null}
     </>
   );
 }

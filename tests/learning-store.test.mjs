@@ -121,6 +121,46 @@ async function teachingFixture() {
   return f;
 }
 
+test('room and class edits persist and reject capacity changes that break reservations', async () => {
+  const f = await teachingFixture();
+  try {
+    f.insert('campuses', { id: 'campus', code: 'C1', name: 'Campus' });
+    f.insert('classrooms', { id: 'room', code: 'R1', name: 'Room', capacity: 26, campus_id: 'campus' });
+    f.insert('class_resource_bookings', { id: 'resource', class_session_id: 'session1', classroom_id: 'room', starts_at: '2026-09-20 12:00', ends_at: '2026-09-20 13:30', status: 'reserved' });
+    const edit = { id: 'room', name: 'Maths room', campusId: 'campus', capacity: 26, location: 'Level 1', roomType: 'classroom', resources: 'Screen' };
+    await f.store.updateClassroom(edit);
+    assert.equal(f.db.prepare('SELECT name FROM classrooms').get().name, 'Maths room');
+    await assert.rejects(f.store.updateClassroom({ ...edit, capacity: 25 }), /at least 26/);
+    await assert.rejects(f.store.updateClassroom({ ...edit, campusId: 'missing' }), /campus/);
+    await assert.rejects(f.store.updateClassroom({ ...edit, capacity: 2.5 }), /whole number/);
+    await f.store.enrollCourse('student', 'run', 'onsite', 'course');
+    await f.store.updateRun({ id: 'run', name: 'Updated class', capacity: 26, price: 160 });
+    assert.equal(f.db.prepare('SELECT name FROM class_runs').get().name, 'Updated class');
+    assert.equal(f.db.prepare('SELECT total_amount FROM student_invoices').get().total_amount, 100);
+    await assert.rejects(f.store.updateRun({ id: 'run', name: 'Large class', capacity: 27, price: 160 }), /only 26/);
+    await assert.rejects(f.store.updateRun({ id: 'run', name: 'Invalid', capacity: 26, price: -1 }), /valid fee/);
+  } finally { f.close(); }
+});
+
+test('legacy demo repair creates unpaid invoices and pending attendance once without inventing payments', async () => {
+  const f = await teachingFixture();
+  try {
+    f.insert('class_enrollments', { id: 'plan-enrollment-01-01', class_run_id: 'run', student_id: 'student', contracted_fee: 100, status: 'enrolled' });
+    await f.store.reconcileDemoEnrollments();
+    await f.store.reconcileDemoEnrollments();
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM class_student_bookings').get().n, 2);
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM class_attendance WHERE status = \'pending\'').get().n, 2);
+    assert.deepEqual({ ...f.db.prepare('SELECT total_amount, paid_amount, status FROM student_invoices').get() }, { total_amount: 100, paid_amount: 0, status: 'unpaid' });
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM student_payments').get().n, 0);
+    f.store.now = () => new Date('2026-09-20T04:15:00Z');
+    const booking = f.db.prepare('SELECT id FROM class_student_bookings WHERE class_session_id = \'session1\'').get().id;
+    await assert.rejects(f.store.markAttendance(booking, 'present'), /payment/);
+    await f.store.payInvoice({ invoiceId: 'plan-enrollment-01-01:invoice', requestKey: 'legacy-payment' });
+    await f.store.markAttendance(booking, 'present');
+    assert.equal(f.db.prepare('SELECT status FROM class_attendance WHERE student_booking_id = ?').get(booking).status, 'present');
+  } finally { f.close(); }
+});
+
 test('one lesson reserves one seat and credit; cancelling releases both without a debit', async () => {
   const f = await teachingFixture();
   try {

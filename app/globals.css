@@ -2930,6 +2930,27 @@ summary:focus-visible { outline: 3px solid rgba(14, 147, 180, .32); outline-offs
 .market-route-mode { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 4px; padding: 0 17px 12px; }.market-route-mode > span { color: #88abaa; font-size: 10px; font-weight: 850; }.market-route-mode button { display: inline-flex; min-width: 0; min-height: 28px; align-items: center; justify-content: center; gap: 4px; padding: 0 5px; border: 1px solid rgba(120, 204, 197, .26); border-radius: 5px; background: transparent; color: #9ebfbd; cursor: pointer; font-size: 10px; font-weight: 850; }.market-route-mode button:hover { border-color: #f6c45b; color: #fff0c8; }.market-route-mode button.active { border-color: #6fd0c5; background: rgba(75, 167, 157, .18); color: #ecfffb; }
 .market-landmark-shell { border: 0 !important; background: transparent !important; }.market-landmark-marker { display: block; width: 12px; height: 12px; border: 2px solid rgba(56, 218, 202, .8); border-radius: 50%; background: rgba(18, 167, 154, .28); box-shadow: 0 0 0 4px rgba(18, 167, 154, .08); }.market-landmark-tooltip { padding: 3px 6px; border: 1px solid rgba(68, 200, 186, .35); border-radius: 4px; background: rgba(7, 28, 36, .74); color: rgba(198, 242, 235, .82); font-size: 10px; font-weight: 800; box-shadow: none; }.market-landmark-tooltip::before { display: none; }
 
+.entity-header-actions .detail-edit-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.detail-edit-action:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.record-edit-fields { min-width: 0; margin: 0; border: 0; }
+.record-edit-fields label { display: grid; min-width: 0; gap: 6px; }
+.record-edit-fields select { width: 100%; min-height: 36px; }
+@media (max-width: 760px) {
+  .course-detail-header, .entity-header { flex-wrap: wrap; }
+  .course-detail-header > div:first-child, .entity-heading { flex: 1 1 100%; }
+  .entity-header-actions { width: 100%; justify-content: flex-start; }
+  .entity-header-actions .detail-edit-action { display: inline-flex; min-height: 44px; }
+  .entity-header-actions .header-icon { margin-left: auto; }
+}
+
 /* Accessibility score is the shared visual signal for every school surface. */
 .market-map-marker { border-color: var(--route-colour); background: color-mix(in srgb, var(--route-colour) 70%, transparent); box-shadow: 0 0 0 3px rgba(5,18,25,.72), inset 0 0 0 2px var(--audience-colour), 0 8px 18px rgba(0,0,0,.42); }
 .market-school-row { grid-template-columns: minmax(0, 1fr) 31px 6px; gap: 0; width: 100%; padding: 0; border: 0; border-bottom: 1px solid rgba(154,206,202,.12); background: transparent; color: inherit; text-align: left; transition: background .15s ease, box-shadow .15s ease; }

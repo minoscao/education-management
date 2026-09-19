@@ -55,6 +55,27 @@ export class LearningStore {
   async all<T = RecordData>(sql: string, values: unknown[] = []) { return (await this.db.prepare(sql).bind(...values).all<T>()).results ?? []; }
   async batch(queries: Query[]) { if (queries.length) await this.db.batch(queries.map(q => this.db.prepare(q.sql).bind(...q.values))); }
 
+  async updateClassroom(input: { id: string; name: string; campusId: string; capacity: number; location: string; roomType: string; resources: string }) {
+    if (!input.name.trim() || !Number.isInteger(input.capacity) || input.capacity < 1) throw new Error('Enter a classroom name and a whole number of seats.');
+    if (!await this.one('SELECT id FROM classrooms WHERE id = ?', [input.id])) throw new Error('Classroom not found.');
+    if (!await this.one('SELECT id FROM campuses WHERE id = ?', [input.campusId])) throw new Error('Choose an existing campus.');
+    const scheduled = await this.one<{ seats: number }>(`SELECT MAX(r.capacity) AS seats FROM class_resource_bookings b JOIN class_sessions s ON s.id = b.class_session_id JOIN class_runs r ON r.id = s.class_run_id WHERE b.classroom_id = ? AND b.status = 'reserved' AND s.status != 'cancelled' AND s.ends_at > ?`, [input.id, malaysiaTime(this.now())]);
+    if (input.capacity < Number(scheduled?.seats || 0)) throw new Error(`This room needs at least ${scheduled!.seats} seats for its scheduled classes.`);
+    const study = await this.one<{ seats: number }>(`SELECT MAX((SELECT COUNT(*) FROM study_bookings other WHERE other.classroom_id = b.classroom_id AND other.status IN ('booked', 'present') AND other.starts_at <= b.starts_at AND other.ends_at > b.starts_at)) AS seats FROM study_bookings b WHERE b.classroom_id = ? AND b.status IN ('booked', 'present') AND b.ends_at > ?`, [input.id, malaysiaTime(this.now())]);
+    if (input.capacity < Number(study?.seats || 0)) throw new Error('The new capacity cannot accommodate existing study bookings.');
+    await this.db.prepare('UPDATE classrooms SET name = ?, campus_id = ?, capacity = ?, location = ?, room_type = ?, resources = ? WHERE id = ?').bind(input.name.trim(), input.campusId, input.capacity, input.location.trim(), input.roomType.trim() || 'classroom', input.resources.trim(), input.id).run();
+  }
+
+  async updateRun(input: { id: string; name: string; capacity: number; price: number; mode?: string }) {
+    if (!input.name.trim() || !Number.isInteger(input.capacity) || input.capacity < 1 || !Number.isFinite(input.price) || input.price < 0) throw new Error('Enter a class name, a whole number of places and a valid fee.');
+    if (!await this.one('SELECT id FROM class_runs WHERE id = ?', [input.id])) throw new Error('Class not found.');
+    const occupied = await this.one<{ seats: number }>(`SELECT MAX(seats) AS seats FROM (SELECT COUNT(*) AS seats FROM class_enrollments WHERE class_run_id = ? AND status = 'enrolled' AND delivery_mode = 'onsite' UNION ALL SELECT COUNT(*) AS seats FROM class_student_bookings b JOIN class_sessions s ON s.id = b.class_session_id WHERE s.class_run_id = ? AND b.status = 'booked' AND b.delivery_mode = 'onsite' AND s.status != 'cancelled' GROUP BY s.id)`, [input.id, input.id]);
+    if (input.capacity < Number(occupied?.seats || 0)) throw new Error(`This class already has ${occupied!.seats} onsite places reserved.`);
+    const room = await this.one<{ seats: number }>(`SELECT MIN(c.capacity) AS seats FROM class_resource_bookings b JOIN classrooms c ON c.id = b.classroom_id JOIN class_sessions s ON s.id = b.class_session_id WHERE s.class_run_id = ? AND b.status = 'reserved' AND s.status != 'cancelled' AND s.ends_at > ?`, [input.id, malaysiaTime(this.now())]);
+    if (room?.seats != null && input.capacity > room.seats) throw new Error(`The assigned classroom has only ${room.seats} seats.`);
+    await this.db.prepare(`UPDATE class_runs SET name = ?, capacity = ?, price = ?${input.mode ? ', delivery_mode = ?' : ''} WHERE id = ?`).bind(input.name.trim(), input.capacity, input.price, ...(input.mode ? [input.mode === 'online' ? 'online' : 'onsite'] : []), input.id).run();
+  }
+
   async prepareLegacySchema() {
     if (await this.one("SELECT key FROM app_settings WHERE key = 'learning_integrity_v1'")) return;
     const columns = await this.all<{ name: string }>("PRAGMA table_info('class_enrollments')");
@@ -83,6 +104,30 @@ export class LearningStore {
     }));
     queries.push({ sql: "UPDATE student_passes SET status = 'fulfilled' WHERE status = 'active' AND credit_type IN ('bundle','package')", values: [] });
     await this.batch(queries);
+  }
+
+  async reconcileDemoEnrollments() {
+    if (await this.one("SELECT key FROM app_settings WHERE key = 'demo_enrollment_links_v1'")) return;
+    // Only the known historical plan seed is repaired; partial real purchases stay untouched.
+    await this.batch([
+      { sql: `WITH missing AS MATERIALIZED (
+          SELECT e.* FROM class_enrollments e WHERE e.id LIKE 'plan-enrollment-%' AND e.status = 'enrolled' AND e.pass_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM class_student_bookings b WHERE b.enrollment_id = e.id)
+        ) INSERT INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status, delivery_mode, payment_source)
+        SELECT 'repair:' || e.id || ':' || s.id, s.id, e.id, e.student_id,
+          e.contracted_fee / (SELECT COUNT(*) FROM class_sessions x WHERE x.class_run_id = e.class_run_id AND x.status != 'cancelled'),
+          'booked', e.delivery_mode, 'course'
+        FROM missing e JOIN class_sessions s ON s.class_run_id = e.class_run_id WHERE s.status != 'cancelled'`, values: [] },
+      { sql: `INSERT INTO student_invoices (id, invoice_no, enrollment_id, student_id, total_amount, paid_amount, status, issued_at, due_at)
+        SELECT e.id || ':invoice', 'INV-' || e.id, e.id, e.student_id, e.contracted_fee, 0, 'unpaid', e.enrolled_at, substr(e.enrolled_at, 1, 10)
+        FROM class_enrollments e WHERE e.id LIKE 'plan-enrollment-%' AND e.status = 'enrolled' AND e.pass_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM student_invoices i WHERE i.enrollment_id = e.id)`, values: [] },
+      { sql: `INSERT INTO class_attendance (id, student_booking_id, status, note)
+        SELECT 'attendance:' || b.id, b.id, 'pending', '' FROM class_student_bookings b
+        WHERE b.enrollment_id LIKE 'plan-enrollment-%' AND b.status = 'booked'
+        AND NOT EXISTS (SELECT 1 FROM class_attendance a WHERE a.student_booking_id = b.id)`, values: [] },
+      { sql: "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('demo_enrollment_links_v1', 'true')", values: [] },
+    ]);
   }
 
   async createPassOrder(input: { studentId: string; productId: string; requestKey: string; months: number; start?: string; runId?: string; mode?: string }) {

@@ -1,10 +1,11 @@
 name: Deploy to Cloudflare
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+
+concurrency:
+  group: education-manual-production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:

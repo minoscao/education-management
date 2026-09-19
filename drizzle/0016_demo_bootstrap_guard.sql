@@ -16,5 +16,3 @@ BEGIN
       AND a.starts_at < s.ends_at AND a.ends_at > s.starts_at
   ) THEN RAISE(ABORT, 'You already have another lesson at this time.') END;
 END;
-
-

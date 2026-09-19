@@ -2883,6 +2883,8 @@ summary:focus-visible { outline: 3px solid rgba(14, 147, 180, .32); outline-offs
 
 @media (max-width: 760px) {
   .operation-sidebar { padding: 8px; }
+  .operation-sidebar .sidebar-bottom { flex: 0 0 136px; margin-top: 0; align-self: center; }
+  .operation-sidebar .role-switcher { grid-template-columns: repeat(3, minmax(36px, 1fr)); }
   .operation-brand { min-height: 42px; padding: 2px; border: 0; }
   .operation-brand img { width: 34px; height: 38px; margin: 0; }
   .operation-brand-copy { display: none; }

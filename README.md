@@ -142,7 +142,9 @@ npm run db:migrate:remote
 
 ### Option B: GitHub Actions
 
-Use `.github/workflows/cloudflare-deploy.yml`.
+Use `.github/workflows/cloudflare-deploy.yml` as a manually triggered fallback.
+Automatic pushes deploy through Workers Builds only, avoiding competing migrations.
+Do not start the fallback while a Workers Build is deploying.
 
 Add these GitHub repository secrets:
 

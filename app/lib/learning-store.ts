@@ -11,9 +11,10 @@ export type CreditType = 'onsite' | 'online' | 'study';
 type Offer = {
   id: string; name: string; price: number; validity_type: string; validity_days: number;
   onsite_credits: number; online_credits: number; study_credits: number;
+  issuance_mode?: 'balance' | 'tickets';
 };
 type Window = { from: string; until: string };
-type Snapshot = { product: Offer; windows: Window[]; booking?: { runId: string; sessionId?: string; mode: 'onsite' | 'online' } };
+type Snapshot = { product: Offer; windows: Window[]; booking?: { runId: string; sessionId?: string; mode: 'onsite' | 'online'; autoBook?: boolean } };
 
 export function malaysiaDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
@@ -149,7 +150,7 @@ export class LearningStore {
     ]);
   }
 
-  async createPassOrder(input: { studentId: string; productId: string; requestKey: string; months: number; start?: string; runId?: string; sessionId?: string; mode?: string }) {
+  async createPassOrder(input: { studentId: string; productId: string; requestKey: string; months: number; start?: string; runId?: string; sessionId?: string; mode?: string; reserveSelection?: boolean }) {
     if (!input.studentId || !/^[\w-]{8,100}$/.test(input.requestKey)) throw new Error('Refresh this purchase and try again.');
     const requestKey = `${input.studentId}:${input.requestKey}`;
     const old = await this.one<{ id: string }>('SELECT id FROM pass_orders WHERE request_key = ?', [requestKey]);
@@ -158,25 +159,25 @@ export class LearningStore {
     if (!product || !await this.one('SELECT id FROM students WHERE id = ?', [input.studentId])) throw new Error('Choose an available pass and learner.');
     const today = malaysiaDay(this.now());
     const anchor = input.start?.slice(0, 10) || today;
+    if (product.validity_type === 'rolling_days' && anchor < today) throw new Error('Choose today or a future start date.');
     const windows = passWindows(product, anchor, input.months);
     if (windows[0].until < today) throw new Error('Choose the current month or a future month.');
-    if (input.runId && !await this.one("SELECT id FROM class_runs WHERE id = ? AND status NOT IN ('cancelled','finished')", [input.runId])) throw new Error('This class is no longer open.');
+    const selectedRun = input.runId ? await this.one<{ status: string }>('SELECT status FROM class_runs WHERE id = ?', [input.runId]) : null;
+    if (input.runId && !selectedRun) throw new Error('Class not found.');
     const orderId = uid('pass-order');
     const packageId = `${orderId}:package`;
     const snapshot: Snapshot = { product, windows };
     if (input.runId) {
       const mode = input.mode === 'online' ? 'online' : 'onsite';
-      await this.assertBookingAvailable(input.studentId, input.runId, input.sessionId, mode);
       const sessions = await this.all<{ id: string; starts_at: string }>("SELECT id, starts_at FROM class_sessions WHERE class_run_id = ? AND status NOT IN ('cancelled','completed') AND starts_at > ? ORDER BY starts_at", [input.runId, malaysiaTime(this.now())]);
       const selected = input.sessionId ? sessions.filter(session => session.id === input.sessionId) : sessions;
-      if (!selected.length) throw new Error('This selection has no upcoming lessons.');
       const booked = await this.all<{ class_session_id: string; delivery_mode: string }>("SELECT class_session_id, delivery_mode FROM class_student_bookings WHERE student_id = ? AND status = 'booked'", [input.studentId]);
-      if (selected.some(session => booked.some(booking => booking.class_session_id === session.id && booking.delivery_mode !== mode))) throw new Error('Cancel the existing lesson before changing its attendance mode.');
+      const modeConflict = selected.some(session => booked.some(booking => booking.class_session_id === session.id && booking.delivery_mode !== mode));
       const dates = selected.filter(session => !booked.some(booking => booking.class_session_id === session.id)).map(session => session.starts_at);
-      if (!dates.length) throw new Error('These lessons are already booked. No additional pass is needed.');
       const cards = await this.all(`SELECT p.*, p.${mode}_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = p.id AND e.status = 'reserved') AS ${mode}_available FROM student_passes p WHERE student_id = ? AND credit_type = ? AND status = 'active'`, [input.studentId, mode]);
-      if (creditCoverage([...cards, ...passOfferCards(product, anchor, input.months)], dates, mode).missing) throw new Error('This pass does not cover every selected lesson. Choose a pass with enough credits and matching dates.');
-      snapshot.booking = { runId: input.runId, sessionId: input.sessionId || undefined, mode };
+      const autoBook = input.reserveSelection !== false && !['cancelled', 'finished'].includes(selectedRun!.status) && !modeConflict && dates.length > 0 && creditCoverage([...cards, ...passOfferCards(product, anchor, input.months)], dates, mode).missing === 0;
+      if (autoBook) await this.assertBookingAvailable(input.studentId, input.runId, input.sessionId, mode);
+      snapshot.booking = { runId: input.runId, sessionId: input.sessionId || undefined, mode, autoBook };
     }
     try { await this.batch([
       { sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, valid_from, valid_until, status) VALUES (?, ?, ?, ?, ?, 'package', ?, ?, 'pending_payment')", values: [packageId, orderId, input.studentId, product.id, product.name, windows[0].from, windows.at(-1)!.until] },
@@ -195,6 +196,7 @@ export class LearningStore {
     const snapshot: Snapshot | null = order.offer_snapshot ? JSON.parse(order.offer_snapshot) : null;
     const booking = snapshot?.booking || (order.selected_run_id ? { runId: order.selected_run_id, mode: order.delivery_mode === 'online' ? 'online' as const : 'onsite' as const } : null);
     if (!booking) return false;
+    if ('autoBook' in booking && booking.autoBook === false) return false;
     if ('sessionId' in booking && booking.sessionId) await this.bookLesson(order.student_id, booking.sessionId, booking.mode);
     else await this.enrollCourse(order.student_id, booking.runId, booking.mode, 'pass');
     return true;
@@ -228,15 +230,19 @@ export class LearningStore {
       if (existing) throw new Error('This older order already has cards. Please reconcile it before issuing more.');
       snapshot = { product, windows: passWindows(product, pack.valid_from, Number(order.reservation_months || 1)) };
     }
-    if (snapshot.booking) await this.assertBookingAvailable(order.student_id, snapshot.booking.runId, snapshot.booking.sessionId, snapshot.booking.mode);
+    if (snapshot.booking && snapshot.booking.autoBook !== false) await this.assertBookingAvailable(order.student_id, snapshot.booking.runId, snapshot.booking.sessionId, snapshot.booking.mode);
     const queries: Query[] = [];
     for (const window of snapshot.windows) {
       for (const type of ['onsite', 'online', 'study'] as const) {
         const credits = snapshot.product[`${type}_credits`];
         if (!Number.isInteger(credits) || credits < 0) throw new Error('The pass quantities need a staff review.');
         if (!credits) continue;
-        const key = `${orderId}:${window.from}:${type}`;
-        queries.push({ sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, credits_total, valid_from, valid_until, onsite_remaining, online_remaining, study_remaining, status, issuance_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?) ON CONFLICT(issuance_key) WHERE issuance_key IS NOT NULL DO NOTHING", values: [key, orderId, order.student_id, order.product_id, `${snapshot.product.name} - ${type}`, type, credits, window.from, window.until, type === 'onsite' ? credits : 0, type === 'online' ? credits : 0, type === 'study' ? credits : 0, key] });
+        const tickets = snapshot.product.issuance_mode === 'tickets';
+        for (let index = 0; index < (tickets ? credits : 1); index++) {
+          const units = tickets ? 1 : credits;
+          const key = `${orderId}:${window.from}:${type}${tickets ? ':' + (index + 1) : ''}`;
+          queries.push({ sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, credits_total, valid_from, valid_until, onsite_remaining, online_remaining, study_remaining, status, issuance_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?) ON CONFLICT(issuance_key) WHERE issuance_key IS NOT NULL DO NOTHING", values: [key, orderId, order.student_id, order.product_id, `${snapshot.product.name} - ${type}${tickets ? ' ' + (index + 1) + '/' + credits : ''}`, type, units, window.from, window.until, type === 'onsite' ? units : 0, type === 'online' ? units : 0, type === 'study' ? units : 0, key] });
+        }
       }
     }
     queries.push(

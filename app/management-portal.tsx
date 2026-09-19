@@ -47,6 +47,8 @@ import {
   Languages,
   PenTool,
   Pencil,
+  MessageCircle,
+  Phone,
 } from "lucide-react";
 import {
   FormEvent,
@@ -55,14 +57,29 @@ import {
   useMemo,
   useRef,
   useState,
+  createContext,
+  useContext,
 } from "react";
-import { creditCoverage, malaysiaDay, monthCount, passOfferCards } from "./lib/learning-store";
+import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows } from "./lib/learning-store";
 import { useDialogFocus } from "./lib/use-dialog-focus";
 import { useClock } from "./lib/use-clock";
+import { whatsappLink, whatsappNumber } from "./lib/contact";
 import { useStoredChoice } from "./lib/use-stored-choice";
 import { createPortal } from "react-dom";
 
 type Row = Record<string, unknown>;
+const StudentDirectoryContext = createContext<ReadonlyMap<string, Row>>(new Map());
+
+function StudentContact({ row }: { row: Row }) {
+  const students = useContext(StudentDirectoryContext);
+  const student = students.get(String(row.student_id || row.id));
+  const phone = String(student?.guardian_phone ?? row.guardian_phone ?? "").trim();
+  const link = whatsappLink(phone);
+  return <div className="student-contact-cell" onClick={event => event.stopPropagation()}>
+    {phone ? <span className="student-contact-number"><Phone size={13} aria-hidden="true" />{phone}</span> : <span className="muted">Not provided</span>}
+    {link ? <a className="contact-whatsapp-link" href={link} target="_blank" rel="noopener noreferrer" title="Open WhatsApp chat" aria-label={`WhatsApp ${String(student?.name ?? row.student_name ?? "guardian")}`}><MessageCircle size={15} aria-hidden="true" />WhatsApp</a> : null}
+  </div>;
+}
 type Language = "en" | "zh";
 type Role = "admin" | "teacher" | "student";
 type StudentTheme = "sky" | "ocean" | "mint";
@@ -661,6 +678,7 @@ function scheduleWindow(
 
 export function ManagementPortal({ initialView = "dashboard" }: { initialView?: View }) {
   const [data, setData] = useState<PortalData>(emptyData);
+  const studentDirectory = useMemo(() => new Map(data.students.map(student => [String(student.id), student])), [data.students]);
   const [view, setView] = useState<View>(initialView);
   const [role, setRole] = useState<Role>("admin");
   const [language, setLanguage] = useState<Language>("en");
@@ -874,7 +892,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
   }
 
   return (
-    <main
+    <StudentDirectoryContext.Provider value={studentDirectory}><main
       className={`operation-app role-${role} student-theme-${studentTheme}${view === "calendar" ? " calendar-screen" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
     >
       <aside className="operation-sidebar">
@@ -1275,7 +1293,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           onClose={() => {
             setPassPurchaseOpen(false);
           }}
-          onComplete={() => { setPassPurchaseOpen(false); setPassPurchaseTarget(null); setBookingRunId(""); setBookingSessionId(""); }}
+          onComplete={(returnToBooking) => { setPassPurchaseOpen(false); if (!returnToBooking) { setPassPurchaseTarget(null); setBookingRunId(""); setBookingSessionId(""); } }}
         />
       ) : null}
       {bookingRunId && !passPurchaseOpen ? (
@@ -1297,7 +1315,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
         />
       ) : null}
       {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
-    </main>
+    </main></StudentDirectoryContext.Provider>
   );
 }
 
@@ -2031,7 +2049,7 @@ function StudentCreditCard({ pass }: { pass: Row }) {
 
 function OrderList({ rows, busy, onConfirm }: { rows: Row[]; busy: boolean; onConfirm: (id: string) => Promise<boolean> }) {
   if (!rows.length) return null;
-  return <section className="student-learning-section"><h3>Pass orders</h3><div className="table-scroll"><table className="data-table"><thead><tr><th>Order</th><th>Learner</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map(order => <tr key={get(order, "id")}><td>{get(order, "product_name")}<small>{get(order, "reservation_months")} month(s)</small></td><td>{get(order, "student_name")}</td><td>{amount(order.total_amount)}</td><td><Status value={get(order, "status")} /></td><td>{get(order, "status") !== "paid" ? <button type="button" className="quiet-button" disabled={busy} onClick={() => void onConfirm(get(order, "id"))}>Demo: confirm payment</button> : <span>Paid</span>}</td></tr>)}</tbody></table></div></section>;
+  return <section className="student-learning-section"><h3>Pass orders</h3><ResizableDataTable columns={[{ key: "product_name", label: "Order" }, { key: "student_name", label: "Student" }, { key: "total_amount", label: "Total" }, { key: "status", label: "Status" }, { key: "actions", label: "Action" }]} rows={rows} empty="No pass orders" renderCell={(order, column) => column.key === "total_amount" ? amount(order.total_amount) : column.key === "status" ? <Status value={get(order, "status")} /> : column.key === "actions" ? get(order, "status") !== "paid" ? <button type="button" className="quiet-button" disabled={busy} onClick={() => void onConfirm(get(order, "id"))}>Demo: confirm payment</button> : <span>Paid</span> : get(order, column.key)} /></section>;
 }
 
 function StudyReservations({ data, studentId, busy, run }: { data: PortalData; studentId: string; busy: boolean; run: (action: string, values?: Row) => Promise<boolean> }) {
@@ -2053,13 +2071,15 @@ function PassPurchaseDialog({
 }: {
   data: PortalData; studentId: string; busy: boolean;
   run: (action: string, values?: Row) => Promise<boolean>;
-  target: BookingTarget | null; onClose: () => void; onComplete: () => void;
+  target: BookingTarget | null; onClose: () => void; onComplete: (returnToBooking?: boolean) => void;
 }) {
   const clockNow = useClock();
   const dialogRef = useDialogFocus<HTMLElement>(onClose, busy);
   const [step, setStep] = useState<1 | 2>(1);
   const [requestKey] = useState(() => crypto.randomUUID());
   const [method, setMethod] = useState("pay_at_campus");
+  const [startDay, setStartDay] = useState(malaysiaDay);
+  const [reserveSelection, setReserveSelection] = useState(true);
   const [error, setError] = useState("");
   const selectedRun = data.runs.find(item => get(item, "id") === target?.runId);
   const selectedSessions = data.sessions.filter(session =>
@@ -2068,37 +2088,37 @@ function PassPurchaseDialog({
     !["cancelled", "completed"].includes(get(session, "status")) && asTime(session.starts_at) > clockNow,
   ).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
   const firstDay = selectedSessions.length ? get(selectedSessions[0], "starts_at").slice(0, 10) : malaysiaDay();
-  const months = selectedSessions.length ? monthCount(firstDay, get(selectedSessions.at(-1), "starts_at")) : 1;
+  const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDay) && startDay >= malaysiaDay();
   const cards = data.passes.filter(card => get(card, "student_id") === studentId);
   const dates = selectedSessions.filter(session => !data.bookings.some(booking =>
     get(booking, "student_id") === studentId && get(booking, "class_session_id") === get(session, "id") &&
     get(booking, "status") === "booked" && get(booking, "delivery_mode") === target?.deliveryMode,
   )).map(session => get(session, "starts_at"));
   const offers = data.passProducts.filter(product => get(product, "status") === "active").map(product => {
-    const periods = get(product, "validity_type") === "calendar_month" ? months : 1;
-    const coverage = target ? creditCoverage([...cards, ...passOfferCards(product, firstDay, periods)], dates, target.deliveryMode) : null;
-    const suitable = !target || Boolean(dates.length && !coverage?.missing && Number(product[target.deliveryMode + "_credits"]) > 0);
-    return { product, periods, coverage, suitable };
+    const coverage = target && validStart ? creditCoverage([...cards, ...passOfferCards(product, startDay, 1)], dates, target.deliveryMode) : null;
+    return { product, coverage };
   });
   const [productId, setProductId] = useState(() => get(
-    offers.find(offer => offer.suitable && get(offer.product, "validity_type") === "calendar_month")?.product ??
-    offers.find(offer => offer.suitable)?.product, "id",
+    offers[0]?.product, "id",
   ));
   const chosen = offers.find(offer => get(offer.product, "id") === productId);
+  const validity = chosen && validStart ? passWindows({ validity_type: get(chosen.product, "validity_type"), validity_days: Number(chosen.product.validity_days) }, startDay, 1)[0] : null;
+  const canBook = Boolean(target && dates.length && chosen?.coverage && !chosen.coverage.missing);
+  const autoBook = canBook && reserveSelection;
   const existingOrder = data.passOrders.find(order => get(order, "request_key") === studentId + ":" + requestKey);
   const paidOrder = get(existingOrder, "status") === "paid";
   async function submit() {
-    if (!chosen || busy) return;
+    if (!chosen || busy || !validStart) return;
     setError("");
     const saved = paidOrder
       ? await run("recordPassPayment", { passOrderId: get(existingOrder, "id") })
       : await run("purchasePass", {
           requestKey, studentId, passProductId: productId,
           runId: target?.runId, sessionId: target?.sessionId, deliveryMode: target?.deliveryMode,
-          reservationMonths: chosen.periods, passStartAt: firstDay,
+          reservationMonths: 1, passStartAt: startDay, reserveSelection: autoBook,
           payNow: method !== "pay_at_campus", method,
         });
-    if (saved) onComplete();
+    if (saved) onComplete(Boolean(target && !autoBook));
     else setError("The booking is not complete. Check the message above. A paid order will not be charged again.");
   }
   return <div className="payment-dialog-backdrop pass-purchase-backdrop" role="presentation" onMouseDown={() => { if (!busy) onClose(); }}>
@@ -2112,22 +2132,24 @@ function PassPurchaseDialog({
         {step === 1 ? <div className="pass-choice-grid">{offers.map(offer => <button
           key={get(offer.product, "id")} type="button"
           className={productId === get(offer.product, "id") ? "selected" : ""}
-          disabled={busy || paidOrder || !offer.suitable}
+          disabled={busy || paidOrder}
           onClick={() => setProductId(get(offer.product, "id"))}
         >
           <Banknote size={21} /><strong>{get(offer.product, "name")}</strong>
-          <p>{get(offer.product, "validity_type") === "calendar_month" ? offer.periods + " calendar month(s), from the 1st" : get(offer.product, "validity_days") + " days from " + malaysiaDate(firstDay)}</p>
-          <div><span>{Number(offer.product.onsite_credits) * offer.periods} onsite</span><span>{Number(offer.product.online_credits) * offer.periods} online</span><span>{Number(offer.product.study_credits) * offer.periods} study</span></div>
-          <b>{amount(Number(offer.product.price) * offer.periods)}</b>
-          {!offer.suitable ? <small>Not enough valid credits for this selection</small> : null}
+          <p>{get(offer.product, "validity_type") === "calendar_month" ? "1 calendar month" : get(offer.product, "validity_days") + " days"}</p>
+          <div>{(["onsite", "online", "study"] as const).filter(type => Number(offer.product[type + "_credits"]) > 0).map(type => <span key={type}>{Number(offer.product[type + "_credits"])} {type}</span>)}</div>
+          <b>{amount(Number(offer.product.price))}</b>
         </button>)}</div> : chosen ? <div className="pass-checkout-step">
-          <section className="pass-checkout-summary"><div><span>PASS</span><strong>{get(chosen.product, "name")}</strong></div><b>{amount(Number(chosen.product.price) * chosen.periods)}</b><p>{chosen.periods} period(s) · {Number(chosen.product.onsite_credits) * chosen.periods} onsite · {Number(chosen.product.online_credits) * chosen.periods} online · {Number(chosen.product.study_credits) * chosen.periods} study</p></section>
+          <section className="pass-checkout-summary"><div><span>PASS</span><strong>{get(chosen.product, "name")}</strong></div><b>{amount(Number(chosen.product.price))}</b><p>{(["onsite", "online", "study"] as const).filter(type => Number(chosen.product[type + "_credits"]) > 0).map(type => Number(chosen.product[type + "_credits"]) + " " + type).join(" + ")}{get(chosen.product, "issuance_mode") === "tickets" ? " single-use tickets" : " visits"}</p></section>
+          <label className="form-field"><span>Start date</span><input type="date" min={malaysiaDay()} value={startDay} disabled={busy || paidOrder} required onChange={event => setStartDay(event.target.value)} /></label>
+          {validity ? <p className="step-note">Valid {malaysiaDate(validity.from)} - {malaysiaDate(validity.until)}</p> : <p className="dialog-error" role="alert">Choose today or a future start date.</p>}
+          {target ? canBook ? <label className="pass-booking-option"><input type="checkbox" checked={reserveSelection} disabled={busy || paidOrder} onChange={event => setReserveSelection(event.target.checked)} /><span>Also book my selected {target.sessionId ? "lesson" : "course"}</span></label> : <p className="step-note">Tickets only. Your selected course stays saved; no lessons will be booked with this purchase.</p> : null}
           {paidOrder ? <p className="booking-already-purchased">Pass paid. Retry your saved booking without paying again.</p> : <label className="form-field"><span>Payment</span><select value={method} disabled={busy} onChange={event => setMethod(event.target.value)}><option value="pay_at_campus">Pay at campus later</option><option value="demo">Demo: confirm payment now</option></select></label>}
         </div> : null}
       </main>
       <footer><button type="button" className="quiet-button" disabled={busy || paidOrder} onClick={() => step === 2 ? setStep(1) : onClose()}><ChevronLeft size={16} />Back</button>
-        {step === 1 ? <button type="button" className="primary-button" disabled={busy || !chosen?.suitable} onClick={() => setStep(2)}>Continue <ChevronRight size={16} /></button>
-        : <button type="button" className="primary-button" disabled={busy || (!paidOrder && !chosen?.suitable)} onClick={() => void submit()}><Check size={16} />{busy ? "Saving..." : paidOrder ? "Retry booking" : method === "pay_at_campus" ? "Save order" : target ? "Confirm payment & book" : "Confirm payment"}</button>}
+        {step === 1 ? <button type="button" className="primary-button" disabled={busy || !chosen} onClick={() => setStep(2)}>Continue <ChevronRight size={16} /></button>
+        : <button type="button" className="primary-button" disabled={busy || !chosen || !validStart} onClick={() => void submit()}><Check size={16} />{busy ? "Saving..." : paidOrder ? "Retry booking" : method === "pay_at_campus" ? "Save order" : autoBook ? "Confirm payment & book" : "Confirm payment"}</button>}
       </footer>
     </section>
   </div>;
@@ -15408,10 +15430,7 @@ function StudentSummaryCard({
         <section className="sheet-section contact-card">
           <div className="sheet-section-title">
             <h3>Student contact</h3>
-            <a className="contact-email-button" href={`mailto:${email}`}>
-              <Mail size={15} />
-              Email student
-            </a>
+            <StudentContact row={item} />
           </div>
           <div className="sheet-overview">
             <Info label="Student code" value={get(item, "code")} />
@@ -15707,29 +15726,26 @@ function CommunicationPanel({
   run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
 }) {
-  const email =
-    get(item, "email") || `${get(item, "code").toLowerCase()}@family.example`;
-  function send(event: FormEvent<HTMLFormElement>) {
+  const phone = get(item, "guardian_phone");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const link = whatsappLink(phone, [subject, body].filter(Boolean).join("\n\n"));
+  async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run("sendMessage", {
-      ...values,
+    await run("sendMessage", {
+      subject, body, channel: "whatsapp",
       studentId: get(item, "id"),
-      recipient: email,
+      recipient: whatsappNumber(phone),
     });
-    event.currentTarget.reset();
   }
   return (
     <>
       <section className="sheet-section communication-contact">
         <div>
-          <span>EMAIL</span>
-          <strong>{email}</strong>
+          <span>WHATSAPP</span>
+          <strong>{phone || "Phone not provided"}</strong>
         </div>
-        <a className="contact-email-button" href={`mailto:${email}`}>
-          <Mail size={15} />
-          Open email
-        </a>
+        <StudentContact row={item} />
       </section>
       <section className="sheet-section">
         <div className="sheet-section-title">
@@ -15740,28 +15756,29 @@ function CommunicationPanel({
           {messages.map((message) => (
             <article key={get(message, "id")}>
               <span>
-                {get(message, "direction") === "outbound" ? "Sent" : "Received"}
+                {get(message, "direction") === "inbound" ? "Received" : get(message, "status") === "prepared" ? "Draft - not sent" : get(message, "status") === "sent" ? "Sent" : get(message, "status")}
               </span>
               <strong>{get(message, "subject")}</strong>
               <p>{get(message, "body")}</p>
-              <small>{get(message, "created_at")}</small>
+              <small>{get(message, "channel") || "email"} · {get(message, "created_at")}</small>
             </article>
           ))}
           {!messages.length ? <Empty text="No messages yet." /> : null}
         </div>
       </section>
       <section className="sheet-section">
-        <h3>New email</h3>
+        <h3>New WhatsApp message</h3>
         <form className="communication-form" onSubmit={send}>
-          <FormField name="subject" label="Subject" required />
+          <FormField name="subject" label="Subject" value={subject} onChange={event => setSubject(event.target.value)} required />
           <label className="form-field">
             <span>Message</span>
-            <textarea name="body" required />
+            <textarea name="body" value={body} onChange={event => setBody(event.target.value)} required />
           </label>
-          <button className="primary-button" disabled={busy} type="submit">
+          <button className="quiet-button" disabled={busy || !link} type="submit">
             <Send size={15} />
-            Send email
+            Save draft
           </button>
+          {link && body.trim() ? <a className="primary-button" href={link} target="_blank" rel="noopener noreferrer"><MessageCircle size={16} />Open in WhatsApp</a> : null}
         </form>
       </section>
     </>
@@ -16957,8 +16974,15 @@ type ResizableDataTableProps = {
 };
 
 function ResizableDataTable(props: ResizableDataTableProps) {
-  const signature = props.columns.map(column => `${column.key}:${column.width ?? "auto"}`).join("|");
-  return <ResizableDataTableBody key={signature} {...props} />;
+  const students = useContext(StudentDirectoryContext);
+  const hasStudents = props.columns.some(column => column.key === "student_name") || props.rows.some(row => row.student_id || students.has(String(row.id)));
+  const columns = [...props.columns];
+  if (hasStudents && !columns.some(column => column.key === "contact")) {
+    const actionsIndex = columns.findIndex(column => column.key === "actions");
+    columns.splice(actionsIndex < 0 ? columns.length : actionsIndex, 0, { key: "contact", label: "Guardian contact", width: 185 });
+  }
+  const signature = columns.map(column => `${column.key}:${column.width ?? "auto"}`).join("|");
+  return <ResizableDataTableBody key={signature} {...props} columns={columns} renderCell={(row, column) => hasStudents && column.key === "contact" ? <StudentContact row={row} /> : props.renderCell(row, column)} />;
 }
 
 function ResizableDataTableBody({

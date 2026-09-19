@@ -160,17 +160,70 @@ test('single-lesson selection survives deferred payment without enrolling the wh
   } finally { f.close(); }
 });
 
-test('a pass that cannot cover the selected dates is rejected before creating an order', async () => {
+test('a pass that cannot cover the whole course can be purchased without reserving lessons', async () => {
   const f = await teachingFixture();
   try {
     f.db.exec("UPDATE class_sessions SET starts_at = '2026-10-04 12:00', ends_at = '2026-10-04 13:30' WHERE id = 'session2'");
     const input = { studentId: 'student', productId: 'monthly', requestKey: 'too-short-period', months: 1, runId: 'run', mode: 'online', start: '2026-09-20' };
-    await assert.rejects(f.store.createPassOrder(input), /does not cover/);
-    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_orders').get().n, 0);
-    const order = await f.store.createPassOrder({ ...input, months: 2 });
+    const topup = await f.store.createPassOrder(input);
+    await f.store.payPass(topup);
+    assert.equal(await f.store.completePassBooking(topup), false);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 0);
+    assert.equal(f.db.prepare('SELECT status FROM pass_orders').get().status, 'paid');
+    const order = await f.store.createPassOrder({ ...input, requestKey: 'longer-period', months: 2 });
     await f.store.payPass(order);
     await f.store.completePassBooking(order);
     assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 2);
+  } finally { f.close(); }
+});
+
+test('rolling monthly pass issues 12 independent tickets with the chosen 30-day window', async () => {
+  const f = await fixture();
+  try {
+    f.db.exec("UPDATE pass_products SET validity_type = 'rolling_days', validity_days = 30, issuance_mode = 'tickets'");
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'rolling-ticket-order', months: 1, start: '2026-09-21' });
+    f.db.exec('UPDATE pass_products SET onsite_credits = 99, price = 999');
+    await f.store.payPass(order);
+    await f.store.payPass(order);
+    const tickets = f.db.prepare("SELECT * FROM student_passes WHERE credit_type != 'package'").all();
+    assert.equal(tickets.length, 12);
+    for (const [type, count] of [['onsite', 4], ['online', 6], ['study', 2]]) {
+      assert.equal(tickets.filter(t => t.credit_type === type).length, count);
+    }
+    assert.ok(tickets.every(t => t.credits_total === 1 && t.valid_from === '2026-09-21' && t.valid_until === '2026-10-20'));
+    assert.equal(f.db.prepare('SELECT SUM(amount) n FROM pass_payments').get().n, 160);
+    await assert.rejects(f.store.consumeCredit('student', 'online', 'future-ticket'), /No online credit/);
+    await assert.rejects(f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'past-start-date', months: 1, start: '2026-09-18' }), /future start/);
+    assert.deepEqual(passWindows({ validity_type: 'rolling_days', validity_days: 30 }, '2028-02-15', 1), [{ from: '2028-02-15', until: '2028-03-15' }]);
+  } finally { f.close(); }
+});
+
+test('extra online tickets can be bought during onsite selection; ticket use and expiry are enforced', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE pass_products SET validity_type = 'rolling_days', validity_days = 30, issuance_mode = 'tickets', onsite_credits = 0, study_credits = 0, price = 90");
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'extra-online-tickets', months: 1, runId: 'run', mode: 'onsite' });
+    await f.store.payPass(order);
+    assert.equal(await f.store.completePassBooking(order), false);
+    await f.store.consumeCredit('student', 'online', 'online-lesson-1');
+    await f.store.consumeCredit('student', 'online', 'online-lesson-1');
+    assert.equal(f.db.prepare("SELECT SUM(online_remaining) n FROM student_passes WHERE credit_type = 'online'").get().n, 5);
+    f.store.now = () => new Date('2026-10-19T04:00:00Z');
+    await assert.rejects(f.store.consumeCredit('student', 'online', 'expired-lesson'), /No online credit/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 0);
+  } finally { f.close(); }
+});
+
+test('tickets-only purchase ignores a full class and does not reserve it', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec('UPDATE class_runs SET capacity = 1');
+    f.insert('students', { id: 'other', code: 'S2', name: 'Another learner' });
+    await f.store.enrollCourse('other', 'run', 'onsite', 'course');
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'topup-full-class', months: 1, runId: 'run', mode: 'onsite', reserveSelection: false });
+    await f.store.payPass(order);
+    assert.equal(await f.store.completePassBooking(order), false);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE student_id = 'student'").get().n, 0);
   } finally { f.close(); }
 });
 

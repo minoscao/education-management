@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { LearningStore, type Database } from "../../lib/learning-store";
+import { whatsappNumber } from "../../lib/contact";
 import { findResourceConflicts as findConflicts } from "../../lib/resource-conflicts";
 
 type Row = Record<string, unknown>;
@@ -54,6 +55,7 @@ type ActionPayload = {
   note?: string;
   phone?: string;
   email?: string;
+  channel?: string;
   bio?: string;
   avatarUrl?: string;
   location?: string;
@@ -83,6 +85,7 @@ type ActionPayload = {
   passOrderId?: string;
   reservationMonths?: number | string;
   passStartAt?: string;
+  reserveSelection?: boolean;
 };
 
 function db() {
@@ -5823,11 +5826,11 @@ async function purchasePass(payload: ActionPayload) {
   const orderId = await learning().createPassOrder({
     studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
     requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
-    start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode,
+    start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode, reserveSelection: payload.reserveSelection,
   });
   if (payload.payNow === true || payload.payNow === "true")
     return await recordPassPayment({ ...payload, passOrderId: orderId });
-  return { notice: "Your order and course selection are saved. Payment will issue your credits and complete the booking.", bookingPending: false };
+  return { notice: "Your order is saved. Tickets will be issued after payment. Your course selection is kept.", bookingPending: false };
 }
 
 
@@ -5842,7 +5845,8 @@ async function recordPassPayment(payload: ActionPayload) {
   let body = "Payment confirmed. Your selected lessons are booked and your remaining pass balance is updated.";
   let bookingPending = false;
   try {
-    await learning().completePassBooking(orderId);
+    const booked = await learning().completePassBooking(orderId);
+    if (!booked) body = "Payment confirmed. Your tickets are ready. Your course selection is saved; no additional lessons were reserved.";
   } catch (error) {
     bookingPending = true;
     body = "Your pass is ready. Course reservation needs attention: " + (error instanceof Error ? error.message : "Please contact the campus.");
@@ -5913,12 +5917,12 @@ async function ensurePassData() {
         "pass-monthly",
         "MONTHLY-PASS",
         "Monthly learning pass",
-        "12 onsite lessons, 24 online lessons and 6 study access visits. Valid from the first to the last day of the calendar month.",
-        12,
-        24,
+        "4 onsite lessons, 6 online lessons and 2 study visits. Valid for 30 days from your chosen start date.",
+        4,
         6,
-        "calendar_month",
-        31,
+        2,
+        "rolling_days",
+        30,
         160,
         1,
       ],
@@ -5976,14 +5980,14 @@ async function ensurePassData() {
   // Keep the commercial offer in step with the current pass configuration.
   // This runs once for an already provisioned D1 database via pass_schema_v4.
   await execute(
-    "UPDATE pass_products SET name = ?, description = ?, price = ?, onsite_credits = ?, online_credits = ?, study_credits = ? WHERE id = ?",
+    "UPDATE pass_products SET name = ?, description = ?, price = ?, onsite_credits = ?, online_credits = ?, study_credits = ?, validity_type = 'rolling_days', validity_days = 30, issuance_mode = 'tickets' WHERE id = ?",
     [
       "Monthly learning pass",
-      "12 onsite lessons, 24 online lessons and 6 study access visits. Valid from the first to the last day of the calendar month.",
+      "4 onsite lessons, 6 online lessons and 2 study visits. Valid for 30 days from your chosen start date.",
       160,
-      12,
-      24,
+      4,
       6,
+      2,
       "pass-monthly",
     ],
   );
@@ -6061,17 +6065,25 @@ async function sendMessage(payload: ActionPayload) {
     !payload.subject?.trim() ||
     !payload.body?.trim()
   )
-    throw new Error("Email details are incomplete.");
+    throw new Error("Message details are incomplete.");
+  const channel = payload.channel === "whatsapp" ? "whatsapp" : "email";
+  let recipient = payload.recipient;
+  if (channel === "whatsapp") {
+    const student = await row<{ guardian_phone: string }>('SELECT guardian_phone FROM students WHERE id = ?', [payload.studentId]);
+    recipient = whatsappNumber(student?.guardian_phone) || "";
+    if (!recipient) throw new Error('Add a valid guardian phone number before preparing a WhatsApp message.');
+  }
   await execute(
-    "INSERT INTO student_messages (id, student_id, recipient, subject, body, direction, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO student_messages (id, student_id, recipient, subject, body, direction, status, channel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [
       id("message"),
       payload.studentId,
-      payload.recipient,
+      recipient,
       payload.subject.trim(),
       payload.body.trim(),
       "outbound",
       "prepared",
+      channel,
     ],
   );
 }

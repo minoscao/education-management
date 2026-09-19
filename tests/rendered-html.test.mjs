@@ -63,4 +63,18 @@ test("pass checkout preserves the course choice and never asks to choose it agai
   assert.match(portal, /Use existing pass balance/);
   assert.match(portal, /Buy a new pass/);
   assert.match(portal, /bookingRunId && !passPurchaseOpen/);
+  assert.doesNotMatch(purchase, /Not enough valid credits|!offer.suitable/);
+  assert.match(purchase, /reservationMonths: 1, passStartAt: startDay/);
+  assert.match(purchase, /<span>Start date<\/span>/);
+});
+
+test("student tables share contacts and WhatsApp drafts do not claim delivery", async () => {
+  const portal = await readProjectFile("app/management-portal.tsx");
+  assert.match(portal, /StudentDirectoryContext.Provider value={studentDirectory}/);
+  assert.match(portal, /label: "Guardian contact"/);
+  assert.match(portal, /function StudentContact/);
+  const communication = portal.slice(portal.indexOf('function CommunicationPanel('), portal.indexOf('function StudentCourseProgress('));
+  assert.match(communication, /channel: "whatsapp"/);
+  assert.match(communication, /Draft - not sent/);
+  assert.doesNotMatch(communication, /mailto:|Send email/);
 });

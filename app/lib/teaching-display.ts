@@ -2,15 +2,16 @@ type TeachingRow = Record<string, unknown>;
 
 export const teachingPalette = {
   chinese: '#2563EB',
-  malay: '#D97706',
-  english: '#16834A',
+  malay: '#DC4C59',
+  english: '#7C3AED',
+  mixed: '#D97706',
   unknown: '#64748B',
 };
 
 export function teachingDisplay(row: TeachingRow) {
   const id = String(row.language_id || '');
   const name = String(row.language_name || '');
-  const medium = id === 'lang-me' ? 'malay'
+  const medium = ['lang-me', 'lang-ms'].includes(id) ? 'malay'
     : ['lang-ce', 'lang-zh'].includes(id) ? 'chinese'
     : /bahasa|malay|马来/i.test(name) ? 'malay'
     : /mandarin|chinese|华语|华文|中文/i.test(name) ? 'chinese'
@@ -23,7 +24,9 @@ export function teachingDisplay(row: TeachingRow) {
     || level.match(/^\s*(?:DuZhong\s*[·:-]\s*)?([GF][1-6]|[LH][1-3])\s*$/i)?.[1];
   const independent = system ? ['independent', 'uec', 'duzhong'].includes(system)
     : Boolean(grade && /^[LH]/i.test(grade)) || /duzhong|uec|独中/i.test(level);
-  return { medium, colour: teachingPalette[medium], independent,
+  const group = String(row.cohort_group || '');
+  const colour = group in teachingPalette ? teachingPalette[group as keyof typeof teachingPalette] : teachingPalette[medium];
+  return { medium, colour, independent, group,
     label: name || 'Teaching language not set' };
 }
 

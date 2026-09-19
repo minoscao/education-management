@@ -621,7 +621,7 @@ function eventColour(row: Row) {
   return courseColourOptions.includes(color) ? color : defaultCourseColour;
 }
 function eventStyle(row: Row) {
-  return { "--course-colour": eventColour(row) } as React.CSSProperties;
+  return { "--course-colour": row.cohort_group ? teachingDisplay(row).colour : eventColour(row) } as React.CSSProperties;
 }
 function teachingStyle(row: Row) {
   return { "--course-colour": teachingDisplay(row).colour } as React.CSSProperties;
@@ -629,7 +629,14 @@ function teachingStyle(row: Row) {
 function CalendarCourseTitle({ event }: { event: Row }) {
   const display = teachingDisplay(event);
   const Icon = { math: Calculator, communication: MessageCircle, science: FlaskConical, chinese: PenTool, malay: Languages, english: BookOpen, music: Music2, general: GraduationCap }[teachingSubject(event)];
-  return <strong className="calendar-course-title" title={`${get(event, "subject") || get(event, "course_title")} · ${display.label}${display.independent ? ' · Independent school / UEC' : ''}`}><Icon className="calendar-subject-icon" size={13} aria-hidden="true" /><span>{get(event, "course_title")}</span>{display.independent ? <span className="independent-course-tag" title="Independent school / 独中">UEC</span> : null}</strong>;
+  const audience = display.group === 'chinese' ? '华小' : display.group === 'malay' ? '马小' : '';
+  const title = `${teachingSubject(event) === 'english' && audience ? `${audience} · ` : ''}${get(event, 'course_title')}`;
+  return <strong className="calendar-course-title" title={`${title} · ${display.label}${display.independent ? ' · Independent school / UEC' : ''}`}><Icon className="calendar-subject-icon" size={13} aria-hidden="true" /><span>{title}</span><TeachingLanguageTag row={event} />{display.independent ? <span className="independent-course-tag" title="Independent school / 独中">UEC</span> : null}</strong>;
+}
+function TeachingLanguageTag({ row }: { row: Row }) {
+  const display = teachingDisplay(row);
+  const label = { chinese: '中文', malay: '马来文', english: 'English', unknown: '待确认' }[display.medium];
+  return <span className="teaching-medium-tag" title={`Teaching language · ${display.label}`}>{label}</span>;
 }
 function cohortPhase(run: Row, sessions: Row[]) {
   const times = sessions
@@ -2246,7 +2253,7 @@ function StudentCourseBooking({
                 <CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "subject"), display_color: get(item, "run_course_color") }} />
                 <div>
                   <span>{used ? "ALREADY PURCHASED" : pending ? "AWAITING PAYMENT" : "AVAILABLE CLASS"}</span>
-                  <h3>{get(item, "course_title")}</h3>
+                  <h3>{get(item, "course_title")}</h3><TeachingLanguageTag row={item} />
                   <p>{get(item, "name")}</p>
                   <small>{get(item, "teacher_name") || "Teacher to be confirmed"} · {get(item, "session_count")} lessons</small>
                 </div>
@@ -2769,16 +2776,17 @@ function CalendarView({
   onReschedule: (id: string, startsAt: string) => void;
 }) {
   const c = calendarText[language];
+  const currentPlan = data.sessions.filter(row => get(row, 'class_run_id').startsWith('weekly-run-') && get(row, 'status') !== 'cancelled');
   const firstSession = visibleSessions?.[0]
     ? fromKey(datePart(visibleSessions[0].starts_at))
-    : data.sessions[0]
-      ? fromKey(datePart(data.sessions[0].starts_at))
+    : (currentPlan[0] || data.sessions[0])
+      ? fromKey(datePart((currentPlan[0] || data.sessions[0]).starts_at))
       : new Date();
   const [scope, setScope] = useState<CalendarScope>("week");
   const [mode, setMode] = useState<CalendarMode>("time");
   const [resourceKind, setResourceKind] = useState<ResourceKind>("classroom");
   const [anchor, setAnchor] = useState<Date>(() => firstSession);
-  const events = visibleSessions ?? data.sessions;
+  const events = (visibleSessions ?? data.sessions).filter(row => get(row, 'status') !== 'cancelled');
   const resources = calendarResources(data, resourceKind);
   const businessHours = data.settings.businessHours;
   const displayTitle = calendarTitle(anchor, scope, language);
@@ -3315,7 +3323,7 @@ function WeekCalendar({
   }
   return (
     <>
-      <div className="teaching-calendar-legend" aria-label="Teaching language and curriculum"><span><i style={{ background: teachingPalette.chinese }} />{language === "zh" ? "中文" : "Chinese"}</span><span><i style={{ background: teachingPalette.malay }} />{language === "zh" ? "马来文" : "Bahasa"}</span><span><i style={{ background: teachingPalette.english }} />{language === "zh" ? "英文" : "English"}</span><span><b className="independent-course-tag">UEC</b>{language === "zh" ? "独立课程" : "Independent curriculum"}</span></div>
+      <div className="teaching-calendar-legend" aria-label="Course groups"><span><i style={{ background: teachingPalette.chinese }} />{language === "zh" ? "华小群体" : "Chinese-primary group"}</span><span><i style={{ background: teachingPalette.malay }} />{language === "zh" ? "马小群体 / 马来文数学" : "Malay-primary / Malay maths"}</span><span><i style={{ background: teachingPalette.english }} />{language === "zh" ? "英文数学" : "English maths"}</span><span><i style={{ background: teachingPalette.mixed }} />{language === "zh" ? "混合群体" : "Mixed group"}</span><span><b className="independent-course-tag">UEC</b>{language === "zh" ? "独立课程" : "Independent curriculum"}</span></div>
       <section className="week-timeline">
         <div className="week-timeline-head">
           <div className="week-time-corner">Time</div>
@@ -6689,6 +6697,7 @@ function CourseRunLibrary({
     void run("createClassRun", values).then(saved => saved && setAdding(false));
   }
   const courseGroups = data.courses
+    .filter(course => get(course, 'status') !== 'inactive')
     .map((course) => ({
       course,
       intakes: data.runs
@@ -10183,11 +10192,7 @@ function CourseRunNavCard({
     >
       <div className="course-run-nav-title">
         <strong>{get(runItem, "name")}</strong>
-        <span
-          className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
-        >
-          {get(runItem, "language_name") || "待设置语言"}
-        </span>
+        <TeachingLanguageTag row={runItem} />
       </div>
       <div className="course-run-nav-teacher">
         {teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}
@@ -10241,11 +10246,7 @@ function CourseRunHeaderMeta({
   );
   return (
     <div className="course-run-header-meta">
-      <span
-        className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
-      >
-        {get(runItem, "language_name") || "待设置语言"}
-      </span>
+      <TeachingLanguageTag row={runItem} />
       <span
         className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}
       >
@@ -10433,11 +10434,7 @@ function CourseAllRunCard({
     >
       <div>
         <strong>{get(runItem, "name")}</strong>
-        <span
-          className={`language-tag ${languageTagTone(get(runItem, "language_name"))}`}
-        >
-          {get(runItem, "language_name") || "待设置语言"}
-        </span>
+        <TeachingLanguageTag row={runItem} />
         <span
           className={`delivery-mode ${get(runItem, "delivery_mode") === "online" ? "online" : "onsite"}`}
         >

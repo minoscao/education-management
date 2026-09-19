@@ -1,0 +1,1 @@
+ALTER TABLE class_runs ADD COLUMN cohort_group TEXT NOT NULL DEFAULT '';

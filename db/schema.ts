@@ -232,6 +232,7 @@ export const teacherLanguages = sqliteTable("teacher_languages", {
 });
 
 export const classRuns = sqliteTable("class_runs", {
+  cohortGroup: text("cohort_group").notNull().default(""),
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   courseId: text("course_id")

@@ -27,6 +27,12 @@ test('independent curriculum is separate from teaching language', () => {
   assert.equal(teachingDisplay({ course_title: 'H3 English', curriculum: 'public' }).independent, false);
   assert.equal(teachingDisplay({ course_title: 'Chinese', curriculum: 'uec' }).independent, true);
 });
+test('audience colour stays separate from English teaching tags', () => {
+  assert.equal(teachingDisplay({language_id:'lang-en',cohort_group:'chinese'}).colour,teachingPalette.chinese);
+  assert.equal(teachingDisplay({language_id:'lang-en',cohort_group:'malay'}).colour,teachingPalette.malay);
+  assert.equal(teachingDisplay({language_id:'lang-ms',cohort_group:'mixed'}).colour,teachingPalette.mixed);
+  assert.equal(teachingDisplay({language_id:'lang-ms',cohort_group:'mixed'}).medium,'malay');
+});
 
 test('subject icons are independent from teaching language and curriculum', () => {
   assert.equal(teachingSubject({ subject: 'English', language_id: 'lang-me' }), 'english');

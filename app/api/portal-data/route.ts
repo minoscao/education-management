@@ -6403,8 +6403,9 @@ async function readPortal(includeAttendance = false) {
           LEFT JOIN teaching_languages ON teaching_languages.id = class_runs.language_id LEFT JOIN teachers ON teachers.id = class_runs.teacher_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
           GROUP BY class_runs.id ORDER BY class_runs.created_at DESC`),
-    rows(`SELECT class_sessions.*, class_runs.name AS run_name, class_runs.code AS run_code, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color, class_resource_bookings.classroom_id, classrooms.name AS classroom_name, class_teacher_bookings.teacher_id, teachers.name AS teacher_name, class_teacher_bookings.pay_amount AS pay_amount, class_teacher_bookings.pay_status
+    rows(`SELECT class_sessions.*, class_runs.name AS run_name, class_runs.code AS run_code, class_runs.language_id, teaching_languages.name AS language_name, course_catalogs.subject, course_catalogs.level AS course_level, course_catalogs.title AS course_title, course_catalogs.display_color AS course_color, class_resource_bookings.classroom_id, classrooms.name AS classroom_name, class_teacher_bookings.teacher_id, teachers.name AS teacher_name, class_teacher_bookings.pay_amount AS pay_amount, class_teacher_bookings.pay_status
           FROM class_sessions JOIN class_runs ON class_runs.id = class_sessions.class_run_id JOIN course_catalogs ON course_catalogs.id = class_runs.course_id
+          LEFT JOIN teaching_languages ON teaching_languages.id = class_runs.language_id
           LEFT JOIN class_resource_bookings ON class_resource_bookings.class_session_id = class_sessions.id LEFT JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id
           LEFT JOIN class_teacher_bookings ON class_teacher_bookings.class_session_id = class_sessions.id LEFT JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id
           ORDER BY class_sessions.starts_at ASC`),

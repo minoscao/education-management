@@ -65,6 +65,7 @@ import { useDialogFocus } from "./lib/use-dialog-focus";
 import { useClock } from "./lib/use-clock";
 import { whatsappLink, whatsappNumber } from "./lib/contact";
 import { demoTeacherProfile } from "./lib/teacher-profiles";
+import { teachingDisplay, teachingPalette, teachingSubject } from "./lib/teaching-display";
 import { useStoredChoice } from "./lib/use-stored-choice";
 import { createPortal } from "react-dom";
 
@@ -621,6 +622,14 @@ function eventColour(row: Row) {
 }
 function eventStyle(row: Row) {
   return { "--course-colour": eventColour(row) } as React.CSSProperties;
+}
+function teachingStyle(row: Row) {
+  return { "--course-colour": teachingDisplay(row).colour } as React.CSSProperties;
+}
+function CalendarCourseTitle({ event }: { event: Row }) {
+  const display = teachingDisplay(event);
+  const Icon = { math: Calculator, communication: MessageCircle, science: FlaskConical, chinese: PenTool, malay: Languages, english: BookOpen, music: Music2, general: GraduationCap }[teachingSubject(event)];
+  return <strong className="calendar-course-title" title={`${get(event, "subject") || get(event, "course_title")} · ${display.label}${display.independent ? ' · Independent school / UEC' : ''}`}><Icon className="calendar-subject-icon" size={13} aria-hidden="true" /><span>{get(event, "course_title")}</span>{display.independent ? <span className="independent-course-tag" title="Independent school / 独中">UEC</span> : null}</strong>;
 }
 function cohortPhase(run: Row, sessions: Row[]) {
   const times = sessions
@@ -3306,6 +3315,7 @@ function WeekCalendar({
   }
   return (
     <>
+      <div className="teaching-calendar-legend" aria-label="Teaching language and curriculum"><span><i style={{ background: teachingPalette.chinese }} />{language === "zh" ? "中文" : "Chinese"}</span><span><i style={{ background: teachingPalette.malay }} />{language === "zh" ? "马来文" : "Bahasa"}</span><span><i style={{ background: teachingPalette.english }} />{language === "zh" ? "英文" : "English"}</span><span><b className="independent-course-tag">UEC</b>{language === "zh" ? "独立课程" : "Independent curriculum"}</span></div>
       <section className="week-timeline">
         <div className="week-timeline-head">
           <div className="week-time-corner">Time</div>
@@ -3433,14 +3443,14 @@ function TimelineSlotGroup({
           type="button"
           key={eventSessionId(event)}
           className="timeline-slot-record"
-          style={eventStyle(event)}
+          style={teachingStyle(event)}
           onClick={(click) => {
             click.stopPropagation();
             onOpen(eventSessionId(event));
           }}
         >
-          <strong>{get(event, "course_title")}</strong>
-          <small>{get(event, "run_name") || get(event, "topic")}</small>
+          <CalendarCourseTitle event={event} />
+          <small>{teachingDisplay(event).label}</small>
         </button>
       ))}
       {extra > 0 ? (
@@ -3508,13 +3518,13 @@ function TimelineSlotGroupDialog({
             <button
               type="button"
               key={eventSessionId(event)}
-              style={eventStyle(event)}
+              style={teachingStyle(event)}
               onClick={() => onOpen(eventSessionId(event))}
             >
               <span>
                 <b>{timePart(event.starts_at)}</b>
-                <strong>{get(event, "course_title")}</strong>
-                <small>{get(event, "run_name") || get(event, "topic")}</small>
+                <CalendarCourseTitle event={event} />
+                <small>{teachingDisplay(event).label} · {get(event, "run_name") || get(event, "topic")}</small>
               </span>
               <em>
                 {get(event, "classroom_name") || get(event, "teacher_name")}
@@ -3722,14 +3732,15 @@ function TimelineEvent({
       type="button"
       draggable={draggable}
       className={`timeline-event${draggable ? " draggable-lesson" : ""}`}
-      style={{ ...eventStyle(event), top: `${top}%`, height: `${height}%` }}
+      style={{ ...teachingStyle(event), top: `${top}%`, height: `${height}%` }}
       onDragStart={(dragEvent) =>
         dragEvent.dataTransfer.setData("application/x-lesson", get(event, "id"))
       }
       onClick={() => onOpen(eventSessionId(event))}
     >
       <span>{timePart(event.starts_at)}</span>
-      <strong>{get(event, "course_title")}</strong>
+      <CalendarCourseTitle event={event} />
+      <small>{teachingDisplay(event).label}</small>
       <em>
         {get(event, "run_name") ||
           get(event, "topic") ||

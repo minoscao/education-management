@@ -1,0 +1,8 @@
+.teaching-calendar-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 8px 0; font-size: 11px; color: #466069; }
+.teaching-calendar-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.teaching-calendar-legend i { width: 9px; height: 9px; border-radius: 2px; }
+.calendar-course-title { display: flex !important; align-items: center; gap: 5px; min-width: 0; }
+.calendar-course-title > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: inherit; font: inherit; }
+.calendar-subject-icon { flex: 0 0 13px; color: #38505a; }
+.calendar-course-title > .independent-course-tag,.teaching-calendar-legend .independent-course-tag { flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #111; color: #fff; font-size: 9px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+.timeline-event > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: #405b66; }

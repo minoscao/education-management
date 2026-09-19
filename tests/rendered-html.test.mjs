@@ -4,6 +4,29 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
+test("student home shares lesson cards, attendance mode and compact balance views", async () => {
+  const portal = await readProjectFile("app/management-portal.tsx");
+  const css = await readProjectFile("app/student-learning.css");
+  const page = await readProjectFile("app/student/page.tsx");
+  const home = portal.slice(portal.indexOf('function StudentHome('), portal.indexOf('function activePasses('));
+  assert.match(page, /initialRole="student"/);
+  assert.match(home, /<StudentCourses[^>]+compact/);
+  assert.match(home, /<StudentPassSummary[^>]+compact/);
+  assert.match(home, /<StudentLessonCard/);
+  assert.doesNotMatch(home, /learning-hero|student-focus-grid/);
+  assert.match(portal, /function AttendanceModeSwitch/);
+  assert.match(portal, /Use 1 credit & join/);
+  assert.match(portal, /Unlimited online places/);
+  for (const action of ['Book onsite', 'Book online', 'Book study']) assert.ok(portal.includes(action));
+  assert.match(css, /student-week-lesson:disabled[^}]+filter: grayscale\(1\)/);
+  assert.match(css, /student-booking-dock[^}]+position: fixed/);
+  for (let index = 0; index < 10; index++) {
+    const photo = await readFile(new URL(`public/assets/teachers/demo-${index}.jpg`, root));
+    assert.equal(photo.readUInt16BE(0), 0xffd8);
+    assert.ok(photo.length > 1000);
+  }
+});
+
 async function readProjectFile(path) {
   return readFile(new URL(path, root), "utf8");
 }

@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText + '\n//# sourceURL=learning-store.ts';
-const { LearningStore, passWindows, monthCount, malaysiaDay, creditCoverage, passOfferCards } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { LearningStore, passWindows, monthCount, malaysiaDay, creditCoverage, passOfferCards, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 async function fixture() {
   const db = new DatabaseSync(':memory:');
@@ -338,6 +338,83 @@ test('no classroom link means no online debit; repeated entry uses one credit', 
     await f.store.joinOnline('student', 'session1');
     await f.store.joinOnline('student', 'session1');
     assert.equal(f.db.prepare("SELECT online_remaining AS n FROM student_passes WHERE credit_type = 'online'").get().n, 5);
+  } finally { f.close(); }
+});
+
+test('online seats are unlimited while unavailable onsite lessons are disabled', () => {
+  const lesson = { id: 's', starts_at: '2026-09-20 12:00', ends_at: '2026-09-20 13:30', status: 'scheduled', online_url: 'https://example.com/class' };
+  const bookings = [{ student_id: 'other', class_session_id: 's', delivery_mode: 'onsite', status: 'booked' }];
+  const before = new Date('2026-09-20T03:00:00Z').getTime();
+  assert.equal(lessonAvailability(lesson, 1, bookings, 'student', 'onsite', before).reason, 'Full');
+  assert.equal(lessonAvailability(lesson, 1, bookings, 'student', 'online', before).disabled, false);
+  assert.equal(lessonAvailability(lesson, 1, bookings, 'student', 'online', before).seats, null);
+  assert.equal(onlineLessonState(lesson, new Date('2026-09-20T03:44:59Z').getTime()), 'upcoming');
+  assert.equal(onlineLessonState(lesson, new Date('2026-09-20T03:45:00Z').getTime()), 'opening');
+  assert.equal(onlineLessonState(lesson, new Date('2026-09-20T04:00:00Z').getTime()), 'live');
+  assert.equal(onlineLessonState(lesson, new Date('2026-09-20T05:30:00Z').getTime()), 'ended');
+  assert.equal(gradeCode('G4 English'), 'G4');
+  assert.equal(gradeCode('Mathematics Year 7'), 'Y7');
+  assert.notEqual(gradeCode('F1 Maths'), gradeCode('L1 Maths'));
+});
+
+test('same-grade live drop-in creates attendance and consumes one ticket atomically without pre-booking', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE students SET level = 'F3 English'; UPDATE class_sessions SET online_url = 'https://example.com/live'; UPDATE class_runs SET capacity = 1");
+    f.insert('students', { id: 'other', code: 'S2', name: 'Other learner' });
+    await f.store.enrollCourse('other', 'run', 'onsite', 'course');
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'live-drop-in-test', months: 1 });
+    await f.store.payPass(order);
+    f.store.now = () => new Date('2026-09-20T04:15:00Z');
+    f.interrupt(3);
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /Injected/);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE student_id = 'student'").get().n, 0);
+    f.interrupt(null);
+    const urls = await Promise.all([f.store.joinOnline('student', 'session1'), f.store.joinOnline('student', 'session1')]);
+    assert.deepEqual(urls, ['https://example.com/live', 'https://example.com/live']);
+    assert.equal(f.db.prepare("SELECT online_remaining n FROM student_passes WHERE credit_type = 'online'").get().n, 5);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE student_id = 'student'").get().n, 1);
+    assert.equal(f.db.prepare("SELECT status FROM class_enrollments WHERE student_id = 'student'").get().status, 'single_lesson');
+    assert.equal(f.db.prepare("SELECT a.status FROM class_attendance a JOIN class_student_bookings b ON b.id = a.student_booking_id WHERE b.student_id = 'student'").get().status, 'present');
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'consumed'").get().n, 1);
+  } finally { f.close(); }
+});
+
+test('drop-in reuses cancelled legacy attendance records and debits once', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE students SET level = 'F3'; UPDATE class_sessions SET online_url = 'https://example.com/live'");
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'legacy-dropin', months: 1 });
+    await f.store.payPass(order);
+    const booking = await f.store.bookLesson('student', 'session1', 'online');
+    await f.store.cancelLesson('student', 'session1');
+    f.db.prepare("UPDATE class_attendance SET id = 'legacy-attendance' WHERE student_booking_id = ?").run(booking);
+    f.store.now = () => new Date('2026-09-20T04:15:00Z');
+    await f.store.joinOnline('student', 'session1');
+    await f.store.joinOnline('student', 'session1');
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_attendance').get().n, 1);
+    assert.equal(f.db.prepare("SELECT status FROM class_attendance WHERE id = 'legacy-attendance'").get().status, 'present');
+    assert.equal(f.db.prepare("SELECT online_remaining n FROM student_passes WHERE credit_type = 'online'").get().n, 5);
+  } finally { f.close(); }
+});
+
+test('drop-in rejects wrong grade, missing link, early entry, ended sessions and insufficient credits without writes', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE students SET level = 'F2'; UPDATE class_sessions SET online_url = 'https://example.com/live'");
+    f.store.now = () => new Date('2026-09-20T04:15:00Z');
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /your grade/);
+    f.db.exec("UPDATE students SET level = 'F3'");
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /No online credit/);
+    f.store.now = () => new Date('2026-09-20T03:44:00Z');
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /15 minutes/);
+    f.store.now = () => new Date('2026-09-20T05:30:00Z');
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /15 minutes/);
+    f.store.now = () => new Date('2026-09-20T04:15:00Z');
+    f.db.exec("UPDATE class_sessions SET online_url = ''");
+    await assert.rejects(f.store.joinOnline('student', 'session1'), /classroom link/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 0);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM learning_credit_events').get().n, 0);
   } finally { f.close(); }
 });
 

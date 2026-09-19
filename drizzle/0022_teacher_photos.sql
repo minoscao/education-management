@@ -1,0 +1,1 @@
+ALTER TABLE teachers ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';

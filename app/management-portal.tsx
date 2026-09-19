@@ -60,10 +60,11 @@ import {
   createContext,
   useContext,
 } from "react";
-import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows } from "./lib/learning-store";
+import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows, gradeCode, onlineLessonState, lessonAvailability } from "./lib/learning-store";
 import { useDialogFocus } from "./lib/use-dialog-focus";
 import { useClock } from "./lib/use-clock";
 import { whatsappLink, whatsappNumber } from "./lib/contact";
+import { demoTeacherProfile } from "./lib/teacher-profiles";
 import { useStoredChoice } from "./lib/use-stored-choice";
 import { createPortal } from "react-dom";
 
@@ -99,6 +100,7 @@ type View =
   | "settings"
   | "teacherHome"
   | "studentHome"
+  | "studentStudy"
   | "studentCourses"
   | "studentCalendar"
   | "studentPasses"
@@ -432,6 +434,8 @@ function courseCover(course: Row) {
 }
 
 function avatarUrl(person: Row) {
+  if (get(person, "avatar_url") && !get(person, "avatar_url").startsWith("sprite:")) return get(person, "avatar_url");
+  if (get(person, "id").startsWith("teacher-")) return demoTeacherProfile(get(person, "id"), get(person, "subject")).avatar_url;
   const seed = encodeURIComponent(
     `${get(person, "id")}-${get(person, "name")}`,
   );
@@ -483,8 +487,8 @@ function Avatar({
   alt?: string;
 }) {
   const stored = get(person, "avatar_url");
-  if (stored && !stored.startsWith("sprite:"))
-    return <img className={className} src={stored} alt={alt} />;
+  if ((stored && !stored.startsWith("sprite:")) || get(person, "id").startsWith("teacher-"))
+    return <img className={className} src={avatarUrl(person)} alt={alt} title={avatarUrl(person).includes("/teachers/demo-") ? "Demo portrait" : undefined} />;
   const sprite = portraitSprite(person);
   if (Number.isFinite(sprite))
     return (
@@ -676,11 +680,11 @@ function scheduleWindow(
   };
 }
 
-export function ManagementPortal({ initialView = "dashboard" }: { initialView?: View }) {
+export function ManagementPortal({ initialView = "dashboard", initialRole = "admin" }: { initialView?: View; initialRole?: Role }) {
   const [data, setData] = useState<PortalData>(emptyData);
   const studentDirectory = useMemo(() => new Map(data.students.map(student => [String(student.id), student])), [data.students]);
   const [view, setView] = useState<View>(initialView);
-  const [role, setRole] = useState<Role>("admin");
+  const [role, setRole] = useState<Role>(initialRole);
   const [language, setLanguage] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1205,7 +1209,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           <StudentHome
             data={data}
             studentId={selectedStudentId}
-            onOpen={(id) => setDetail({ kind: "session", id })}
+            onChooseLesson={(id) => { const session = data.sessions.find(row => get(row, "id") === id); if (session) { setPassPurchaseTarget(null); setBookingDelivery("online"); setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); } }}
             onOpenClass={(id) =>
               setDetail({
                 kind: "studentClass",
@@ -1242,19 +1246,24 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           <StudentCourseBooking
             data={data}
             studentId={selectedStudentId}
-            onChoose={(id) => { setPassPurchaseTarget(null); setBookingDelivery("onsite"); setBookingSessionId(""); setBookingRunId(id); }}
+            delivery={bookingDelivery}
+            onDeliveryChange={setBookingDelivery}
+            onChoose={(id) => { setPassPurchaseTarget(null); setBookingSessionId(""); setBookingRunId(id); }}
           />
         ) : null}
         {view === "studentLessonBooking" ? (
           <StudentLessonBooking
             data={data}
             studentId={selectedStudentId}
+            delivery={bookingDelivery}
+            onDeliveryChange={setBookingDelivery}
             onChoose={(id) => {
               const session = data.sessions.find(item => get(item, "id") === id);
-              if (session) { setPassPurchaseTarget(null); setBookingDelivery("onsite"); setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
+              if (session) { setPassPurchaseTarget(null); setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
             }}
           />
         ) : null}
+        {view === "studentStudy" ? <section className="student-portal"><StudentPassSummary data={data} studentId={selectedStudentId} compact onBuy={() => { setPassPurchaseTarget(null); setPassPurchaseOpen(true); }} /><StudyReservations data={data} studentId={selectedStudentId} busy={busy} run={run} /></section> : null}
         {view === "studentCalendar" ? (
           <StudentTimetableV2
             data={data}
@@ -1264,6 +1273,7 @@ export function ManagementPortal({ initialView = "dashboard" }: { initialView?: 
           />
         ) : null}
       </section>
+      {role === "student" ? <nav className="student-booking-dock" aria-label="Book learning"><button type="button" className={view === "studentLessonBooking" && bookingDelivery === "onsite" ? "active" : ""} onClick={() => { setBookingDelivery("onsite"); setView("studentLessonBooking"); }}><Building2 size={19} /><span>Book onsite</span></button><button type="button" className={view === "studentLessonBooking" && bookingDelivery === "online" ? "active" : ""} onClick={() => { setBookingDelivery("online"); setView("studentLessonBooking"); }}><BookOpen size={19} /><span>Book online</span></button><button type="button" className={view === "studentStudy" ? "active" : ""} onClick={() => setView("studentStudy")}><School size={19} /><span>Book study</span></button></nav> : null}
       {detailStack.map((stackDetail, index) => (
         <DetailSheet
           key={`${stackDetail.kind}-${stackDetail.id}-${index}`}
@@ -1366,6 +1376,7 @@ function pageTitle(view: View, t: (typeof copy)[Language]) {
     settings: "Business rules",
     teacherHome: "Today",
     studentHome: "My learning",
+    studentStudy: "Book study",
     studentPasses: "My pass",
     studentCourses: "My courses",
     studentBooking: "Book a course",
@@ -1730,149 +1741,30 @@ function DashboardMetric({
 }
 
 function StudentHome({
-  data,
-  studentId,
-  onOpen,
-  onOpenClass,
-  onBuyPass,
+  data, studentId, onOpenClass, onBuyPass, onChooseLesson,
 }: {
-  data: PortalData;
-  studentId: string;
-  onOpen: (id: string) => void;
-  onOpenClass: (id: string) => void;
-  onBuyPass: () => void;
+  data: PortalData; studentId: string;
+  onOpenClass: (id: string) => void; onBuyPass: () => void;
+  onChooseLesson: (id: string) => void;
 }) {
-  const clockNow = useClock();
-  const { student, enrollments, sessions } = studentLearning(data, studentId);
-  const next =
-    sessions.find(
-      (item) =>
-        new Date(get(item, "starts_at").replace(" ", "T")).getTime() >=
-        clockNow,
-    ) ?? sessions[0];
-  const attended = data.attendance.filter(
-    (item) =>
-      get(item, "student_id") === get(student, "id") &&
-      ["present", "late"].includes(get(item, "status")),
-  ).length;
-  return (
-    <section className="student-portal">
-      <section className="student-hero">
-        <img src="/assets/student/learning-hero.png" alt="" />
-        <div className="student-hero-copy">
-          <div className="student-profile">
-            <Avatar person={student} />
-            <span>{get(student, "level")} learner</span>
-          </div>
-          <p>Good to see you</p>
-          <h2>{get(student, "name").split(" ")[0]}!</h2>
-          <strong>Small steps make big progress.</strong>
-        </div>
-        <div className="student-stars">
-          <Sparkles size={20} />
-          <b>{attended}</b>
-          <span>learning wins</span>
-        </div>
-      </section>
-      <StudentPassSummary
-        data={data}
-        studentId={get(student, "id")}
-        onBuy={onBuyPass}
-      />
-      <div className="student-focus-grid student-focus-grid-compact">
-        <article className="student-next">
-          <span>UP NEXT</span>
-          <h3>{get(next, "course_title") || "Your next lesson"}</h3>
-          <p>{get(next, "topic") || "A new learning adventure"}</p>
-          <div>
-            <Clock3 size={16} />
-            <strong>
-              {next
-                ? `${timePart(next.starts_at)} · ${datePart(next.starts_at)}`
-                : "No lesson booked"}
-            </strong>
-          </div>
-          {next ? (
-            <button type="button" onClick={() => onOpen(get(next, "id"))}>
-              View lesson <ChevronRight size={16} />
-            </button>
-          ) : null}
-        </article>
-        <article className="student-reminder">
-          <ClipboardCheck size={22} />
-          <div>
-            <span>THIS WEEK</span>
-            <strong>{sessions.slice(0, 2).length} lessons ahead</strong>
-            <p>Pack your notebook and arrive ready.</p>
-          </div>
-        </article>
-      </div>
-      <section className="student-learning-section">
-        <div className="student-section-title">
-          <div>
-            <span>MY LEARNING</span>
-            <h3>Keep going, you are doing great</h3>
-          </div>
-          <b>{enrollments.length} courses</b>
-        </div>
-        <div className="course-card-gallery">
-          {enrollments.map((enrollment) => {
-            const runSessions = sessions.filter(
-              (item) =>
-                get(item, "class_run_id") === get(enrollment, "class_run_id"),
-            );
-            const progress = runSessions.length
-              ? Math.min(
-                  100,
-                  Math.round(
-                    (data.attendance.filter(
-                      (item) =>
-                        get(item, "student_id") === get(student, "id") &&
-                        runSessions.some(
-                          (session) =>
-                            get(session, "id") ===
-                            get(item, "class_session_id"),
-                        ) &&
-                        ["present", "late"].includes(get(item, "status")),
-                    ).length /
-                      runSessions.length) *
-                      100,
-                  ),
-                )
-              : 0;
-            return (
-              <button
-                type="button"
-                className="student-course-card"
-                key={get(enrollment, "id")}
-                style={eventStyle({
-                  course_color: get(enrollment, "course_color"),
-                })}
-                onClick={() => onOpenClass(get(enrollment, "class_run_id"))}
-              >
-                <CourseVisual
-                  course={{
-                    title: get(enrollment, "course_title"),
-                    subject: get(enrollment, "course_title"),
-                    display_color: get(enrollment, "course_color"),
-                  }}
-                />
-                <div>
-                  <h4>{get(enrollment, "course_title")}</h4>
-                  <p>{get(enrollment, "run_name")}</p>
-                  <div className="mini-progress">
-                    <i style={{ width: `${progress}%` }} />
-                  </div>
-                  <small>{progress}% complete</small>
-                </div>
-                <strong className="course-progress-number">{progress}%</strong>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+  const now = useClock();
+  const { student } = studentLearning(data, studentId);
+  const grade = gradeCode(get(student, "level"));
+  const dropins = data.sessions.filter(session => {
+    const state = onlineLessonState(session, now);
+    return grade && grade === gradeCode(get(session, "course_title")) && state !== "ended"
+      && asTime(session.starts_at) < now + 7 * 86_400_000;
+  }).sort((a, b) => asTime(a.starts_at) - asTime(b.starts_at));
+  return <section className="student-portal student-home-compact">
+    <header className="student-welcome"><Avatar person={student} /><div><span>WELCOME</span><h2>{get(student, "name")}</h2><small>{grade || get(student, "level")}</small></div></header>
+    <StudentPassSummary data={data} studentId={studentId} onBuy={onBuyPass} compact />
+    <StudentCourses data={data} studentId={studentId} onOpenClass={onOpenClass} compact />
+    <section className="student-learning-section">
+      <div className="student-section-title"><div><span>ONLINE DROP-IN</span><h3>Live & coming up{grade ? " · " + grade : ""}</h3></div><BookOpen size={20} /></div>
+      <div className="student-online-gallery">{dropins.map(session => <StudentLessonCard key={get(session, "id")} data={data} studentId={studentId} session={session} delivery="online" now={now} onChoose={() => onChooseLesson(get(session, "id"))} />)}</div>
+      {!dropins.length ? <Empty text={grade ? "No online lessons for your grade in the next 7 days." : "Add your grade to see online lessons."} /> : null}
     </section>
-  );
+  </section>;
 }
 
 function activePasses(data: PortalData, studentId: string) {
@@ -1902,10 +1794,12 @@ function StudentPassSummary({
   data,
   studentId,
   onBuy,
+  compact = false,
 }: {
   data: PortalData;
   studentId: string;
   onBuy: () => void;
+  compact?: boolean;
 }) {
   const passes = activePasses(data, studentId);
   const totals = passes.reduce<{ onsite: number; online: number; study: number }>(
@@ -1918,8 +1812,8 @@ function StudentPassSummary({
   );
   const latest = [...passes].sort((a, b) => get(a, "valid_until").localeCompare(get(b, "valid_until")))[0];
   return (
-    <section className="student-pass-summary">
-      <div className="student-pass-summary-copy">
+    <section className={`student-pass-summary${compact ? " is-compact" : ""}`}>
+      {!compact ? <div className="student-pass-summary-copy">
         <span>MY LEARNING PASS</span>
         <h3>{latest ? "Your available learning credits" : "Get ready to learn"}</h3>
         <p>
@@ -1927,7 +1821,7 @@ function StudentPassSummary({
             ? `Next expiry: ${malaysiaDate(latest.valid_until)}`
             : "Choose a monthly pass or add only the credits you need."}
         </p>
-      </div>
+      </div> : null}
       <div className="student-credit-row">
         <span>
           <Building2 size={15} />
@@ -2159,19 +2053,21 @@ function StudentCourses({
   data,
   studentId,
   onOpenClass,
+  compact = false,
 }: {
   data: PortalData;
   studentId: string;
   onOpenClass: (id: string) => void;
+  compact?: boolean;
 }) {
   const { student, enrollments, sessions } = studentLearning(data, studentId);
   return (
-    <section className="student-portal">
+    <section className={compact ? "student-learning-section compact-courses" : "student-portal"}>
       <section className="student-simple-heading">
         <Sparkles size={22} />
         <div>
           <span>MY COURSES</span>
-          <h2>Everything you are learning</h2>
+          <h2>My courses</h2>
         </div>
       </section>
       <div className="course-card-gallery">
@@ -2221,6 +2117,7 @@ function StudentCourses({
           );
         })}
       </div>
+      {!enrollments.length ? <Empty text="No courses booked yet." /> : null}
     </section>
   );
 }
@@ -2266,17 +2163,40 @@ function StudentTimetable({
   );
 }
 
+function AttendanceModeSwitch({ value, onChange }: { value: "onsite" | "online"; onChange: (value: "onsite" | "online") => void }) {
+  return <div className="student-timetable-switch attendance-mode-switch" role="group" aria-label="Attendance mode">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" className={value === mode ? "active" : ""} aria-pressed={value === mode} onClick={() => onChange(mode)}>{mode === "onsite" ? <Building2 size={16} /> : <BookOpen size={16} />}{mode === "onsite" ? "Onsite" : "Online"}</button>)}</div>;
+}
+
+function StudentLessonCard({ data, studentId, session, delivery, now, onChoose }: { data: PortalData; studentId: string; session: Row; delivery: "onsite" | "online"; now: number; onChoose: () => void }) {
+  const run = data.runs.find(row => get(row, "id") === get(session, "class_run_id"));
+  const teacher = data.teachers.find(row => get(row, "id") === get(session, "teacher_id")) || { id: get(session, "teacher_id"), name: get(session, "teacher_name") || "Teacher to be confirmed" };
+  const availability = lessonAvailability(session, Number(run?.capacity || 0), data.bookings, studentId, delivery, now);
+  const closed = ["finished", "cancelled"].includes(get(run, "status"));
+  const joining = delivery === "online" && ["live", "opening"].includes(availability.state);
+  const learner = data.students.find(row => get(row, "id") === studentId);
+  const wrongGrade = joining && !availability.booked && (!gradeCode(get(learner, "level")) || gradeCode(get(learner, "level")) !== gradeCode(get(session, "course_title")));
+  const reason = closed ? "Closed" : availability.reason || (wrongGrade ? "Different grade" : "");
+  return <button type="button" className={`student-week-lesson ${availability.booked ? "is-purchased" : ""}`} style={eventStyle(session)} disabled={Boolean(reason)} title={reason || undefined} onClick={onChoose}>
+    <span className="student-week-time">{datePart(session.starts_at)} · {timePart(session.starts_at)}{joining ? <em>{availability.state === "live" ? "Live now" : "Starting soon"}</em> : null}</span>
+    <strong>{get(session, "course_title")}</strong><small>{get(session, "topic")}</small>
+    <div className="student-week-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><span><b>{get(teacher, "name")}</b><em>{get(teacher, "bio") || demoTeacherProfile(get(teacher, "id"), get(teacher, "subject")).bio}</em></span></div>
+    <footer><span>{reason || (availability.booked ? "Lesson booked" : delivery === "online" ? "Unlimited online places" : `${availability.seats} seats left`)}</span><b>{reason ? "Unavailable" : joining ? "Join online" : availability.booked ? "View lesson" : "Book lesson"}</b></footer>
+  </button>;
+}
+
 function StudentCourseBooking({
   data,
   studentId,
   onChoose,
+  delivery, onDeliveryChange,
 }: {
   data: PortalData;
   studentId: string;
   onChoose: (id: string) => void;
+  delivery: "onsite" | "online"; onDeliveryChange: (mode: "onsite" | "online") => void;
 }) {
+  const now = useClock();
   const [mode, setMode] = useState<"list" | "calendar">("list");
-  const [anchor, setAnchor] = useState(new Date());
   const availableRuns = data.runs
     .filter((run) => !["finished", "cancelled"].includes(get(run, "status")))
     .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
@@ -2301,6 +2221,7 @@ function StudentCourseBooking({
           <button className={mode === "calendar" ? "active" : ""} type="button" onClick={() => setMode("calendar")}><CalendarDays size={16} />Calendar</button>
         </div>
       </section>
+      <AttendanceModeSwitch value={delivery} onChange={onDeliveryChange} />
       {mode === "list" ? (
         <div className="student-booking-gallery">
           {availableRuns.map((item) => {
@@ -2308,10 +2229,11 @@ function StudentCourseBooking({
             const used = enrolled.has(get(item, "id")) && Boolean(get(enrollment, "pass_id") || get(enrollment, "invoice_status") === "paid");
             const pending = Boolean((enrollment && !used) || pendingPassForSelection(data, studentId, get(item, "id")));
             const capacity = Number(get(item, "capacity"));
-            const filled = Number(get(item, "student_count"));
-            const seats = Math.max(0, capacity - filled);
+            const upcoming = sessions.filter(session => get(session, "class_run_id") === get(item, "id") && !["completed", "cancelled"].includes(get(session, "status")) && asTime(session.starts_at) > now);
+            const seats = Math.min(capacity, ...upcoming.map(session => Number(lessonAvailability(session, capacity, data.bookings, studentId, "onsite", now).seats)));
+            const unavailable = !used && !pending && (!upcoming.length || (delivery === "onsite" && seats === 0));
             return (
-              <button key={get(item, "id")} type="button" className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
+              <button key={get(item, "id")} type="button" disabled={unavailable} className={`student-booking-card ${used ? "is-enrolled" : ""}`} style={eventStyle(item)} onClick={() => onChoose(get(item, "id"))}>
                 <CourseVisual course={{ title: get(item, "course_title"), subject: get(item, "subject"), display_color: get(item, "run_course_color") }} />
                 <div>
                   <span>{used ? "ALREADY PURCHASED" : pending ? "AWAITING PAYMENT" : "AVAILABLE CLASS"}</span>
@@ -2319,14 +2241,14 @@ function StudentCourseBooking({
                   <p>{get(item, "name")}</p>
                   <small>{get(item, "teacher_name") || "Teacher to be confirmed"} · {get(item, "session_count")} lessons</small>
                 </div>
-                <aside>{used ? <><strong className="purchased-mark"><Check size={20} /></strong><span>Already purchased</span></> : <><strong>{seats}</strong><span>seats left</span>{capacity > 0 && seats / capacity < .2 ? <em>Few left</em> : null}</>}</aside>
+                <aside>{used ? <><strong className="purchased-mark"><Check size={20} /></strong><span>Already purchased</span></> : unavailable ? <span>{upcoming.length ? "Full" : "No upcoming lessons"}</span> : delivery === "online" ? <><BookOpen size={22} /><span>Unlimited places</span></> : <><strong>{seats}</strong><span>seats left</span>{capacity > 0 && seats / capacity < .2 ? <em>Few left</em> : null}</>}</aside>
               </button>
             );
           })}
           {!availableRuns.length ? <Empty text="No classes are open for booking yet." /> : null}
         </div>
       ) : (
-        <section className="student-calendar-view"><header><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1))}><ChevronLeft size={17} /></button><strong>{anchor.toLocaleDateString("en-MY", { month: "long", year: "numeric" })}</strong><button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1))}><ChevronRight size={17} /></button></header><MonthCalendar anchor={anchor} events={sessions} c={calendarText.en} language="en" onOpen={(sessionId) => { const session = sessions.find((item) => get(item, "id") === sessionId); if (session) onChoose(get(session, "class_run_id")); }} onSelectDate={() => undefined} /></section>
+        <StudentLessonBooking data={data} studentId={studentId} delivery={delivery} onDeliveryChange={onDeliveryChange} embedded onChoose={id => { const session = sessions.find(row => get(row, "id") === id); if (session) onChoose(get(session, "class_run_id")); }} />
       )}
     </section>
   );
@@ -2336,11 +2258,16 @@ function StudentLessonBooking({
   data,
   studentId,
   onChoose,
+  delivery, onDeliveryChange,
+  embedded = false,
 }: {
   data: PortalData;
   studentId: string;
   onChoose: (id: string) => void;
+  delivery: "onsite" | "online"; onDeliveryChange: (mode: "onsite" | "online") => void;
+  embedded?: boolean;
 }) {
+  const now = useClock();
   const [anchor, setAnchor] = useState(new Date());
   const weekStart = new Date(anchor);
   weekStart.setHours(0, 0, 0, 0);
@@ -2368,20 +2295,16 @@ function StudentLessonBooking({
       );
     })
     .sort((left, right) => asTime(left.starts_at) - asTime(right.starts_at));
-  const courseRun = (id: string) => data.runs.find((run) => get(run, "id") === id);
-  const teacherFor = (session: Row) =>
-    data.teachers.find((teacher) => get(teacher, "id") === get(session, "teacher_id")) ||
-    ({ id: get(session, "teacher_id"), name: get(session, "teacher_name") || "Teacher to be confirmed" } as Row);
   return (
     <section className="student-portal student-lesson-booking">
-      <section className="student-simple-heading">
+      {!embedded ? <section className="student-simple-heading">
         <CalendarDays size={22} />
         <div>
           <span>BOOK A LESSON</span>
           <h2>Choose a lesson for your week</h2>
-          <p>See your teacher, time and available places before you join a class.</p>
         </div>
-      </section>
+      </section> : null}
+      {!embedded ? <AttendanceModeSwitch value={delivery} onChange={onDeliveryChange} /> : null}
       <section className="student-week-booking">
         <header>
           <button type="button" className="header-icon" onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 7))}><ChevronLeft size={17} /></button>
@@ -2397,32 +2320,7 @@ function StudentLessonBooking({
               <section key={key} className={day.toDateString() === new Date().toDateString() ? "today" : ""}>
                 <header><span>{day.toLocaleDateString("en-MY", { weekday: "short" })}</span><strong>{day.getDate()}</strong></header>
                 <div>
-                  {daySessions.map((session) => {
-                    const run = courseRun(get(session, "class_run_id"));
-                    const teacher = teacherFor(session);
-                    const purchased = data.bookings.some(booking => get(booking, "student_id") === studentId && get(booking, "class_session_id") === get(session, "id") && get(booking, "status") === "booked");
-                    const availableSeats = Math.max(
-                      0,
-                      Number(get(run || {}, "capacity")) -
-                        data.bookings.filter(booking => get(booking, "class_session_id") === get(session, "id") && get(booking, "status") === "booked" && get(booking, "delivery_mode") === "onsite").length,
-                    );
-                    return (
-                      <button
-                        key={get(session, "id")}
-                        type="button"
-                        className={`student-week-lesson ${purchased ? "is-purchased" : ""}`}
-                        style={eventStyle(session)}
-                        disabled={!purchased && asTime(session.starts_at) <= Date.now()}
-                        onClick={() => onChoose(get(session, "id"))}
-                      >
-                        <span className="student-week-time">{timePart(session.starts_at)}</span>
-                        <strong>{get(session, "course_title")}</strong>
-                        <small>{get(session, "topic")}</small>
-                        <div className="student-week-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><span><b>{get(teacher, "name")}</b><em>{get(teacher, "bio") || "Your lesson teacher"}</em></span></div>
-                        <footer>{purchased ? <span>Lesson booked</span> : <><span>{availableSeats} seats left</span><b>Book lesson</b></>}</footer>
-                      </button>
-                    );
-                  })}
+                  {daySessions.map(session => <StudentLessonCard key={get(session, "id")} data={data} studentId={studentId} session={session} delivery={delivery} now={now} onChoose={() => onChoose(get(session, "id"))} />)}
                   {!daySessions.length ? <p className="student-week-empty">No lessons</p> : null}
                 </div>
               </section>
@@ -2473,6 +2371,13 @@ function CourseBookingDialog({
   const pendingPass = pendingPassForSelection(data, studentId, runId, sessionId);
   const awaitingPayment = unpaid || Boolean(pendingPass);
   const booking = sessionId ? data.bookings.find(row => get(row, "student_id") === studentId && get(row, "class_session_id") === sessionId && get(row, "status") === "booked") : undefined;
+  const entryState = first ? onlineLessonState(first, clockNow) : "ended";
+  const entryRequested = Boolean(sessionId && delivery === "online" && entryState !== "upcoming");
+  const onlineBalance = activePasses(data, studentId).reduce((n, pass) => n + Number(pass.online_available ?? pass.online_remaining ?? 0), 0);
+  const ownsOnline = get(booking, "delivery_mode") === "online";
+  const learner = data.students.find(row => get(row, "id") === studentId);
+  const gradeMatches = Boolean(gradeCode(get(learner, "level")) && gradeCode(get(learner, "level")) === gradeCode(get(item, "course_title")));
+  const canEnter = ["opening", "live"].includes(entryState) && (ownsOnline || (!booking && gradeMatches && onlineBalance > 0));
   const owns = sessionId ? Boolean(booking) : paid;
   const teacherId = first ? get(first, "teacher_id") : get(item, "teacher_id");
   const teacher = data.teachers.find(row => get(row, "id") === teacherId) ?? (get(first, "teacher_name") ? { id: teacherId, name: get(first, "teacher_name") } : undefined);
@@ -2484,12 +2389,13 @@ function CourseBookingDialog({
   if (!item) return null;
   return <div className="payment-dialog-backdrop" onMouseDown={() => { if (!busy) onClose(); }}>
     <section ref={dialogRef} className="course-booking-dialog" role="dialog" aria-modal="true" aria-label={sessionId ? "Book a lesson" : "Book a course"} onMouseDown={event => event.stopPropagation()}>
-      <header><div><span>{sessionId ? "LESSON BOOKING" : "COURSE BOOKING"}</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")}</p>{!owns && !awaitingPayment ? <small>Step {step} of 3 · {step === 2 ? "Choose how to attend" : "Choose how to pay"}</small> : null}</div><button type="button" className="header-icon" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
+      <header><div><span>{entryRequested ? "ONLINE CLASSROOM" : sessionId ? "LESSON BOOKING" : "COURSE BOOKING"}</span><h3>{get(item, "course_title")}</h3><p>{get(item, "name")}</p>{!entryRequested && !owns && !awaitingPayment ? <small>Step {step} of 3 · {step === 2 ? "Choose how to attend" : "Choose how to pay"}</small> : null}</div><button type="button" className="header-icon" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
       <main>
         <div className="booking-selection-summary"><CalendarDays size={20} /><div><strong>{first && last ? malaysiaDate(first.starts_at) + (sessionId ? " · " + timePart(first.starts_at) : " - " + malaysiaDate(last.starts_at)) : "No upcoming lessons"}</strong><small>{sessions.length} lesson{sessions.length === 1 ? "" : "s"}{step === 3 ? " · " + (delivery === "onsite" ? "Onsite" : "Live online") : ""}</small></div></div>
         {teacher ? <div className="booking-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><div><strong>{get(teacher, "name")}</strong><p>{get(teacher, "bio")}</p></div></div> : null}
         {error ? <p className="dialog-error" role="alert">{error}</p> : null}
-        {owns ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>Your lessons are in My timetable.</p></div></section>
+        {entryRequested ? <section className="booking-already-purchased"><BookOpen size={22} /><div><strong>{ownsOnline ? "Your booked online lesson" : "Join with 1 online credit"}</strong><p>{ownsOnline ? "No additional ticket beyond your existing booking." : `${onlineBalance} online credits available`}</p>{entryState === "link_pending" ? <p>Waiting for the teacher's classroom link. No credit will be used.</p> : entryState === "ended" ? <p>This lesson has ended.</p> : booking && !ownsOnline ? <p>You have an onsite place. Contact the campus to change it.</p> : !ownsOnline && !gradeMatches ? <p>Online drop-in is for your grade.</p> : !ownsOnline ? <small>Confirm to use one ticket. Re-entering this lesson will not use another.</small> : null}</div></section>
+        : owns ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>Your lessons are in My timetable.</p></div></section>
         : awaitingPayment ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment</strong><p>{amount(Number((pendingPass || enrollment)?.total_amount || 0) - Number((pendingPass || enrollment)?.paid_amount || 0))} remaining · Pay at campus</p>{pendingPass ? <small>{get(pendingPass, "product_name")} · {get(pendingPass, "delivery_mode") === "online" ? "Live online" : "Onsite"} · Course selection saved</small> : null}</div></section>
         : step === 2 ? <section className="booking-delivery" aria-label="Attendance mode">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" disabled={busy} className={delivery === mode ? "selected" : ""} aria-pressed={delivery === mode} onClick={() => onDeliveryChange(mode)}>{mode === "onsite" ? <Building2 size={20} /> : <BookOpen size={20} />}<strong>{mode === "onsite" ? "Onsite class" : "Live online"}</strong></button>)}</section>
         : <section className="booking-payment-options" aria-label="Payment choice">
@@ -2503,6 +2409,7 @@ function CourseBookingDialog({
         </section>}
       </main>
       <footer>
+        {entryRequested ? <><button type="button" className="quiet-button" disabled={busy} onClick={onClose}>Cancel</button>{!ownsOnline && !booking && gradeMatches && onlineBalance === 0 ? <button type="button" className="primary-button" disabled={busy} onClick={() => onBuyPass({ runId, sessionId, deliveryMode: "online" })}>Buy online credits</button> : <button type="button" className="primary-button" disabled={busy || !canEnter} onClick={() => void submit("useOnlineCredit", { studentId, sessionId })}><DoorOpen size={16} />{busy ? "Joining..." : ownsOnline ? "Enter classroom" : "Use 1 credit & join"}</button>}</> : <>
         {booking && get(booking, "delivery_mode") === "online" ? <button className="primary-button" disabled={busy} onClick={() => void submit("useOnlineCredit", { studentId, sessionId })}><DoorOpen size={16} />Join online lesson</button> : null}
         {booking && first && asTime(first.starts_at) > clockNow ? <button className="quiet-button" disabled={busy} onClick={() => void submit("requestLeave", { studentId, sessionId })}>Cancel this lesson</button> : null}
         {owns ? <button className="quiet-button" onClick={onClose}>Close</button> : awaitingPayment ? <button className="primary-button" disabled={busy} onClick={() => void submit(pendingPass ? "recordPassPayment" : "recordPayment", { passOrderId: get(pendingPass, "id"), invoiceId: get(enrollment, "invoice_id"), method: "demo", note: "Demo payment" })}>Demo: confirm payment</button> : <>
@@ -2510,6 +2417,7 @@ function CourseBookingDialog({
           {step === 2 ? <button type="button" className="primary-button" disabled={busy || !sessions.length || Boolean(first && asTime(first.starts_at) <= clockNow)} onClick={() => setStep(3)}>Continue <ChevronRight size={16} /></button>
           : payment === "new" ? <button type="button" className="primary-button" disabled={busy || !sessions.length} onClick={() => onBuyPass({ runId, sessionId: sessionId || undefined, deliveryMode: delivery })}>Choose pass <ChevronRight size={16} /></button>
           : <button type="button" className="primary-button" disabled={busy || !canUseBalance} onClick={() => void submit(sessionId ? "bookLesson" : "bookCourseWithCredit", { studentId, runId, sessionId, deliveryMode: delivery })}><Check size={16} />Confirm booking</button>}
+        </>}
         </>}
       </footer>
     </section>
@@ -15983,6 +15891,7 @@ function TeacherDetailContent({
                 label="About this teacher"
                 defaultValue={get(item, "bio")}
               />
+              <label className="form-field photo-upload"><span>Teacher photo</span><input name="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" /></label>
               <button className="primary-button" disabled={busy} type="submit">
                 <Check size={16} />
                 Save changes
@@ -15992,6 +15901,7 @@ function TeacherDetailContent({
         ) : (
           <section className="sheet-section">
             <h3>Teacher profile</h3>
+            {get(item, "avatar_url").includes("/teachers/demo-") ? <small>Demo portrait and profile</small> : null}
             <div className="sheet-overview">
               <Info label="Teacher code" value={get(item, "code")} />
               <Info label="Subject" value={get(item, "subject")} />

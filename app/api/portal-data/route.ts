@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { LearningStore, type Database } from "../../lib/learning-store";
 import { whatsappNumber } from "../../lib/contact";
+import { demoTeacherProfile } from "../../lib/teacher-profiles";
 import { findResourceConflicts as findConflicts } from "../../lib/resource-conflicts";
 
 type Row = Record<string, unknown>;
@@ -6134,12 +6135,13 @@ async function updateEntity(payload: ActionPayload) {
   }
   if (payload.action === "updateTeacher" && payload.teacherId) {
     await execute(
-      "UPDATE teachers SET name = ?, subject = ?, phone = ?, bio = COALESCE(?, bio) WHERE id = ?",
+      "UPDATE teachers SET name = ?, subject = ?, phone = ?, bio = COALESCE(?, bio), avatar_url = COALESCE(NULLIF(?, ''), avatar_url) WHERE id = ?",
       [
         payload.name?.trim() || "Untitled teacher",
         payload.subject?.trim() || "General",
         payload.phone?.trim() || "",
         payload.bio?.trim() || null,
+        payload.avatarUrl?.trim() || "",
         payload.teacherId,
       ],
     );
@@ -6164,15 +6166,19 @@ async function createBaseRecord(payload: ActionPayload) {
     );
   }
   if (payload.action === "createTeacher") {
+    const teacherId = id("teacher");
+    const profile = demoTeacherProfile(teacherId, payload.subject?.trim() || "General");
     await execute(
-      "INSERT INTO teachers (id, code, name, subject, phone, status) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO teachers (id, code, name, subject, phone, status, bio, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       [
-        id("teacher"),
+        teacherId,
         `TCH-${Date.now().toString().slice(-6)}`,
         label,
         payload.subject?.trim() || "General",
         payload.phone?.trim() || "",
         "available",
+        payload.bio?.trim() || profile.bio,
+        payload.avatarUrl?.trim() || profile.avatar_url,
       ],
     );
   }
@@ -6338,8 +6344,19 @@ async function readAttendance() {
     JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id ORDER BY class_sessions.starts_at ASC`);
 }
 
+async function ensureTeacherProfiles() {
+  if (await row("SELECT key FROM app_settings WHERE key = 'teacher_profiles_v1'")) return;
+  const teachers = await rows<{ id: string; subject: string }>('SELECT id, subject FROM teachers');
+  await executeBatch(teachers.map(teacher => {
+    const profile = demoTeacherProfile(teacher.id, teacher.subject);
+    return { sql: "UPDATE teachers SET bio = CASE WHEN bio IS NULL OR bio = '' THEN ? ELSE bio END, avatar_url = CASE WHEN avatar_url IS NULL OR avatar_url = '' THEN ? ELSE avatar_url END WHERE id = ?", values: [profile.bio, profile.avatar_url, teacher.id] };
+  }));
+  await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('teacher_profiles_v1', 'true')");
+}
+
 async function readPortal(includeAttendance = false) {
   await seedDatabase();
+  await ensureTeacherProfiles();
   await learning().migrateLegacyCards();
   await learning().reconcileDemoEnrollments();
   const bookings = await rows("SELECT * FROM class_student_bookings ORDER BY created_at DESC");

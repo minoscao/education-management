@@ -24,6 +24,38 @@ export function malaysiaTime(now = new Date()) {
   return `${malaysiaDay(now)} ${new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(now)}`;
 }
 
+export const ONLINE_EARLY_JOIN_MINUTES = 15;
+
+export function gradeCode(value: unknown) {
+  const text = String(value ?? '').toUpperCase();
+  return text.match(/\b(?:G[1-6]|F[1-5]|L[1-3]|H[1-3]|Y(?:1[0-3]|[1-9]))\b/)?.[0]
+    || (text.match(/\bYEAR\s+(1[0-3]|[1-9])\b/) ? 'Y' + text.match(/\bYEAR\s+(1[0-3]|[1-9])\b/)![1] : '');
+}
+
+export function onlineLessonState(session: RecordData, now = Date.now()) {
+  const time = (value: unknown) => new Date(String(value ?? '').replace(' ', 'T') + '+08:00').getTime();
+  const starts = time(session.starts_at), ends = time(session.ends_at);
+  if (['cancelled', 'completed'].includes(String(session.status)) || !Number.isFinite(starts) || !Number.isFinite(ends) || now >= ends) return 'ended';
+  if (now < starts - ONLINE_EARLY_JOIN_MINUTES * 60_000) return 'upcoming';
+  try { if (new URL(String(session.online_url)).protocol !== 'https:') return 'link_pending'; }
+  catch { return 'link_pending'; }
+  return now < starts ? 'opening' : 'live';
+}
+
+export function lessonAvailability(session: RecordData, capacity: number, bookings: RecordData[], studentId: string, mode: 'onsite' | 'online', now = Date.now()) {
+  const own = bookings.find(b => b.student_id === studentId && b.class_session_id === session.id && b.status === 'booked');
+  const seats = mode === 'online' ? null : Math.max(0, capacity - bookings.filter(b => b.class_session_id === session.id && b.status === 'booked' && b.delivery_mode === 'onsite').length);
+  const state = onlineLessonState(session, now);
+  const started = now >= new Date(String(session.starts_at).replace(' ', 'T') + '+08:00').getTime();
+  let reason = '';
+  if (state === 'ended') reason = session.status === 'cancelled' ? 'Cancelled' : 'Ended';
+  else if (own && own.delivery_mode !== mode) reason = `Booked ${own.delivery_mode}`;
+  else if (mode === 'onsite' && started) reason = 'Already started';
+  else if (mode === 'online' && state === 'link_pending') reason = 'Classroom link pending';
+  else if (!own && mode === 'onsite' && seats === 0) reason = 'Full';
+  return { booked: Boolean(own), seats, state, reason, disabled: Boolean(reason) };
+}
+
 export function monthCount(first: string, last: string) {
   const start = new Date(`${first.slice(0, 10)}T12:00:00Z`);
   const end = new Date(`${last.slice(0, 10)}T12:00:00Z`);
@@ -375,20 +407,45 @@ export class LearningStore {
   }
 
   async joinOnline(studentId: string, sessionId: string) {
-    const lesson = await this.one<{ id: string; starts_at: string; ends_at: string; online_url: string; payment_source: string; enrollment_id: string }>("SELECT b.id, b.payment_source, b.enrollment_id, s.starts_at, s.ends_at, s.online_url FROM class_student_bookings b JOIN class_sessions s ON s.id = b.class_session_id WHERE b.student_id = ? AND s.id = ? AND b.status = 'booked' AND b.delivery_mode = 'online' AND s.status != 'cancelled'", [studentId, sessionId]);
-    if (!lesson) throw new Error('Book this online lesson first.');
-    let url: URL;
-    try { url = new URL(lesson.online_url); } catch { throw new Error('The teacher has not added a classroom link yet. No credit was used.'); }
-    if (url.protocol !== 'https:') throw new Error('The teacher needs to add a secure classroom link.');
-    const now = malaysiaTime(this.now());
-    const opens = new Date(`${lesson.starts_at.replace(' ', 'T')}+08:00`).getTime() - 15 * 60_000;
-    if (this.now().getTime() < opens || now > lesson.ends_at.replace('T', ' ')) throw new Error('Join from 15 minutes before the lesson until it ends.');
-    if (lesson.payment_source === 'pass') await this.consumeCredit(studentId, 'online', `lesson:${lesson.id}`, lesson.id);
-    else {
-      const invoice = await this.one<{ status: string }>('SELECT status FROM student_invoices WHERE enrollment_id = ?', [lesson.enrollment_id]);
-      if (invoice?.status !== 'paid') throw new Error('Complete course payment before joining.');
+    const session = await this.one<RecordData & { class_run_id: string; online_url: string; starts_at: string; level: string; title: string }>("SELECT s.*, c.level, c.title FROM class_sessions s JOIN class_runs r ON r.id = s.class_run_id JOIN course_catalogs c ON c.id = r.course_id WHERE s.id = ? AND r.status NOT IN ('cancelled','finished')", [sessionId]);
+    if (!session) throw new Error('This lesson is no longer available.');
+    const state = onlineLessonState(session, this.now().getTime());
+    if (state === 'link_pending') throw new Error('The teacher has not added a classroom link yet. No credit was used.');
+    if (!['opening', 'live'].includes(state)) throw new Error('Join from 15 minutes before the lesson until it ends.');
+    const existing = await this.one<{ id: string; status: string; delivery_mode: string; payment_source: string; enrollment_id: string }>('SELECT * FROM class_student_bookings WHERE student_id = ? AND class_session_id = ?', [studentId, sessionId]);
+    if (existing?.status === 'booked') {
+      if (existing.delivery_mode !== 'online') throw new Error('You already have an onsite place. Contact the campus to change attendance mode.');
+      const queries: Query[] = [];
+      if (existing.payment_source === 'pass') {
+        queries.push(...await this.reserveCredit(studentId, 'online', malaysiaDay(this.now()), `lesson:${existing.id}`, existing.id));
+        queries.push({ sql: "UPDATE learning_credit_events SET status = 'consumed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'reserved'", values: [`lesson:${existing.id}`] });
+      } else {
+        const invoice = await this.one<{ status: string }>('SELECT status FROM student_invoices WHERE enrollment_id = ?', [existing.enrollment_id]);
+        if (invoice?.status !== 'paid') throw new Error('Complete course payment before joining.');
+      }
+      queries.push({ sql: "UPDATE class_attendance SET status = 'present', note = 'Joined online', marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", values: [existing.id] });
+      await this.batch(queries);
+      return new URL(session.online_url).href;
     }
-    return url.href;
+    const student = await this.one<{ level: string }>('SELECT level FROM students WHERE id = ?', [studentId]);
+    const grade = gradeCode(student?.level);
+    if (!grade || grade !== gradeCode(session.title + ' ' + session.level)) throw new Error('Choose an online lesson for your grade.');
+    const enrollment = await this.one<{ id: string }>('SELECT id FROM class_enrollments WHERE student_id = ? AND class_run_id = ?', [studentId, session.class_run_id]);
+    const enrollmentId = enrollment?.id || `dropin:${studentId}:${session.class_run_id}`;
+    const bookingId = existing?.id || `${studentId}:${sessionId}`;
+    const eventId = `lesson:${bookingId}`;
+    const credits = await this.reserveCredit(studentId, 'online', malaysiaDay(this.now()), eventId, bookingId);
+    const queries: Query[] = [];
+    if (!enrollment) queries.push({ sql: "INSERT INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, delivery_mode) VALUES (?, ?, ?, 0, 'single_lesson', 'online') ON CONFLICT(id) DO NOTHING", values: [enrollmentId, session.class_run_id, studentId] });
+    queries.push(existing
+      ? { sql: "UPDATE class_student_bookings SET status = 'booked', delivery_mode = 'online', payment_source = 'pass', allocated_fee = 0 WHERE id = ?", values: [bookingId] }
+      : { sql: "INSERT INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status, delivery_mode, payment_source) VALUES (?, ?, ?, ?, 0, 'booked', 'online', 'pass') ON CONFLICT(id) DO NOTHING", values: [bookingId, sessionId, enrollmentId, studentId] });
+    queries.push(...credits,
+      { sql: "UPDATE learning_credit_events SET status = 'consumed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'reserved'", values: [eventId] },
+      { sql: "INSERT INTO class_attendance (id, student_booking_id, status, note, marked_at) SELECT ?, ?, 'present', 'Joined online', CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM class_attendance WHERE student_booking_id = ?)", values: [`attendance:${bookingId}`, bookingId, bookingId] },
+      { sql: "UPDATE class_attendance SET status = 'present', note = 'Joined online', marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", values: [bookingId] });
+    await this.batch(queries);
+    return new URL(session.online_url).href;
   }
 
   async payInvoice(input: { invoiceId: string; requestKey: string; amount?: number; discount?: number; method?: string; reference?: string; note?: string }) {

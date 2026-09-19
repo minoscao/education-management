@@ -1,0 +1,52 @@
+.role-student .operation-workspace { padding-bottom: 100px; }
+.role-student .operation-header { padding: 10px 14px; min-height: 60px; }
+.role-student .student-welcome { display: flex; align-items: center; gap: 12px; padding: 12px 0 4px; }
+.role-student .student-welcome > img,.role-student .student-welcome > .avatar-photo { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex: 0 0 42px; }
+.role-student .student-welcome > div { min-width: 0; }
+.role-student .student-welcome h2 { margin: 2px 0; font-size: 20px; overflow-wrap: anywhere; }
+.role-student .student-welcome span,.role-student .student-welcome small { color: #567477; font-size: 11px; }
+.role-student .student-pass-summary.is-compact { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 18px; padding: 10px 0; background: none; border: 0; border-bottom: 1px solid #cfdfdf; border-radius: 0; box-shadow: none; }
+.role-student .student-pass-summary.is-compact .student-credit-row { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); flex: 1; gap: 6px; }
+.role-student .student-pass-summary.is-compact .student-credit-row span { justify-content: center; padding: 9px 6px; border: 1px solid #d3e6e2; border-radius: 6px; background: #fff; }
+.role-student .student-pass-summary.is-compact .student-credit-row span:nth-child(2) { border-color: #b8d6ed; }
+.role-student .student-pass-summary.is-compact .student-credit-row span:nth-child(3) { border-color: #e8d59d; }
+.role-student .student-pass-summary.is-compact .primary-button { width: auto; flex: 0 0 auto; }
+.role-student .compact-courses { margin-top: 0; }
+.role-student .compact-courses .student-simple-heading { padding: 0; min-height: 0; margin-bottom: 10px; border: 0; background: none; }
+.role-student .compact-courses .student-simple-heading span { display: none; }
+.role-student .compact-courses .student-simple-heading h2 { font-size: 18px; }
+.role-student .compact-courses .student-course-card { min-height: 96px; }
+.role-student .student-online-gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,280px),1fr)); gap: 10px; }
+.role-student .student-week-lesson { min-width: 0; align-content: start; }
+.role-student .student-week-booking { overflow-x: auto; }
+.role-student .student-week-lesson footer { flex-wrap: wrap; }
+.role-student .student-week-lesson:focus-visible { outline: 2px solid #178467; outline-offset: 2px; }
+.role-student .student-week-lesson:active:not(:disabled) { transform: translateY(1px); }
+.role-student .student-week-lesson > strong { white-space: normal; overflow-wrap: anywhere; }
+.role-student .student-week-teacher { min-height: 52px; align-items: start; }
+.role-student .student-week-teacher img { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 6px; }
+.role-student .student-week-teacher em { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; line-height: 1.4; font-size: 10px; }
+.role-student .student-week-time { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.role-student .student-week-time em { padding: 2px 5px; background: #def2e8; color: #146448; border-radius: 3px; font-style: normal; font-size: 10px; }
+.role-student .student-week-lesson:disabled,.role-student .student-booking-card:disabled { --course-colour: #929b9d; filter: grayscale(1); opacity: 1; border-color: #cbd0d2; background: #eef0f1; color: #70777b; cursor: not-allowed; box-shadow: none; }
+.role-student .student-week-lesson:disabled *,.role-student .student-booking-card:disabled * { color: #70777b; }
+.role-student .student-week-lesson:disabled:hover,.role-student .student-booking-card:disabled:hover { transform: none; box-shadow: none; }
+.role-student .attendance-mode-switch { display: flex; width: fit-content; margin: 0 0 12px; padding: 3px; background: #e8efed; border-radius: 6px; }
+.role-student .attendance-mode-switch button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 7px 15px; }
+.role-student .student-booking-dock { position: fixed; z-index: 35; bottom: 12px; left: calc(232px + (100vw - 232px)/2); transform: translateX(-50%); display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: min(580px,calc(100vw - 270px)); padding: 5px; gap: 5px; border: 1px solid #b8d1ca; border-radius: 8px; background: #fff; box-shadow: 0 5px 22px #153e3826; }
+.role-student.sidebar-collapsed .student-booking-dock { left: calc(64px + (100vw - 64px)/2); width: min(580px,calc(100vw - 90px)); }
+.role-student .student-booking-dock button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; min-width: 0; padding: 7px; border: 0; border-radius: 5px; background: #f2f7f5; color: #215447; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s,transform .15s; }
+.role-student .student-booking-dock button:hover,.role-student .student-booking-dock button.active { background: #d4ebe1; }
+.role-student .student-booking-dock button:active { transform: translateY(1px); }
+.role-student .student-booking-dock button:focus-visible { outline: 2px solid #178467; outline-offset: 1px; }
+@media (max-width: 1120px) and (min-width: 761px) { .role-student .student-booking-dock { left: calc(192px + (100vw - 192px)/2); width: min(580px,calc(100vw - 220px)); } }
+@media (max-width: 760px) {
+  .role-student .student-booking-dock,.role-student.sidebar-collapsed .student-booking-dock { left: 10px; right: 10px; bottom: 0; width: auto; transform: none; padding-bottom: max(6px,env(safe-area-inset-bottom)); border-radius: 8px 8px 0 0; }
+  .role-student .student-booking-dock button { flex-direction: column; gap: 4px; font-size: 11px; min-height: 52px; }
+  .role-student .student-pass-summary.is-compact { flex-wrap: wrap; }
+  .role-student .student-pass-summary.is-compact .student-credit-row { flex: 1 1 100%; }
+  .role-student .student-pass-summary.is-compact .primary-button { margin-left: auto; min-height: 32px; }
+  .role-student .student-week-booking { overflow-x: auto; }
+  .role-student .student-week-booking > header { justify-content: flex-start; min-width: 360px; gap: 6px; }
+  .role-student .student-week-booking > header > div { min-width: 150px; }
+}

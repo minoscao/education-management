@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./student-learning.css";
 
 .student-contact-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; min-width: 0; font-size: 12px; }
 .student-contact-number { display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }

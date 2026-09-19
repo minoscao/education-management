@@ -166,6 +166,7 @@ export class LearningStore {
     const snapshot: Snapshot = { product, windows };
     if (input.runId) {
       const mode = input.mode === 'online' ? 'online' : 'onsite';
+      await this.assertBookingAvailable(input.studentId, input.runId, input.sessionId, mode);
       const sessions = await this.all<{ id: string; starts_at: string }>("SELECT id, starts_at FROM class_sessions WHERE class_run_id = ? AND status NOT IN ('cancelled','completed') AND starts_at > ? ORDER BY starts_at", [input.runId, malaysiaTime(this.now())]);
       const selected = input.sessionId ? sessions.filter(session => session.id === input.sessionId) : sessions;
       if (!selected.length) throw new Error('This selection has no upcoming lessons.');
@@ -199,6 +200,19 @@ export class LearningStore {
     return true;
   }
 
+  async assertBookingAvailable(studentId: string, runId: string, sessionId: string | undefined, mode: 'onsite' | 'online') {
+    const check = await this.one<{ total: number; blocked: number }>(`SELECT COUNT(*) AS total, SUM(CASE WHEN
+      NOT EXISTS (SELECT 1 FROM class_student_bookings own WHERE own.student_id = ? AND own.class_session_id = s.id AND own.status = 'booked') AND (
+        (? = 'onsite' AND (SELECT COUNT(*) FROM class_student_bookings b WHERE b.class_session_id = s.id AND b.delivery_mode = 'onsite' AND b.status = 'booked') >= r.capacity)
+        OR EXISTS (SELECT 1 FROM class_student_bookings b JOIN class_sessions other ON other.id = b.class_session_id WHERE b.student_id = ? AND b.status = 'booked' AND other.status != 'cancelled' AND other.id != s.id AND other.starts_at < s.ends_at AND other.ends_at > s.starts_at)
+        OR EXISTS (SELECT 1 FROM study_bookings b WHERE b.student_id = ? AND b.status != 'cancelled' AND b.starts_at < s.ends_at AND b.ends_at > s.starts_at)
+      ) THEN 1 ELSE 0 END) AS blocked
+      FROM class_sessions s JOIN class_runs r ON r.id = s.class_run_id
+      WHERE s.class_run_id = ? AND (? = '' OR s.id = ?) AND s.status NOT IN ('cancelled','completed') AND r.status NOT IN ('cancelled','finished') AND s.starts_at > ?`, [studentId, mode, studentId, studentId, runId, sessionId || '', sessionId || '', malaysiaTime(this.now())]);
+    if (!check?.total) throw new Error('This selection has no upcoming lessons. No payment was taken.');
+    if (check.blocked) throw new Error('A selected lesson is full or overlaps another booking. No payment was taken.');
+  }
+
   async payPass(orderId: string, method = 'cash', reference = '', note = '') {
     const order = await this.one<RecordData & { id: string; student_id: string; product_id: string; pass_id: string; offer_snapshot: string; reservation_months: number; total_amount: number; status: string; fulfilled_at: string | null }>("SELECT * FROM pass_orders WHERE id = ?", [orderId]);
     if (!order) throw new Error('Pass order not found.');
@@ -214,6 +228,7 @@ export class LearningStore {
       if (existing) throw new Error('This older order already has cards. Please reconcile it before issuing more.');
       snapshot = { product, windows: passWindows(product, pack.valid_from, Number(order.reservation_months || 1)) };
     }
+    if (snapshot.booking) await this.assertBookingAvailable(order.student_id, snapshot.booking.runId, snapshot.booking.sessionId, snapshot.booking.mode);
     const queries: Query[] = [];
     for (const window of snapshot.windows) {
       for (const type of ['onsite', 'online', 'study'] as const) {

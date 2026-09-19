@@ -174,6 +174,20 @@ test('a pass that cannot cover the selected dates is rejected before creating an
   } finally { f.close(); }
 });
 
+test('a class that fills after ordering cannot charge or issue cards before reservation', async () => {
+  const f = await teachingFixture();
+  try {
+    f.db.exec("UPDATE class_runs SET capacity = 1");
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'seat-lost-after-order', months: 1, runId: 'run', mode: 'onsite' });
+    f.insert('students', { id: 'other', code: 'S2', name: 'Another learner' });
+    await f.store.enrollCourse('other', 'run', 'onsite', 'course');
+    await assert.rejects(f.store.payPass(order), /full or overlaps/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 0);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type != 'package'").get().n, 0);
+    assert.equal(f.db.prepare('SELECT status FROM pass_orders').get().status, 'unpaid');
+  } finally { f.close(); }
+});
+
 test('room and class edits persist and reject capacity changes that break reservations', async () => {
   const f = await teachingFixture();
   try {

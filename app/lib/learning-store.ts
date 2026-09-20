@@ -32,6 +32,16 @@ export function extraOnsiteUnitPrice(products: RecordData[]) {
   return product ? Math.round(Number(product.price) / Number(product.onsite_credits) * 100) / 100 : null;
 }
 
+export function passOrderNotice(order: RecordData, today = malaysiaDay()) {
+  if (order.status === 'paid') return order.valid_until && String(order.valid_until) < today ? 'Paid pass expired' : '';
+  // Monthly bills are existing debts, not a new purchase of the old course.
+  if (order.enrollment_id || order.plan_key) return '';
+  if (order.selected_run_id && ['finished', 'cancelled'].includes(String(order.run_status))) return 'Previous class is no longer available. Choose a current course.';
+  if (order.selected_run_id && order.upcoming_lessons != null && Number(order.upcoming_lessons) === 0) return 'No upcoming lessons. Choose a current course.';
+  if (order.valid_until && String(order.valid_until) < today) return 'This offer has expired. Choose a new course plan.';
+  return '';
+}
+
 export function malaysiaDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
@@ -376,6 +386,12 @@ export class LearningStore {
     const order = await this.one<RecordData & { id: string; student_id: string; product_id: string; pass_id: string; offer_snapshot: string; reservation_months: number; total_amount: number; status: string; fulfilled_at: string | null }>("SELECT * FROM pass_orders WHERE id = ?", [orderId]);
     if (!order) throw new Error('Pass order not found.');
     if (order.fulfilled_at) return;
+    if (order.status !== 'paid' && !order.enrollment_id && !order.plan_key) {
+      const validity = await this.one<RecordData>('SELECT valid_from, valid_until FROM student_passes WHERE id = ?', [order.pass_id]);
+      const run = order.selected_run_id ? await this.one<RecordData>('SELECT status AS run_status FROM class_runs WHERE id = ?', [order.selected_run_id]) : null;
+      const notice = passOrderNotice({ ...order, ...validity, ...run }, malaysiaDay(this.now()));
+      if (notice) throw new Error(`${notice} No payment was taken.`);
+    }
     if (!deferred && order.plan_key) {
       const plan: Snapshot = JSON.parse(order.offer_snapshot);
       const orders = plan.billing?.payMonthly ? [{ id: orderId }] : await this.all<{ id: string }>("SELECT id FROM pass_orders WHERE plan_key = ? AND status != 'paid' ORDER BY billing_month", [order.plan_key]);

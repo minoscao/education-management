@@ -6,7 +6,16 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText + '\n//# sourceURL=learning-store.ts';
-const { LearningStore, passWindows, coursePassWindows, courseMonthlySchedule, monthCount, malaysiaDay, creditCoverage, passOfferCards, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { LearningStore, passWindows, coursePassWindows, courseMonthlySchedule, monthCount, malaysiaDay, creditCoverage, passOfferCards, passOrderNotice, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+
+test('historical pass expiry is distinct from paid status and retired offers cannot be paid', () => {
+  const today = '2026-09-20';
+  assert.equal(passOrderNotice({ status: 'paid', valid_until: '2026-08-31' }, today), 'Paid pass expired');
+  assert.match(passOrderNotice({ status: 'unpaid', selected_run_id: 'old', run_status: 'finished' }, today), /Previous class/);
+  assert.match(passOrderNotice({ status: 'unpaid', selected_run_id: 'old', upcoming_lessons: 0 }, today), /No upcoming/);
+  assert.equal(passOrderNotice({ status: 'unpaid', selected_run_id: 'old', enrollment_id: 'existing-debt', run_status: 'finished' }, today), '');
+  assert.equal(passOrderNotice({ status: 'paid', valid_until: today }, today), '');
+});
 
 test('course pass plans follow delivery mode, quota and expiry', () => {
   const dates = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(2026, 8, 21 + i * 7)).toISOString().slice(0, 10));
@@ -20,6 +29,19 @@ test('course pass plans follow delivery mode, quota and expiry', () => {
   assert.equal(coursePassWindows(online, dates, 'online', dates[0]).length, 2);
   assert.throws(() => coursePassWindows(online, dates, 'onsite', dates[0]), /selected lesson type/);
   assert.throws(() => coursePassWindows(monthly, dates, 'onsite', '2026-09-22'), /first lesson/);
+});
+
+test('paying a legacy offer for a retired class cannot take money or issue credits', async () => {
+  const f = await teachingFixture();
+  try {
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'retired-offer', months: 1 });
+    f.db.prepare('UPDATE pass_orders SET selected_run_id = ? WHERE id = ?').run('run', order);
+    f.db.exec("UPDATE class_runs SET status = 'finished' WHERE id = 'run'");
+    await assert.rejects(f.store.payPass(order), /Previous class is no longer available/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 0);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type != 'package'").get().n, 0);
+    assert.equal(f.db.prepare('SELECT status FROM pass_orders WHERE id = ?').get(order).status, 'unpaid');
+  } finally { f.db.close(); }
 });
 
 test('course plan payment issues the quoted tickets and books all twelve lessons once', async () => {

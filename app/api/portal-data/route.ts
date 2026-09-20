@@ -6450,7 +6450,10 @@ async function readPortal(includeAttendance = false) {
           online_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = student_passes.id AND e.status = 'reserved' AND e.credit_type = 'online') AS online_available,
           study_remaining - (SELECT COUNT(*) FROM learning_credit_events e WHERE e.pass_id = student_passes.id AND e.status = 'reserved' AND e.credit_type = 'study') AS study_available
           FROM student_passes JOIN pass_products ON pass_products.id = student_passes.product_id ORDER BY student_passes.created_at DESC`),
-    rows(`SELECT pass_orders.*, pass_products.name AS product_name, students.name AS student_name, class_runs.name AS run_name, course_catalogs.title AS course_title
+    rows(`SELECT pass_orders.*, pass_products.name AS product_name, students.name AS student_name, class_runs.name AS run_name, class_runs.status AS run_status, course_catalogs.title AS course_title,
+          (SELECT valid_from FROM student_passes WHERE id = pass_orders.pass_id) AS valid_from,
+          (SELECT valid_until FROM student_passes WHERE id = pass_orders.pass_id) AS valid_until,
+          (SELECT COUNT(*) FROM class_sessions s WHERE s.class_run_id = pass_orders.selected_run_id AND s.status NOT IN ('cancelled','completed') AND s.starts_at > strftime('%Y-%m-%d %H:%M:%S','now','+8 hours')) AS upcoming_lessons
           FROM pass_orders JOIN pass_products ON pass_products.id = pass_orders.product_id JOIN students ON students.id = pass_orders.student_id
           LEFT JOIN class_runs ON class_runs.id = pass_orders.selected_run_id LEFT JOIN course_catalogs ON course_catalogs.id = class_runs.course_id ORDER BY pass_orders.created_at DESC`),
     rows(`SELECT pass_payments.*, pass_products.name AS product_name

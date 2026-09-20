@@ -60,7 +60,7 @@ import {
   createContext,
   useContext,
 } from "react";
-import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows, coursePassWindows, courseMonthlySchedule, extraOnsiteUnitPrice, gradeCode, onlineLessonState, lessonAvailability, leavePolicy } from "./lib/learning-store";
+import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows, coursePassWindows, courseMonthlySchedule, extraOnsiteUnitPrice, passOrderNotice, gradeCode, onlineLessonState, lessonAvailability, leavePolicy } from "./lib/learning-store";
 import { studySlots, studySeats } from "./lib/study-calendar";
 import { useDialogFocus } from "./lib/use-dialog-focus";
 import { useClock } from "./lib/use-clock";
@@ -1821,15 +1821,16 @@ function StudentPassSummary({
     { onsite: 0, online: 0, study: 0 },
   );
   const latest = [...passes].sort((a, b) => get(a, "valid_until").localeCompare(get(b, "valid_until")))[0];
+  const lastExpired = data.passes.filter(pass => get(pass, "student_id") === studentId && get(pass, "credit_type") !== "package" && get(pass, "valid_until") < malaysiaDay()).sort((a, b) => get(b, "valid_until").localeCompare(get(a, "valid_until")))[0];
   return (
     <section className={`student-pass-summary${compact ? " is-compact" : ""}`}>
       {!compact ? <div className="student-pass-summary-copy">
         <span>MY LEARNING PASS</span>
-        <h3>{latest ? "Your available learning credits" : "Get ready to learn"}</h3>
+        <h3>{latest ? "Your available learning credits" : lastExpired ? "Your previous pass has expired" : "Get ready to learn"}</h3>
         <p>
           {latest
             ? `Next expiry: ${malaysiaDate(latest.valid_until)}`
-            : "Choose a monthly pass or add only the credits you need."}
+            : lastExpired ? `Expired on ${malaysiaDate(lastExpired.valid_until)}. Expired credits are not included in your available balance.` : "Choose a course to see your payment plan."}
         </p>
       </div> : null}
       <div className="student-credit-row">
@@ -1954,11 +1955,13 @@ function StudentCreditCard({ pass }: { pass: Row }) {
 function OrderList({ rows, busy, onConfirm, onExtra }: { rows: Row[]; busy: boolean; onConfirm: (id: string) => Promise<boolean>; onExtra?: (id: string) => Promise<boolean> }) {
   if (!rows.length) return null;
   return <section className="student-learning-section"><h3>Payments & monthly bills</h3><ResizableDataTable columns={[{ key: "course_title", label: "Course / pass" }, { key: "student_name", label: "Student" }, { key: "billing_month", label: "Month" }, { key: "due_at", label: "Pay by" }, { key: "total_amount", label: "Total" }, { key: "status", label: "Status" }, { key: "actions", label: "Action" }]} rows={[...rows].sort((a, b) => get(a, "due_at").localeCompare(get(b, "due_at")))} empty="No bills" renderCell={(order, column) => {
-    if (column.key === "course_title") return get(order, "course_title") || get(order, "product_name");
+    const notice = passOrderNotice(order);
+    if (column.key === "course_title") return <div>{get(order, "course_title") || get(order, "product_name")}{get(order, "valid_from") && get(order, "valid_until") ? <small style={{ display: "block" }}>{malaysiaDate(order.valid_from)} - {malaysiaDate(order.valid_until)}</small> : null}</div>;
     if (column.key === "total_amount") return amount(order.total_amount);
     if (column.key === "due_at") return get(order, "due_at") ? malaysiaDate(order.due_at) : "-";
     if (column.key === "status") return <><Status value={get(order, "status")} />{get(order, "status") !== "paid" && get(order, "due_at") && get(order, "due_at") < malaysiaDay() ? <small className="dialog-error">Overdue · place reserved</small> : null}</>;
     if (column.key !== "actions") return get(order, column.key) || "-";
+    if (notice) return <span className="order-notice" style={{ display: "block", maxWidth: 240, whiteSpace: "normal" }}>{notice}</span>;
     let billing: { extraNeeded?: number; extraOnsite?: number; extraUnitPrice?: number; payMonthly?: boolean } | undefined;
     try { billing = JSON.parse(get(order, "offer_snapshot") || "{}").billing; } catch { /* Older orders have no billing snapshot. */ }
     const extra = Math.max(0, Number(billing?.extraNeeded || 0) - Number(billing?.extraOnsite || 0));

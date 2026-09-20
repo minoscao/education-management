@@ -71,8 +71,8 @@ test("keeps shared detail and responsive view primitives in place", async () => 
 test("detail editing stays visible on narrow screens and uses shared save behavior", async () => {
   const portal = await readProjectFile("app/management-portal.tsx");
   const css = await readProjectFile("app/globals.css");
-  assert.match(portal, /<DetailEditAction label="编辑课程"/);
-  assert.match(portal, /<DetailEditAction label="编辑班次"/);
+  assert.match(portal, /<DetailEditAction label="Edit course"/);
+  assert.match(portal, /<DetailEditAction label="Edit class"/);
   assert.match(portal, /run\("updateClassroom",/);
   assert.match(portal, /if \(await onSave\(Object.fromEntries\(new FormData\(event.currentTarget\)\)\)\) onClose\(\)/);
   assert.match(css, /\.entity-header-actions \.detail-edit-action\s*\{\s*display: inline-flex; min-height: 44px;/);

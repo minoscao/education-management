@@ -48,6 +48,6 @@ test('grouped and individual timeline cards share subject icon, semantic colour 
     assert.match(component, /teachingStyle\(event\)/);
     assert.match(component, /<CalendarCourseTitle event={event}/);
   }
-  assert.match(portal, /className="independent-course-tag"[^>]+title="Independent school \/ 独中"/);
+  assert.match(portal, /className="independent-course-tag"[^>]+title="Independent school \/ UEC"/);
   assert.match(portal, /className="calendar-subject-icon"/);
 });

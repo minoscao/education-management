@@ -629,13 +629,13 @@ function teachingStyle(row: Row) {
 function CalendarCourseTitle({ event }: { event: Row }) {
   const display = teachingDisplay(event);
   const Icon = { math: Calculator, communication: MessageCircle, science: FlaskConical, chinese: PenTool, malay: Languages, english: BookOpen, music: Music2, general: GraduationCap }[teachingSubject(event)];
-  const audience = display.group === 'chinese' ? '华小' : display.group === 'malay' ? '马小' : '';
+  const audience = display.group === 'chinese' ? 'SJK(C)' : display.group === 'malay' ? 'SK' : '';
   const title = `${teachingSubject(event) === 'english' && audience ? `${audience} · ` : ''}${get(event, 'course_title')}`;
-  return <strong className="calendar-course-title" title={`${title} · ${display.label}${display.independent ? ' · Independent school / UEC' : ''}`}><Icon className="calendar-subject-icon" size={13} aria-hidden="true" /><span>{title}</span><TeachingLanguageTag row={event} />{display.independent ? <span className="independent-course-tag" title="Independent school / 独中">UEC</span> : null}</strong>;
+  return <strong className="calendar-course-title" title={`${title} · ${display.label}${display.independent ? ' · Independent school / UEC' : ''}`}><Icon className="calendar-subject-icon" size={13} aria-hidden="true" /><span>{title}</span><TeachingLanguageTag row={event} />{display.independent ? <span className="independent-course-tag" title="Independent school / UEC">UEC</span> : null}</strong>;
 }
 function TeachingLanguageTag({ row }: { row: Row }) {
   const display = teachingDisplay(row);
-  const label = { chinese: '中文', malay: '马来文', english: 'English', unknown: '待确认' }[display.medium];
+  const label = { chinese: 'Chinese', malay: 'Malay', english: 'English', unknown: 'Not set' }[display.medium];
   return <span className="teaching-medium-tag" title={`Teaching language · ${display.label}`}>{label}</span>;
 }
 function cohortPhase(run: Row, sessions: Row[]) {
@@ -701,7 +701,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
   const studentDirectory = useMemo(() => new Map(data.students.map(student => [String(student.id), student])), [data.students]);
   const [view, setView] = useState<View>(initialView);
   const [role, setRole] = useState<Role>(initialRole);
-  const [language, setLanguage] = useState<Language>("en");
+  const [language] = useState<Language>("en");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [attendanceLoaded, setAttendanceLoaded] = useState(false);
@@ -1093,13 +1093,6 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                 <button className="header-icon" type="button" aria-label="Dismiss message" onClick={() => setMessage("")}><X size={16} /></button>
               </div>, document.body,
             ) : null}
-            <button
-              className="language-toggle"
-              onClick={() => setLanguage(language === "en" ? "zh" : "en")}
-              type="button"
-            >
-              {t.language}
-            </button>
             <button
               className="header-icon"
               onClick={() => void load()}
@@ -6226,7 +6219,7 @@ function CourseVisual({ course }: { course: Row }) {
   const visual = {
     math: { Icon: Calculator, prop: "÷", label: "MATH" },
     science: { Icon: FlaskConical, prop: "✦", label: "SCIENCE" },
-    chinese: { Icon: PenTool, prop: "文", label: "中文" },
+    chinese: { Icon: PenTool, prop: "ZH", label: "CHINESE" },
     bahasa: { Icon: Languages, prop: "MY", label: "BAHASA" },
     music: { Icon: Music2, prop: "♪", label: "MUSIC" },
     english: { Icon: BookOpen, prop: "Aa", label: "ENGLISH" },
@@ -9878,7 +9871,7 @@ function LegacyDetailSheet({
   );
 }
 
-function DetailEditAction({ onClick, disabled, label = "编辑", editing = false }: {
+function DetailEditAction({ onClick, disabled, label = "Edit", editing = false }: {
   onClick: () => void;
   disabled?: boolean;
   label?: string;
@@ -9886,7 +9879,7 @@ function DetailEditAction({ onClick, disabled, label = "编辑", editing = false
 }) {
   return <button className="quiet-button detail-edit-action" type="button" disabled={disabled} onClick={onClick}>
     {editing ? <X size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
-    {editing ? "取消编辑" : label}
+    {editing ? "Cancel editing" : label}
   </button>;
 }
 
@@ -9907,11 +9900,11 @@ function RecordEditDialog({ title, fields, busy, onSave, onClose }: {
   }
   return <div className="dialog-backdrop" role="presentation" onMouseDown={event => { event.stopPropagation(); if (!busy) onClose(); }}>
     <form ref={ref} className="course-edit-dialog" role="dialog" aria-modal="true" aria-label={title} onSubmit={save} onMouseDown={event => event.stopPropagation()}>
-      <header><h3>{title}</h3><button className="header-icon" type="button" aria-label="关闭" disabled={busy} onClick={onClose}><X size={17} /></button></header>
+      <header><h3>{title}</h3><button className="header-icon" type="button" aria-label="Close" disabled={busy} onClick={onClose}><X size={17} /></button></header>
       <fieldset className="course-edit-grid record-edit-fields" disabled={busy}>
         {fields.map(field => field.options ? <label key={field.name}><span>{field.label}</span><select name={field.name} defaultValue={field.value} required={field.required}>{field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label> : <FormField key={field.name} name={field.name} label={field.label} defaultValue={field.value} type={field.type} min={field.min} step={field.step} required={field.required} />)}
       </fieldset>
-      <footer className="course-edit-footer"><div><button className="quiet-button" type="button" disabled={busy} onClick={onClose}>取消</button><button className="primary-button" type="submit" disabled={busy}><Check size={16} />{busy ? "保存中…" : "保存修改"}</button></div></footer>
+      <footer className="course-edit-footer"><div><button className="quiet-button" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" type="submit" disabled={busy}><Check size={16} />{busy ? "Saving..." : "Save changes"}</button></div></footer>
     </form>
   </div>;
 }
@@ -9997,12 +9990,12 @@ function CourseCatalogueDrawer({
             <header className="course-detail-header">
               <div>
                 <span className="sheet-eyebrow">
-                  {selectedRun ? `${get(course, "title")} / 班次` : "课程详情"}
+                  {selectedRun ? `${get(course, "title")} / Class` : "Course details"}
                 </span>
                 <h2>
                   {selectedRun
                     ? get(selectedRun, "name")
-                    : `${get(course, "title")} · 所有 ${intakes.length} 个班次`}
+                    : `${get(course, "title")} · All ${intakes.length} classes`}
                 </h2>
                 {selectedRun ? (
                   <CourseRunHeaderMeta
@@ -10013,44 +10006,44 @@ function CourseCatalogueDrawer({
                 ) : (
                   <p>
                     {get(course, "subject")} · {get(course, "level")} ·{" "}
-                    {enrolled.length} 名学生
+                    {enrolled.length} students
                   </p>
                 )}
               </div>
               <div className="entity-header-actions">
-                <DetailEditAction label="编辑课程" disabled={busy} onClick={() => setEditingCourse(true)} />
-                {selectedRun ? <DetailEditAction label="编辑班次" disabled={busy} onClick={() => setEditingRun(true)} /> : null}
+                <DetailEditAction label="Edit course" disabled={busy} onClick={() => setEditingCourse(true)} />
+                {selectedRun ? <DetailEditAction label="Edit class" disabled={busy} onClick={() => setEditingRun(true)} /> : null}
                 <button
                   className="header-icon"
                   type="button"
                   onClick={close}
-                  title="关闭"
+                  title="Close"
                 >
                   <X size={18} />
                 </button>
               </div>
             </header>
-            <nav className="course-detail-tabs" aria-label="课程详情分区">
+            <nav className="course-detail-tabs" aria-label="Course detail tabs">
               <button
                 type="button"
                 className={tab === "summary" ? "active" : ""}
                 onClick={() => setTab("summary")}
               >
-                概览
+                Overview
               </button>
               <button
                 type="button"
                 className={tab === "schedule" ? "active" : ""}
                 onClick={() => setTab("schedule")}
               >
-                课程安排 <b>{selectedLessons.length}</b>
+                Schedule <b>{selectedLessons.length}</b>
               </button>
               <button
                 type="button"
                 className={tab === "students" ? "active" : ""}
                 onClick={() => setTab("students")}
               >
-                学生 <b>{selectedEnrollments.length}</b>
+                Students <b>{selectedEnrollments.length}</b>
               </button>
             </nav>
             <div className="course-detail-content">
@@ -10092,11 +10085,11 @@ function CourseCatalogueDrawer({
         />
       ) : null}
       {editingRun && selectedRun ? <RecordEditDialog
-        title="编辑班次"
+        title="Edit class"
         fields={[
-          { name: "name", label: "班次名称", value: get(selectedRun, "name"), required: true },
-          { name: "capacity", label: "名额", value: get(selectedRun, "capacity"), type: "number", min: "1", step: "1", required: true },
-          { name: "price", label: "课程费用 (RM)", value: get(selectedRun, "price"), type: "number", min: "0", step: "0.01", required: true },
+          { name: "name", label: "Class name", value: get(selectedRun, "name"), required: true },
+          { name: "capacity", label: "Capacity", value: get(selectedRun, "capacity"), type: "number", min: "1", step: "1", required: true },
+          { name: "price", label: "Course fee (RM)", value: get(selectedRun, "price"), type: "number", min: "0", step: "0.01", required: true },
         ]}
         busy={busy}
         onSave={values => run("updateRun", { ...values, runId: get(selectedRun, "id") })}
@@ -10124,7 +10117,7 @@ function CourseDetailSidebar({
       <div className="course-sidebar-heading">
         <CourseVisual course={course} />
         <div>
-          <span>课程</span>
+          <span>Course</span>
           <h2>{get(course, "title")}</h2>
           <p>
             {get(course, "code")} · {get(course, "level")}
@@ -10134,7 +10127,7 @@ function CourseDetailSidebar({
       </div>
       <div className="course-sidebar-divider" />
       <div className="course-sidebar-section">
-        <span>班次</span>
+        <span>Class</span>
         <button
           type="button"
           className={
@@ -10145,8 +10138,8 @@ function CourseDetailSidebar({
           onClick={() => onSelect("all")}
         >
           <div>
-            <strong>全部班次</strong>
-            <small>查看 {intakes.length} 个班次的完整情况</small>
+            <strong>All classes</strong>
+            <small>View all {intakes.length} classes</small>
           </div>
           <b>{intakes.length}</b>
         </button>
@@ -10164,7 +10157,7 @@ function CourseDetailSidebar({
       </div>
       <button type="button" className="course-sidebar-add">
         <Plus size={16} />
-        新增班次
+        Add class
       </button>
     </aside>
   );
@@ -10196,18 +10189,18 @@ function CourseRunNavCard({
       </div>
       <div className="course-run-nav-teacher">
         {teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}
-        <span>{get(runItem, "teacher_name") || "待安排老师"}</span>
+        <span>{get(runItem, "teacher_name") || "Teacher pending"}</span>
         {active ? (
           <ChevronRight
             className="course-run-nav-current"
             size={22}
-            aria-label="正在查看"
+            aria-label="Current class"
           />
         ) : null}
       </div>
       <div className="course-run-nav-progress">
         <span>
-          {count} / {capacity} 已报名
+          {count} / {capacity} enrolled
         </span>
         <i>
           <b
@@ -10229,7 +10222,7 @@ function languageTagTone(language: string) {
 }
 
 function deliveryModeLabel(runItem: Row) {
-  return get(runItem, "delivery_mode") === "online" ? "网课" : "现场课";
+  return get(runItem, "delivery_mode") === "online" ? "Online" : "Onsite";
 }
 
 function CourseRunHeaderMeta({
@@ -10263,7 +10256,7 @@ function CourseRunHeaderMeta({
           {get(teacher, "name")}
         </button>
       ) : (
-        <span>待安排老师</span>
+        <span>Teacher pending</span>
       )}
     </div>
   );
@@ -10304,27 +10297,27 @@ function CourseAllDetailWorkspace({
     Number(course.default_sessions || 0) * Number(course.default_minutes || 0);
   const durationLabel = totalMinutes
     ? `${get(course, "default_sessions")} × ${get(course, "default_minutes")} min`
-    : "未设置课时";
+    : "Duration not set";
   const spanLabel =
     firstLesson && lastLesson
       ? `${malaysiaDate(firstLesson.starts_at)} - ${malaysiaDate(lastLesson.ends_at || lastLesson.starts_at)}`
-      : "未排课";
+      : "Not scheduled";
   const teacherLabel =
     teachers.size === 1
       ? Array.from(teachers)[0]
       : teachers.size > 1
         ? "Multiple teachers"
-        : "待安排";
+        : "Pending";
   const roomLabel =
     rooms.size === 1
       ? Array.from(rooms)[0]
       : rooms.size > 1
         ? "Multiple classrooms"
-        : "待安排";
+        : "Pending";
   if (tab === "students")
     return (
       <CourseStudentList
-        title="所有班次的学生"
+        title="Students in all classes"
         students={students}
         data={data}
         openDetail={openDetail}
@@ -10344,43 +10337,43 @@ function CourseAllDetailWorkspace({
       <CourseDashboardMetrics
         items={[
           {
-            label: "课程费用",
+            label: "Course fee",
             value: amount(course.list_price),
-            note: "标准课程费用",
+            note: "Standard course fee",
             icon: <Banknote size={19} />,
           },
           {
-            label: "课程课时",
+            label: "Lesson duration",
             value: durationLabel,
             note: totalMinutes
-              ? `共 ${Math.round((totalMinutes / 60) * 10) / 10} 小时`
+              ? `${Math.round((totalMinutes / 60) * 10) / 10} hours`
               : "",
             icon: <Clock3 size={19} />,
           },
           {
-            label: "总跨度",
+            label: "Course dates",
             value: spanLabel,
             note: lessons.length
-              ? `${lessons.length} 个已排课节`
-              : "尚未开始排课",
+              ? `${lessons.length} scheduled lessons`
+              : "Not scheduled",
             icon: <CalendarDays size={19} />,
           },
           {
-            label: "学生",
+            label: "Students",
             value: String(students.length),
-            note: "已报名",
+            note: "enrolled",
             icon: <UsersRound size={19} />,
           },
           {
-            label: "老师",
+            label: "Teacher",
             value: teacherLabel,
-            note: teachers.size > 1 ? "多个班次老师" : "班次老师",
+            note: teachers.size > 1 ? "Multiple teachers" : "Class teacher",
             icon: <UserRound size={19} />,
           },
           {
-            label: "教室",
+            label: "Classroom",
             value: roomLabel,
-            note: rooms.size > 1 ? "多个上课教室" : "上课教室",
+            note: rooms.size > 1 ? "Multiple classrooms" : "Teaching room",
             icon: <DoorOpen size={19} />,
           },
         ]}
@@ -10388,9 +10381,9 @@ function CourseAllDetailWorkspace({
       <section className="course-all-run-list">
         <div className="sheet-section-title">
           <div>
-            <h3>全部班次</h3>
+            <h3>All classes</h3>
             <p className="panel-hint">
-              选择一个班次，进入它的排课、学生与课堂管理。
+              Select a class to view its schedule and students.
             </p>
           </div>
           <span>{intakes.length}</span>
@@ -10443,15 +10436,15 @@ function CourseAllRunCard({
       </div>
       <span className="course-all-run-teacher">
         {teacher ? <Avatar person={teacher} alt="" /> : <UserRound size={15} />}
-        {get(runItem, "teacher_name") || "待安排老师"}
+        {get(runItem, "teacher_name") || "Teacher pending"}
       </span>
       <span>
         <UsersRound size={15} />
-        {get(runItem, "student_count")}/{get(runItem, "capacity")} 已报名
+        {get(runItem, "student_count")}/{get(runItem, "capacity")} enrolled
       </span>
       <span>
         <CalendarDays size={15} />
-        {lessons.length} 节课
+        {lessons.length} lessons
       </span>
       <ChevronRight
         className="course-all-run-arrow"
@@ -10511,7 +10504,7 @@ function CourseRunDetailWorkspace({
   if (tab === "students")
     return (
       <CourseStudentList
-        title="班次学生"
+        title="Class students"
         students={students}
         data={data}
         openDetail={openDetail}
@@ -10530,37 +10523,37 @@ function CourseRunDetailWorkspace({
       <CourseDashboardMetrics
         items={[
           {
-            label: "剩余课程",
-            value: `${Math.max(0, expected - completed)} / ${expected} 节`,
-            note: completed ? `已完成 ${completed} 节` : "尚未完成课程",
+            label: "Remaining lessons",
+            value: `${Math.max(0, expected - completed)} / ${expected} lessons`,
+            note: completed ? `${completed} completed` : "No completed lessons",
             icon: <CalendarDays size={19} />,
           },
           {
-            label: "学生",
+            label: "Students",
             value: String(students.length),
-            note: `${get(runItem, "student_count") || students.length} / ${get(runItem, "capacity")} 已报名`,
+            note: `${get(runItem, "student_count") || students.length} / ${get(runItem, "capacity")} enrolled`,
             icon: <UsersRound size={19} />,
           },
           {
-            label: "老师",
+            label: "Teacher",
             value:
               teachers.length === 1
                 ? teachers[0]
                 : teachers.length > 1
                   ? "Multiple teachers"
-                  : "待安排",
-            note: teachers.length > 1 ? "课节老师不同" : "班次老师",
+                  : "Pending",
+            note: teachers.length > 1 ? "Varies by lesson" : "Class teacher",
             icon: <UserRound size={19} />,
           },
           {
-            label: "教室",
+            label: "Classroom",
             value:
               rooms.length === 1
                 ? rooms[0]
                 : rooms.length > 1
                   ? "Multiple classrooms"
-                  : "待安排",
-            note: rooms.length > 1 ? "课节教室不同" : "上课教室",
+                  : "Pending",
+            note: rooms.length > 1 ? "Varies by lesson" : "Teaching room",
             icon: <DoorOpen size={19} />,
           },
         ]}
@@ -10568,9 +10561,9 @@ function CourseRunDetailWorkspace({
       <section className="course-run-overview">
         <div className="sheet-section-title">
           <div>
-            <h3>课程日历</h3>
+            <h3>Lesson calendar</h3>
             <p className="panel-hint">
-              课节由排课日历自动判断。需要改动时，使用“调整课时”保留原有记录。
+              Use Adjust lessons to change the schedule while retaining its history.
             </p>
           </div>
           <div className="action-group">
@@ -10580,7 +10573,7 @@ function CourseRunDetailWorkspace({
               onClick={() => setAdjustingLessons(true)}
             >
               <Settings2 size={15} />
-              调整课时
+              Adjust lessons
             </button>
             <button
               className="quiet-button"
@@ -10589,7 +10582,7 @@ function CourseRunDetailWorkspace({
                 openDetail({ kind: "teacher", id: get(runItem, "teacher_id") })
               }
             >
-              查看老师
+              View teacher
             </button>
           </div>
         </div>
@@ -10688,12 +10681,12 @@ function CourseStudentList({
                 {get(entry, "student_name") || get(student, "name")}
               </strong>
               <small>
-                {get(student, "level") || "学生"}
+                {get(student, "level") || "Students"}
                 {get(entry, "run_name") ? ` · ${get(entry, "run_name")}` : ""}
               </small>
             </div>
             <span className="course-student-participation">
-              <small>参与情况</small>
+              <small>Participation</small>
               <b>
                 {attended}/{booked}
               </b>
@@ -10709,7 +10702,7 @@ function CourseStudentList({
           </button>
         );
       })}
-      {!students.length ? <Empty text="暂无已报名学生" /> : null}
+      {!students.length ? <Empty text="No enrolled students" /> : null}
     </section>
   );
 }
@@ -10735,10 +10728,10 @@ function ClassLessonAdjustmentDialog({
   );
   const changeLabel = (change: Row) =>
     get(change, "change_type") === "cancelled"
-      ? "已取消"
+      ? "Cancelled"
       : get(change, "change_type") === "reordered"
-        ? "已调整顺序"
-        : "已更改";
+        ? "Reordered"
+        : "Updated";
   return (
     <>
       <div
@@ -10757,7 +10750,7 @@ function ClassLessonAdjustmentDialog({
               <span>ADJUST LESSONS</span>
               <h3>{get(runItem, "name")}</h3>
               <p>
-                所有调整都会保留原课时记录。取消的课节不会从日历或学生记录中删除。
+                Lesson changes and cancellation history are retained.
               </p>
             </div>
             <button
@@ -10786,11 +10779,11 @@ function ClassLessonAdjustmentDialog({
                   key={get(lesson, "id")}
                 >
                   <div className="class-lesson-adjust-main">
-                    <span>课时 {get(lesson, "session_no")}</span>
+                    <span>Lesson {get(lesson, "session_no")}</span>
                     <strong>{get(lesson, "topic")}</strong>
                     <p>
                       {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)} ·{" "}
-                      {get(lesson, "teacher_name") || "待安排老师"}
+                      {get(lesson, "teacher_name") || "Teacher pending"}
                       {get(lesson, "classroom_name")
                         ? ` · ${get(lesson, "classroom_name")}`
                         : ""}
@@ -10812,7 +10805,7 @@ function ClassLessonAdjustmentDialog({
                           })
                         }
                       >
-                        上移
+                        Move up
                       </button>
                     ) : null}
                     {index < orderedLessons.length - 1 && !cancelled ? (
@@ -10830,7 +10823,7 @@ function ClassLessonAdjustmentDialog({
                           })
                         }
                       >
-                        下移
+                        Move down
                       </button>
                     ) : null}
                     {!cancelled ? (
@@ -10840,7 +10833,7 @@ function ClassLessonAdjustmentDialog({
                         type="button"
                         onClick={() => setEditing(lesson)}
                       >
-                        编辑
+                        Edit
                       </button>
                     ) : null}
                     {!cancelled ? (
@@ -10851,7 +10844,7 @@ function ClassLessonAdjustmentDialog({
                         onClick={() => {
                           if (
                             window.confirm(
-                              "取消后将保留该课节和所有原始记录。确认取消？",
+                              "Cancel this lesson? Its history will be retained.",
                             )
                           )
                             void run("cancelSession", {
@@ -10859,7 +10852,7 @@ function ClassLessonAdjustmentDialog({
                             });
                         }}
                       >
-                        取消
+                        Cancel
                       </button>
                     ) : null}
                   </div>
@@ -10873,7 +10866,7 @@ function ClassLessonAdjustmentDialog({
                         {get(change, "original_topic")} ·{" "}
                         {get(change, "original_starts_at")} →{" "}
                         {get(change, "change_type") === "cancelled"
-                          ? "已取消"
+                          ? "Cancelled"
                           : `${get(change, "new_topic")} · ${get(change, "new_starts_at")}`}
                       </span>
                     </div>
@@ -10882,12 +10875,12 @@ function ClassLessonAdjustmentDialog({
               );
             })}
             {!orderedLessons.length ? (
-              <Empty text="这个班次还没有排课。" />
+              <Empty text="No lessons scheduled for this class." />
             ) : null}
           </div>
           <footer>
             <button className="quiet-button" type="button" onClick={onClose}>
-              完成
+              Done
             </button>
           </footer>
         </section>
@@ -10939,24 +10932,24 @@ function ClassScheduleBrowser({
       <section className="course-schedule-browser">
         <div className="sheet-section-title">
           <div>
-            <h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3>
+            <h3>{allClasses ? "All class schedules" : "Schedule"}</h3>
             <p className="panel-hint">
-              按课程状态查看，并点击卡片进入课堂管理。
+              Open a lesson to manage the class.
             </p>
           </div>
           <div className="course-schedule-controls">
             <div className="segmented-control">
               <button type="button" onClick={() => setMode("calendar")}>
                 <CalendarDays size={14} />
-                日历
+                Calendar
               </button>
               <button className="active" type="button">
                 <LayoutGrid size={14} />
-                卡片
+                Cards
               </button>
               <button type="button" onClick={() => setMode("list")}>
                 <List size={14} />
-                列表
+                List
               </button>
             </div>
           </div>
@@ -10967,14 +10960,14 @@ function ClassScheduleBrowser({
             type="button"
             onClick={() => setPhase("all")}
           >
-            全部 <b>{lessons.length}</b>
+            All <b>{lessons.length}</b>
           </button>
           <button
             className={phase === "active" ? "active" : ""}
             type="button"
             onClick={() => setPhase("active")}
           >
-            未开始或进行中{" "}
+            Upcoming or in progress{" "}
             <b>
               {
                 lessons.filter(
@@ -10989,7 +10982,7 @@ function ClassScheduleBrowser({
             type="button"
             onClick={() => setPhase("finished")}
           >
-            已结束{" "}
+            Ended{" "}
             <b>
               {
                 lessons.filter(
@@ -11012,7 +11005,7 @@ function ClassScheduleBrowser({
               }
             >
               <div>
-                <span>第 {get(lesson, "session_no")} 节</span>
+                <span>Lesson {get(lesson, "session_no")}</span>
                 <strong>{get(lesson, "topic")}</strong>
                 <small>
                   {malaysiaDate(lesson.starts_at)} · {timeRange(lesson)}
@@ -11029,15 +11022,15 @@ function ClassScheduleBrowser({
             </button>
           ))}
         </div>
-        {!visible.length ? <Empty text="这个状态下暂无课程" /> : null}
+        {!visible.length ? <Empty text="No lessons with this status" /> : null}
       </section>
     );
   return (
     <section className="course-schedule-browser">
       <div className="sheet-section-title">
         <div>
-          <h3>{allClasses ? "全部班次课程安排" : "课程安排"}</h3>
-          <p className="panel-hint">点击课程可进入课堂管理。</p>
+          <h3>{allClasses ? "All class schedules" : "Schedule"}</h3>
+          <p className="panel-hint">Open a lesson to manage the class.</p>
         </div>
         <div className="course-schedule-controls">
           <div className="segmented-control">
@@ -11047,14 +11040,14 @@ function ClassScheduleBrowser({
               onClick={() => setMode("calendar")}
             >
               <CalendarDays size={14} />
-              日历
+              Calendar
             </button>
             <button
               type="button"
               onClick={() => setMode("cards")}
             >
               <LayoutGrid size={14} />
-              卡片
+              Cards
             </button>
             <button
               className={mode === "list" ? "active" : ""}
@@ -11062,7 +11055,7 @@ function ClassScheduleBrowser({
               onClick={() => setMode("list")}
             >
               <List size={14} />
-              列表
+              List
             </button>
           </div>
         </div>
@@ -12272,14 +12265,14 @@ function CourseEditDialog({
           className="course-edit-dialog"
           role="dialog"
           aria-modal="true"
-          aria-label="编辑课程"
+          aria-label="Edit course"
           onSubmit={save}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <header>
             <div>
               <span>COURSE</span>
-              <h3>编辑课程</h3>
+              <h3>Edit course</h3>
               <p>
                 Update this reusable course product. Lesson content is edited
                 separately in the Course plan.
@@ -13090,17 +13083,17 @@ function ClassSettingsDialog({
           }}
         >
           <label>
-            <span>授课方式</span>
+            <span>Attendance mode</span>
             <select
               name="deliveryMode"
               defaultValue={get(runItem, "delivery_mode") || "onsite"}
             >
-              <option value="onsite">现场课</option>
-              <option value="online">网课</option>
+              <option value="onsite">Onsite</option>
+              <option value="online">Online</option>
             </select>
           </label>
           <button className="quiet-button" disabled={busy} type="submit">
-            保存方式
+            Save mode
           </button>
         </form>
         <div
@@ -14678,14 +14671,14 @@ function EntityDetailSheet({
         />
       ) : null}
       {editing && detail.kind === "room" ? <RecordEditDialog
-        title="编辑教室"
+        title="Edit classroom"
         fields={[
-          { name: "name", label: "教室名称", value: get(item, "name"), required: true },
-          { name: "location", label: "位置", value: get(item, "location") },
-          { name: "campusId", label: "中心", value: get(item, "campus_id"), required: true, options: data.campuses.map(campus => ({ value: get(campus, "id"), label: get(campus, "name") })) },
-          { name: "capacity", label: "座位数", value: get(item, "capacity"), type: "number", min: "1", step: "1", required: true },
-          { name: "roomType", label: "类型", value: get(item, "room_type"), required: true },
-          { name: "resources", label: "设备", value: get(item, "resources") },
+          { name: "name", label: "Classroom name", value: get(item, "name"), required: true },
+          { name: "location", label: "Location", value: get(item, "location") },
+          { name: "campusId", label: "Campus", value: get(item, "campus_id"), required: true, options: data.campuses.map(campus => ({ value: get(campus, "id"), label: get(campus, "name") })) },
+          { name: "capacity", label: "Seats", value: get(item, "capacity"), type: "number", min: "1", step: "1", required: true },
+          { name: "roomType", label: "Type", value: get(item, "room_type"), required: true },
+          { name: "resources", label: "Resources", value: get(item, "resources") },
         ]}
         busy={busy}
         onSave={values => run("updateClassroom", { ...values, classroomId: detail.id })}

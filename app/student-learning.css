@@ -23,6 +23,12 @@
 .role-student .student-week-lesson:focus-visible { outline: 2px solid #178467; outline-offset: 2px; }
 .role-student .student-week-lesson:active:not(:disabled) { transform: translateY(1px); }
 .student-week-lesson.is-selected { outline: 2px solid #0786a1; outline-offset: 1px; background: #e5f7fb; }
+.pass-extra-choice { margin-top: 16px; padding: 14px; border: 1px solid #e5bd78; border-radius: 6px; background: #fff9ee; color: #65430c; }
+.pass-extra-choice p, .pass-extra-choice small { display: block; margin: 7px 0; font-size: 12px; line-height: 1.5; }
+.pass-extra-choice label { display: flex; align-items: center; gap: 9px; min-height: 44px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pass-extra-choice input { width: 18px; height: 18px; accent-color: #0786a1; }
+.pass-purchase-dialog .table-scroll > .data-table:not(.resizable-data-table) { min-width: 0; width: 100%; table-layout: fixed; }
+.pass-purchase-dialog .table-scroll > .data-table th, .pass-purchase-dialog .table-scroll > .data-table td { white-space: normal; overflow-wrap: anywhere; padding: 10px 8px; }
 .student-week-grid { grid-template-columns: repeat(7, minmax(130px, 1fr)); min-width: 910px; }
 .role-student .student-week-lesson > strong { white-space: normal; overflow-wrap: anywhere; }
 .role-student .student-week-teacher { min-height: 52px; align-items: start; }

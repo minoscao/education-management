@@ -14,7 +14,23 @@ type Offer = {
   issuance_mode?: 'balance' | 'tickets';
 };
 type Window = { from: string; until: string };
-type Snapshot = { product: Offer; windows: Window[]; booking?: { runId: string; sessionId?: string; sessionIds?: string[]; mode: 'onsite' | 'online'; autoBook?: boolean } };
+type Snapshot = { product: Offer; windows: Window[]; billing?: { enrollmentId: string; month: string; dueAt: string; payMonthly: boolean; extraOnsite: number; extraUnitPrice: number; extraNeeded: number; basePrice: number }; booking?: { runId: string; sessionId?: string; sessionIds?: string[]; mode: 'onsite' | 'online'; autoBook?: boolean } };
+
+export function courseMonthlySchedule(product: RecordData, dates: string[], mode: 'onsite' | 'online', today: string) {
+  const days = dates.map(date => date.slice(0, 10)).sort();
+  if (!days.length) return [];
+  const periods = monthCount(days[0], days[days.length - 1]);
+  return passWindows({ validity_type: 'calendar_month', validity_days: 30 }, days[0], periods).map(window => {
+    const month = window.from.slice(0, 7);
+    const lessons = days.filter(day => day >= window.from && day <= window.until).length;
+    return { ...window, month, lessons, included: Number(product[`${mode}_credits`]), extra: Math.max(0, lessons - Number(product[`${mode}_credits`])), dueAt: `${month}-07` < today ? today : `${month}-07` };
+  });
+}
+
+export function extraOnsiteUnitPrice(products: RecordData[]) {
+  const product = products.find(item => item.status === 'active' && Number(item.onsite_credits) > 0 && !Number(item.online_credits) && !Number(item.study_credits));
+  return product ? Math.round(Number(product.price) / Number(product.onsite_credits) * 100) / 100 : null;
+}
 
 export function malaysiaDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
@@ -206,7 +222,8 @@ export class LearningStore {
     ]);
   }
 
-  async createPassOrder(input: { studentId: string; productId: string; requestKey: string; months: number; start?: string; runId?: string; sessionId?: string; mode?: string; reserveSelection?: boolean; coursePlan?: boolean; payMonthly?: boolean }) {
+  async createPassOrder(input: { studentId: string; productId: string; requestKey: string; months: number; start?: string; runId?: string; sessionId?: string; mode?: string; reserveSelection?: boolean; coursePlan?: boolean; payMonthly?: boolean; includeExtraOnsite?: boolean }) {
+    if (input.coursePlan && input.runId && !input.sessionId) return this.createCourseBillingPlan({ ...input, runId: input.runId });
     if (!input.studentId || !/^[\w-]{8,100}$/.test(input.requestKey)) throw new Error('Refresh this purchase and try again.');
     const requestKey = `${input.studentId}:${input.requestKey}`;
     const old = await this.one<{ id: string }>('SELECT id FROM pass_orders WHERE request_key = ?', [requestKey]);
@@ -255,10 +272,61 @@ export class LearningStore {
     return orderId;
   }
 
+  async createCourseBillingPlan(input: { studentId: string; productId: string; requestKey: string; runId: string; mode?: string; payMonthly?: boolean; includeExtraOnsite?: boolean }) {
+    if (!/^[\w-]{8,100}$/.test(input.requestKey)) throw new Error('Refresh this purchase and try again.');
+    const prior = await this.one<{ id: string }>('SELECT id FROM pass_orders WHERE plan_key = ? ORDER BY billing_month LIMIT 1', [`${input.studentId}:${input.requestKey}`]);
+    if (prior) return prior.id;
+    const product = await this.one<Offer>("SELECT * FROM pass_products WHERE id = ? AND status = 'active'", [input.productId]);
+    if (!product || !await this.one('SELECT id FROM students WHERE id = ?', [input.studentId])) throw new Error('Choose an available pass and learner.');
+    const mode = input.mode === 'online' ? 'online' : 'onsite';
+    const existing = await this.one<{ id: string }>('SELECT id FROM class_enrollments WHERE student_id = ? AND class_run_id = ?', [input.studentId, input.runId]);
+    if (existing && await this.one('SELECT id FROM pass_orders WHERE enrollment_id = ? LIMIT 1', [existing.id])) throw new Error('This course is already reserved. Open your monthly bills to pay.');
+    await this.assertBookingAvailable(input.studentId, input.runId, undefined, mode);
+    const sessions = await this.all<{ id: string; starts_at: string }>("SELECT id, starts_at FROM class_sessions WHERE class_run_id = ? AND status NOT IN ('cancelled','completed') AND starts_at > ? ORDER BY starts_at", [input.runId, malaysiaTime(this.now())]);
+    const existingBookings = await this.all<{ id: string; class_session_id: string; status: string }>('SELECT id, class_session_id, status FROM class_student_bookings WHERE student_id = ? AND class_session_id IN (SELECT id FROM class_sessions WHERE class_run_id = ?)', [input.studentId, input.runId]);
+    if (existingBookings.some(booking => booking.status === 'booked')) throw new Error('Some lessons are already booked. Ask the campus to review this course before starting a new payment plan.');
+    const schedule = courseMonthlySchedule(product, sessions.map(session => session.starts_at), mode, malaysiaDay(this.now()));
+    const unitPrice = extraOnsiteUnitPrice(await this.all('SELECT * FROM pass_products'));
+    if (input.includeExtraOnsite && mode === 'onsite' && schedule.some(month => month.extra) && unitPrice == null) throw new Error('The campus must set the extra onsite lesson price first.');
+    const enrollmentId = existing?.id || uid('enrollment');
+    const planKey = `${input.studentId}:${input.requestKey}`;
+    const fee = schedule.reduce((total, month) => total + product.price + (mode === 'onsite' && input.includeExtraOnsite ? month.extra * (unitPrice || 0) : 0), 0);
+    const queries: Query[] = [{
+      sql: existing ? "UPDATE class_enrollments SET status = 'enrolled', contracted_fee = ?, delivery_mode = ? WHERE id = ?" : "INSERT INTO class_enrollments (id, class_run_id, student_id, contracted_fee, status, delivery_mode) VALUES (?, ?, ?, ?, 'enrolled', ?)",
+      values: existing ? [fee, mode, enrollmentId] : [enrollmentId, input.runId, input.studentId, fee, mode],
+    }];
+    let firstOrderId = '';
+    for (const month of schedule) {
+      const orderId = uid('pass-order');
+      firstOrderId ||= orderId;
+      const extra = mode === 'onsite' && input.includeExtraOnsite ? month.extra : 0;
+      const snapshot: Snapshot = { product: { ...product, onsite_credits: product.onsite_credits + extra }, windows: [{ from: month.from, until: month.until }], billing: { enrollmentId, month: month.month, dueAt: month.dueAt, payMonthly: Boolean(input.payMonthly), extraOnsite: extra, extraUnitPrice: unitPrice || 0, extraNeeded: mode === 'onsite' ? month.extra : 0, basePrice: product.price }, booking: { runId: input.runId, mode, autoBook: false } };
+      queries.push(
+        { sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, valid_from, valid_until, status) VALUES (?, ?, ?, ?, ?, 'package', ?, ?, 'pending_payment')", values: [`${orderId}:package`, orderId, input.studentId, product.id, product.name, month.from, month.until] },
+        { sql: "INSERT INTO pass_orders (id, pass_id, student_id, product_id, selected_run_id, delivery_mode, reservation_months, total_amount, paid_amount, status, offer_snapshot, request_key, enrollment_id, billing_month, due_at, plan_key) VALUES (?, ?, ?, ?, ?, ?, 1, ?, 0, 'unpaid', ?, ?, ?, ?, ?, ?)", values: [orderId, `${orderId}:package`, input.studentId, product.id, input.runId, mode, Math.round((product.price + extra * (unitPrice || 0)) * 100) / 100, JSON.stringify(snapshot), `${planKey}:${month.month}`, enrollmentId, month.month, month.dueAt, planKey] },
+      );
+    }
+    for (const session of sessions) {
+      const old = existingBookings.find(booking => booking.class_session_id === session.id);
+      const bookingId = old?.id || `${input.studentId}:${session.id}`;
+      queries.push(old
+        ? { sql: "UPDATE class_student_bookings SET enrollment_id = ?, status = 'booked', delivery_mode = ?, payment_source = 'pass', allocated_fee = 0 WHERE id = ?", values: [enrollmentId, mode, bookingId] }
+        : { sql: "INSERT INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status, delivery_mode, payment_source) VALUES (?, ?, ?, ?, 0, 'booked', ?, 'pass')", values: [bookingId, session.id, enrollmentId, input.studentId, mode] });
+      queries.push({ sql: "INSERT INTO class_attendance (id, student_booking_id, status, note) SELECT ?, ?, 'pending', '' WHERE NOT EXISTS (SELECT 1 FROM class_attendance WHERE student_booking_id = ?)", values: [`attendance:${bookingId}`, bookingId, bookingId] });
+    }
+    try { await this.batch(queries); } catch (error) {
+      const retry = await this.one<{ id: string }>('SELECT id FROM pass_orders WHERE plan_key = ? ORDER BY billing_month LIMIT 1', [planKey]);
+      if (retry) return retry.id;
+      throw error;
+    }
+    return firstOrderId;
+  }
+
   async completePassBooking(orderId: string) {
     const order = await this.one<{ student_id: string; selected_run_id: string; delivery_mode: string; offer_snapshot: string; status: string }>('SELECT * FROM pass_orders WHERE id = ?', [orderId]);
     if (!order || order.status !== 'paid') throw new Error('Complete pass payment before booking.');
     const snapshot: Snapshot | null = order.offer_snapshot ? JSON.parse(order.offer_snapshot) : null;
+    if (snapshot?.billing) return true;
     const booking = snapshot?.booking || (order.selected_run_id ? { runId: order.selected_run_id, mode: order.delivery_mode === 'online' ? 'online' as const : 'onsite' as const } : null);
     if (!booking) return false;
     if ('autoBook' in booking && booking.autoBook === false) return false;
@@ -266,6 +334,29 @@ export class LearningStore {
     else if ('sessionId' in booking && booking.sessionId) await this.bookLesson(order.student_id, booking.sessionId, booking.mode);
     else await this.enrollCourse(order.student_id, booking.runId, booking.mode, 'pass');
     return true;
+  }
+
+  async addCourseExtra(orderId: string) {
+    const order = await this.one<RecordData>('SELECT * FROM pass_orders WHERE id = ?', [orderId]);
+    if (!order?.offer_snapshot) throw new Error('Monthly bill not found.');
+    const snapshot: Snapshot = JSON.parse(String(order.offer_snapshot));
+    const bill = snapshot.billing;
+    if (!bill || bill.extraNeeded <= bill.extraOnsite || snapshot.booking?.mode !== 'onsite') throw new Error('This bill does not need extra onsite credits.');
+    const extraId = `${orderId}:extra`;
+    if (await this.one('SELECT id FROM pass_orders WHERE id = ?', [extraId])) return extraId;
+    if (!(bill.extraUnitPrice > 0)) throw new Error('The campus must set the extra onsite lesson price first.');
+    const count = bill.extraNeeded - bill.extraOnsite;
+    const extra: Snapshot = { ...snapshot, product: { ...snapshot.product, onsite_credits: count, online_credits: 0, study_credits: 0 }, billing: { ...bill, extraOnsite: count, extraNeeded: count, basePrice: 0, payMonthly: true } };
+    await this.batch([
+      { sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, valid_from, valid_until, status) VALUES (?, ?, ?, ?, 'Extra onsite lesson', 'package', ?, ?, 'pending_payment') ON CONFLICT(id) DO NOTHING", values: [`${extraId}:package`, extraId, order.student_id, order.product_id, snapshot.windows[0].from, snapshot.windows[0].until] },
+      { sql: "INSERT INTO pass_orders (id, pass_id, student_id, product_id, selected_run_id, delivery_mode, reservation_months, total_amount, paid_amount, status, offer_snapshot, request_key, enrollment_id, billing_month, due_at) VALUES (?, ?, ?, ?, ?, 'onsite', 1, ?, 0, 'unpaid', ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", values: [extraId, `${extraId}:package`, order.student_id, order.product_id, order.selected_run_id, Math.round(count * bill.extraUnitPrice * 100) / 100, JSON.stringify(extra), extraId, bill.enrollmentId, `${bill.month}:extra`, bill.dueAt] },
+    ]);
+    return extraId;
+  }
+
+  async assertCourseBillPaid(enrollmentId: string, day: string) {
+    const due = await this.one<{ due_at: string }>("SELECT due_at FROM pass_orders WHERE enrollment_id = ? AND (billing_month = ? OR due_at < ?) AND status != 'paid' ORDER BY due_at LIMIT 1", [enrollmentId, day.slice(0, 7), malaysiaDay(this.now())]);
+    if (due) throw new Error(`Pay the course bill for ${day.slice(0, 7)} before attending. Payment due ${due.due_at}; your place is still reserved.`);
   }
 
   async assertBookingAvailable(studentId: string, runId: string, sessionId: string | undefined, mode: 'onsite' | 'online', sessionIds?: string[]) {
@@ -281,10 +372,18 @@ export class LearningStore {
     if (check.blocked) throw new Error('A selected lesson is full or overlaps another booking. No payment was taken.');
   }
 
-  async payPass(orderId: string, method = 'cash', reference = '', note = '') {
+  async payPass(orderId: string, method = 'cash', reference = '', note = '', deferred?: Query[]) {
     const order = await this.one<RecordData & { id: string; student_id: string; product_id: string; pass_id: string; offer_snapshot: string; reservation_months: number; total_amount: number; status: string; fulfilled_at: string | null }>("SELECT * FROM pass_orders WHERE id = ?", [orderId]);
     if (!order) throw new Error('Pass order not found.');
     if (order.fulfilled_at) return;
+    if (!deferred && order.plan_key) {
+      const plan: Snapshot = JSON.parse(order.offer_snapshot);
+      const orders = plan.billing?.payMonthly ? [{ id: orderId }] : await this.all<{ id: string }>("SELECT id FROM pass_orders WHERE plan_key = ? AND status != 'paid' ORDER BY billing_month", [order.plan_key]);
+      const queries: Query[] = [];
+      for (const item of orders) await this.payPass(item.id, method, reference, note, queries);
+      await this.batch(queries);
+      return;
+    }
     let snapshot: Snapshot;
     if (order.offer_snapshot) snapshot = JSON.parse(order.offer_snapshot);
     else {
@@ -298,6 +397,7 @@ export class LearningStore {
     }
     if (snapshot.booking && snapshot.booking.autoBook !== false) await this.assertBookingAvailable(order.student_id, snapshot.booking.runId, snapshot.booking.sessionId, snapshot.booking.mode, snapshot.booking.sessionIds);
     const queries: Query[] = [];
+    const issued: { id: string; type: CreditType; remaining: number; from: string; until: string }[] = [];
     for (const window of snapshot.windows) {
       for (const type of ['onsite', 'online', 'study'] as const) {
         const credits = snapshot.product[`${type}_credits`];
@@ -307,16 +407,30 @@ export class LearningStore {
         for (let index = 0; index < (tickets ? credits : 1); index++) {
           const units = tickets ? 1 : credits;
           const key = `${orderId}:${window.from}:${type}${tickets ? ':' + (index + 1) : ''}`;
+          issued.push({ id: key, type, remaining: units, from: window.from, until: window.until });
           queries.push({ sql: "INSERT INTO student_passes (id, order_id, student_id, product_id, name, credit_type, credits_total, valid_from, valid_until, onsite_remaining, online_remaining, study_remaining, status, issuance_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?) ON CONFLICT(issuance_key) WHERE issuance_key IS NOT NULL DO NOTHING", values: [key, orderId, order.student_id, order.product_id, `${snapshot.product.name} - ${type}${tickets ? ' ' + (index + 1) + '/' + credits : ''}`, type, units, window.from, window.until, type === 'onsite' ? units : 0, type === 'online' ? units : 0, type === 'study' ? units : 0, key] });
         }
       }
+    }
+    if (snapshot.billing && snapshot.booking) {
+      const booked = await this.all<{ id: string; starts_at: string; point_penalty: number }>("SELECT b.id, s.starts_at, b.point_penalty FROM class_student_bookings b JOIN class_sessions s ON s.id = b.class_session_id WHERE b.enrollment_id = ? AND (b.status = 'booked' OR b.point_penalty = 1) AND s.status != 'cancelled' AND substr(s.starts_at, 1, 7) = ? ORDER BY s.starts_at", [snapshot.billing.enrollmentId, snapshot.billing.month]);
+      for (const booking of booked) {
+        if (await this.one("SELECT id FROM learning_credit_events WHERE booking_id = ? AND status IN ('reserved','consumed')", [booking.id])) continue;
+        const ticket = issued.find(card => card.type === snapshot.booking!.mode && card.remaining > 0);
+        if (!ticket) break;
+        ticket.remaining--;
+        queries.push({ sql: "INSERT INTO learning_credit_events (id, student_id, pass_id, booking_id, credit_type, service_date, status) SELECT ?, ?, ?, ?, ?, ?, 'reserved' WHERE NOT EXISTS (SELECT 1 FROM learning_credit_events WHERE id = ?)", values: [`lesson:${booking.id}`, order.student_id, ticket.id, booking.id, ticket.type, booking.starts_at.slice(0, 10), `lesson:${booking.id}`] });
+        if (booking.point_penalty) queries.push({ sql: "UPDATE learning_credit_events SET status = 'consumed' WHERE id = ? AND status = 'reserved'", values: [`lesson:${booking.id}`] });
+      }
+      queries.push({ sql: 'UPDATE class_enrollments SET pass_id = COALESCE(pass_id, ?) WHERE id = ?', values: [order.pass_id, snapshot.billing.enrollmentId] });
     }
     queries.push(
       { sql: "INSERT INTO pass_payments (id, order_id, student_id, amount, method, proof_reference, note, received_at) SELECT ?, id, student_id, total_amount, ?, ?, ?, CURRENT_TIMESTAMP FROM pass_orders WHERE id = ? AND status != 'paid' ON CONFLICT(id) DO NOTHING", values: [`${orderId}:payment`, method, reference.trim(), note.trim(), orderId] },
       { sql: "UPDATE student_passes SET status = 'fulfilled' WHERE id = ?", values: [order.pass_id] },
       { sql: "UPDATE pass_orders SET status = 'paid', paid_amount = total_amount, offer_snapshot = ?, fulfilled_at = CURRENT_TIMESTAMP WHERE id = ?", values: [JSON.stringify(snapshot), orderId] },
     );
-    await this.batch(queries);
+    if (deferred) deferred.push(...queries);
+    else await this.batch(queries);
   }
 
   async reserveCredit(studentId: string, type: CreditType, day: string, eventId: string, bookingId: string | null = null, planned = new Map<string, number>()): Promise<Query[]> {
@@ -407,6 +521,7 @@ export class LearningStore {
     const booking = await this.one<{ student_id: string; payment_source: string; delivery_mode: CreditType; starts_at: string; enrollment_id: string; pass_id: string | null }>(`SELECT b.*, s.starts_at, e.pass_id FROM class_student_bookings b JOIN class_sessions s ON s.id = b.class_session_id JOIN class_enrollments e ON e.id = b.enrollment_id WHERE b.id = ? AND b.status = 'booked' AND s.status != 'cancelled'`, [bookingId]);
     if (!booking) throw new Error('This lesson booking is no longer active.');
     const attending = ['present', 'late'].includes(status);
+    if (attending) await this.assertCourseBillPaid(booking.enrollment_id, booking.starts_at.slice(0, 10));
     if (attending && booking.starts_at.replace('T', ' ') > malaysiaTime(this.now())) throw new Error('Attendance opens when the lesson starts.');
     const usesPass = booking.payment_source === 'pass';
     const eventId = `lesson:${bookingId}`;
@@ -438,7 +553,7 @@ export class LearningStore {
     if (booking.starts_at.replace('T', ' ') <= malaysiaTime(this.now())) throw new Error('This lesson has started. Please contact the campus.');
     const policy = leavePolicy(booking.starts_at, this.now().getTime());
     await this.batch([
-      { sql: "UPDATE class_student_bookings SET status = 'cancelled' WHERE id = ?", values: [booking.id] },
+      { sql: "UPDATE class_student_bookings SET status = 'cancelled', point_penalty = ? WHERE id = ?", values: [policy.refundable ? 0 : 1, booking.id] },
       { sql: "UPDATE learning_credit_events SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'reserved'", values: [policy.refundable ? 'released' : 'consumed', `lesson:${booking.id}`] },
       { sql: "UPDATE class_attendance SET status = 'leave', note = ?, marked_at = CURRENT_TIMESTAMP WHERE student_booking_id = ?", values: [[note.trim() || 'Requested by student', policy.message].join(' '), booking.id] },
     ]);
@@ -452,6 +567,7 @@ export class LearningStore {
     if (!['opening', 'live'].includes(state)) throw new Error('Join from 15 minutes before the lesson until it ends.');
     const existing = await this.one<{ id: string; status: string; delivery_mode: string; payment_source: string; enrollment_id: string }>('SELECT * FROM class_student_bookings WHERE student_id = ? AND class_session_id = ?', [studentId, sessionId]);
     if (existing?.status === 'booked') {
+      await this.assertCourseBillPaid(existing.enrollment_id, session.starts_at.slice(0, 10));
       if (existing.delivery_mode !== 'online') throw new Error('You already have an onsite place. Contact the campus to change attendance mode.');
       const queries: Query[] = [];
       if (existing.payment_source === 'pass') {

@@ -88,6 +88,7 @@ type ActionPayload = {
   reservationMonths?: number | string;
   coursePlan?: boolean;
   payMonthly?: boolean;
+  includeExtraOnsite?: boolean;
   passStartAt?: string;
   reserveSelection?: boolean;
 };
@@ -5832,11 +5833,12 @@ async function purchasePass(payload: ActionPayload) {
     requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
     coursePlan: payload.coursePlan === true,
     payMonthly: payload.payMonthly === true,
+    includeExtraOnsite: payload.includeExtraOnsite === true,
     start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode, reserveSelection: payload.reserveSelection,
   });
   if (payload.payNow === true || payload.payNow === "true")
     return await recordPassPayment({ ...payload, passOrderId: orderId });
-  return { notice: "Your order is saved. Tickets will be issued after payment. Your course selection is kept.", bookingPending: false };
+  return { notice: payload.coursePlan && !payload.sessionId ? "Your complete course is reserved. Monthly bills are ready; pay by the 7th. Credits are issued after payment." : "Your order is saved. Credits will be issued after payment.", bookingPending: false };
 }
 
 
@@ -6666,6 +6668,7 @@ export async function POST(request: Request) {
     }
     if (payload.action === "bookLesson")
       await learning().bookLesson(payload.studentId ?? "", payload.sessionId ?? "", deliveryMode(payload.deliveryMode));
+    if (payload.action === "addCourseExtra") await learning().addCourseExtra(payload.passOrderId ?? "");
     if (payload.action === "useOnlineCredit") {
       const joinUrl = await learning().joinOnline(payload.studentId ?? "", payload.sessionId ?? "");
       return Response.json({ ...(await (await readPortal(true)).json() as Row), joinUrl });

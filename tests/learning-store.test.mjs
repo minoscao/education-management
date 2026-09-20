@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText + '\n//# sourceURL=learning-store.ts';
-const { LearningStore, passWindows, coursePassWindows, monthCount, malaysiaDay, creditCoverage, passOfferCards, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { LearningStore, passWindows, coursePassWindows, courseMonthlySchedule, monthCount, malaysiaDay, creditCoverage, passOfferCards, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 test('course pass plans follow delivery mode, quota and expiry', () => {
   const dates = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(2026, 8, 21 + i * 7)).toISOString().slice(0, 10));
@@ -31,14 +31,16 @@ test('course plan payment issues the quoted tickets and books all twelve lessons
       f.insert('class_sessions', { id: `weekly-${i}`, class_run_id: 'run', session_no: i + 1, starts_at: `${day} 12:00`, ends_at: `${day} 13:30` });
     }
     const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'course-plan-twelve', months: 1, start: '2026-09-21', runId: 'run', mode: 'onsite', coursePlan: true });
-    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders').get().total_amount, 480);
-    await f.store.payPass(order);
-    await f.store.completePassBooking(order);
-    await f.store.payPass(order);
-    await f.store.completePassBooking(order);
-    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type != 'package'").get().n, 36);
+    assert.equal(f.db.prepare('SELECT SUM(total_amount) n FROM pass_orders').get().n, 640);
     assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 12);
-    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 1);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM learning_credit_events').get().n, 0);
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    await f.store.payPass(order);
+    await f.store.completePassBooking(order);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type != 'package'").get().n, 48);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 12);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 4);
   } finally { f.close(); }
 });
 
@@ -115,7 +117,7 @@ test('leave at 48 hours returns the point; one second later retains the charge e
   }
 });
 
-test('monthly course payment charges one month and reserves only its covered lessons', async () => {
+test('monthly course payment reserves the entire course before payment and bills every calendar month', async () => {
   const f = await teachingFixture();
   try {
     f.db.exec("DELETE FROM class_sessions; UPDATE pass_products SET validity_type = 'rolling_days', validity_days = 30, issuance_mode = 'tickets'");
@@ -123,16 +125,90 @@ test('monthly course payment charges one month and reserves only its covered les
       const day = new Date(Date.UTC(2026, 8, 21 + i * 7)).toISOString().slice(0, 10);
       f.insert('class_sessions', { id: `monthly-${i}`, class_run_id: 'run', session_no: i + 1, starts_at: `${day} 12:00`, ends_at: `${day} 13:30` });
     }
-    for (const [index, start] of ['2026-09-21', '2026-10-19', '2026-11-16'].entries()) {
-      const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: `pay-month-${index}`, months: 1, start, runId: 'run', mode: 'onsite', coursePlan: true, payMonthly: true });
-      await f.store.payPass(order);
-      await f.store.completePassBooking(order);
-      await f.store.payPass(order);
-      await f.store.completePassBooking(order);
+    const input = { studentId: 'student', productId: 'monthly', requestKey: 'pay-month-course', months: 1, runId: 'run', mode: 'onsite', coursePlan: true, payMonthly: true };
+    const first = await f.store.createPassOrder(input);
+    assert.equal(await f.store.createPassOrder(input), first);
+    const orders = f.db.prepare('SELECT * FROM pass_orders ORDER BY billing_month').all();
+    assert.equal(orders.length, 4);
+    assert.equal(orders[1].due_at, '2026-10-07');
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 12);
+    for (const [index, order] of orders.entries()) {
+      await f.store.payPass(order.id);
+      await f.store.completePassBooking(order.id);
+      await f.store.payPass(order.id);
+      await f.store.completePassBooking(order.id);
       assert.equal(f.db.prepare('SELECT SUM(amount) n FROM pass_payments').get().n, 160 * (index + 1));
-      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 4 * (index + 1));
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 12);
       assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type != 'package'").get().n, 12 * (index + 1));
     }
+  } finally { f.close(); }
+});
+
+async function fiveLessonBillingFixture() {
+  const f = await teachingFixture();
+  f.db.exec("DELETE FROM class_sessions; UPDATE pass_products SET issuance_mode = 'tickets' WHERE id = 'monthly'");
+  f.insert('pass_products', { id: 'onsite-addon', code: 'ON4', name: 'Onsite 4', price: 100, onsite_credits: 4, online_credits: 0, study_credits: 0, validity_type: 'rolling_days', validity_days: 90 });
+  for (let i = 0; i < 5; i++) {
+    const day = `2026-10-${String(1 + i * 7).padStart(2, '0')}`;
+    f.insert('class_sessions', { id: `extra-${i}`, class_run_id: 'run', session_no: i + 1, starts_at: `${day} 12:00`, ends_at: `${day} 13:30` });
+  }
+  return f;
+}
+
+test('fifth onsite lesson is quoted separately while online has no onsite surcharge', () => {
+  const dates = [1, 8, 15, 22, 29].map(day => `2026-10-${String(day).padStart(2, '0')}`);
+  const product = { onsite_credits: 4, online_credits: 6 };
+  assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-09-20')[0].extra, 1);
+  assert.equal(courseMonthlySchedule(product, dates, 'online', '2026-09-20')[0].extra, 0);
+  assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-10-15')[0].dueAt, '2026-10-15');
+});
+
+test('unpaid monthly bills keep all seats but block attendance; extra credit needs separate consent and payment', async () => {
+  const f = await fiveLessonBillingFixture();
+  try {
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'extras-separate', months: 1, runId: 'run', mode: 'onsite', coursePlan: true, payMonthly: true });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders').get().total_amount, 160);
+    f.store.now = () => new Date('2026-10-08T04:00:00Z');
+    await assert.rejects(f.store.markAttendance('student:extra-1', 'present', ''), /2026-10-07/);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE status = 'booked'").get().n, 5);
+    await f.store.payPass(order);
+    f.store.now = () => new Date('2026-10-29T04:00:00Z');
+    await assert.rejects(f.store.markAttendance('student:extra-4', 'present', ''), /No onsite credit/);
+    const extra = await f.store.addCourseExtra(order);
+    assert.equal(await f.store.addCourseExtra(order), extra);
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(extra).total_amount, 25);
+    await f.store.payPass(extra);
+    await f.store.markAttendance('student:extra-4', 'present', '');
+    assert.equal(f.db.prepare('SELECT SUM(amount) n FROM pass_payments').get().n, 185);
+  } finally { f.close(); }
+});
+
+test('accepted extra is charged once and full payment is atomic', async () => {
+  const f = await fiveLessonBillingFixture();
+  try {
+    const input = { studentId: 'student', productId: 'monthly', requestKey: 'extras-upfront', months: 1, runId: 'run', mode: 'onsite', coursePlan: true, includeExtraOnsite: true };
+    const order = await f.store.createPassOrder(input);
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders').get().total_amount, 185);
+    f.interrupt(2);
+    await assert.rejects(f.store.payPass(order), /Injected/);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_payments').get().n, 0);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE status = 'active'").get().n, 0);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 5);
+    f.interrupt(null);
+    await Promise.all([f.store.payPass(order), f.store.payPass(order)]);
+    assert.equal(f.db.prepare('SELECT SUM(amount) n FROM pass_payments').get().n, 185);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'reserved'").get().n, 5);
+  } finally { f.close(); }
+});
+
+test('late leave before payment still consumes its point when the monthly bill is paid', async () => {
+  const f = await fiveLessonBillingFixture();
+  try {
+    const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'late-unpaid-leave', months: 1, runId: 'run', mode: 'onsite', coursePlan: true });
+    f.store.now = () => new Date('2026-09-30T04:00:00Z');
+    await f.store.cancelLesson('student', 'extra-0');
+    await f.store.payPass(order);
+    assert.equal(f.db.prepare("SELECT status FROM learning_credit_events WHERE booking_id = 'student:extra-0'").get().status, 'consumed');
   } finally { f.close(); }
 });
 

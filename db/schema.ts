@@ -327,6 +327,7 @@ export const classEnrollments = sqliteTable("class_enrollments", {
 });
 
 export const classStudentBookings = sqliteTable("class_student_bookings", {
+  pointPenalty: integer("point_penalty").notNull().default(0),
   id: text("id").primaryKey(),
   classSessionId: text("class_session_id")
     .notNull()
@@ -444,6 +445,10 @@ export const studentPasses = sqliteTable("student_passes", {
 
 export const passOrders = sqliteTable("pass_orders", {
   id: text("id").primaryKey(),
+  enrollmentId: text("enrollment_id").references(() => classEnrollments.id),
+  billingMonth: text("billing_month"),
+  dueAt: text("due_at"),
+  planKey: text("plan_key"),
   offerSnapshot: text("offer_snapshot"),
   fulfilledAt: text("fulfilled_at"),
   requestKey: text("request_key"),

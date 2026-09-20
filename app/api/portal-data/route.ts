@@ -86,6 +86,8 @@ type ActionPayload = {
   passId?: string;
   passOrderId?: string;
   reservationMonths?: number | string;
+  coursePlan?: boolean;
+  payMonthly?: boolean;
   passStartAt?: string;
   reserveSelection?: boolean;
 };
@@ -5828,6 +5830,8 @@ async function purchasePass(payload: ActionPayload) {
   const orderId = await learning().createPassOrder({
     studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
     requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
+    coursePlan: payload.coursePlan === true,
+    payMonthly: payload.payMonthly === true,
     start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode, reserveSelection: payload.reserveSelection,
   });
   if (payload.payNow === true || payload.payNow === "true")

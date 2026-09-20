@@ -1,0 +1,2 @@
+INSERT OR IGNORE INTO classrooms (id, code, name, location, campus_id, capacity, room_type, resources, status)
+VALUES ('study-room-1', 'STUDY-01', 'Study room', 'Campus 1', (SELECT id FROM campuses LIMIT 1), 50, 'study', '{"studySlots":[{"label":"Morning","from":"09:00","until":"12:00"},{"label":"Afternoon","from":"14:00","until":"17:00"},{"label":"Evening","from":"18:30","until":"21:30"}]}', 'active');

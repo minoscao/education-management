@@ -87,8 +87,11 @@ test("pass checkout preserves the course choice and never asks to choose it agai
   assert.match(portal, /Buy a new pass/);
   assert.match(portal, /bookingRunId && !passPurchaseOpen/);
   assert.doesNotMatch(purchase, /Not enough valid credits|!offer.suitable/);
-  assert.match(purchase, /reservationMonths: 1, passStartAt: startDay/);
-  assert.match(purchase, /<span>Start date<\/span>/);
+  assert.match(purchase, /coursePlan: Boolean\(target\), passStartAt: startDay/);
+  assert.match(purchase, /<span>First pass start date<\/span>/);
+  assert.match(purchase, /Pay by month/);
+  assert.match(purchase, /Pay for the full course/);
+  assert.match(purchase, /amount\(offer.total\)/);
 });
 
 test("student tables share contacts and WhatsApp drafts do not claim delivery", async () => {

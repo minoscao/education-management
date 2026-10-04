@@ -31,6 +31,13 @@ async function readProjectFile(path) {
   return readFile(new URL(path, root), "utf8");
 }
 
+test('course dialog scrolls its content without collapsing monthly bill rows', async () => {
+  const css = await readProjectFile('app/student-learning.css');
+  assert.match(css, /course-booking-dialog\s*\{[^}]*max-width: calc\(100vw - 40px\)[^}]*max-height: calc\(100dvh - 40px\)/);
+  assert.match(css, /course-enrollment > main\s*\{[^}]*display: flex;[^}]*flex-direction: column/);
+  assert.match(css, /course-enrollment > main > \*\s*\{[^}]*flex-shrink: 0/);
+});
+
 test("renders the teaching portal from the home route", async () => {
   const [page, portal] = await Promise.all([
     readProjectFile("app/page.tsx"),

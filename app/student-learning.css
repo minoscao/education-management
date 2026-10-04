@@ -30,6 +30,8 @@
 .course-booking-dialog { display: flex; flex-direction: column; min-width: 0; max-width: calc(100vw - 40px); max-height: calc(100dvh - 40px); }
 .course-booking-dialog > main { min-height: 0; overflow-y: auto; }
 .course-booking-dialog > header, .course-booking-dialog > footer { flex-shrink: 0; }
+.course-booking-dialog.course-enrollment > main { display: flex; flex-direction: column; }
+.course-enrollment > main > * { flex-shrink: 0; }
 .course-enrollment .table-scroll > .data-table:not(.resizable-data-table) { min-width: 0; width: 100%; table-layout: fixed; }
 .course-enrollment .table-scroll > .data-table td, .course-enrollment .table-scroll > .data-table th { white-space: normal; overflow-wrap: anywhere; padding: 10px 8px; }
 .course-enrollment .booking-teacher img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }

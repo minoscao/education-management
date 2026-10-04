@@ -62,6 +62,7 @@ export const classrooms = sqliteTable("classrooms", {
 
 export const students = sqliteTable("students", {
   id: text("id").primaryKey(),
+  schoolType: text("school_type").notNull().default("unspecified"),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   level: text("level").notNull(),
@@ -403,6 +404,7 @@ export const studentPayments = sqliteTable("student_payments", {
 
 export const passProducts = sqliteTable("pass_products", {
   id: text("id").primaryKey(),
+  unitPrice: real("unit_price"),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),

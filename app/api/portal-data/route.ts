@@ -91,6 +91,13 @@ type ActionPayload = {
   includeExtraOnsite?: boolean;
   passStartAt?: string;
   reserveSelection?: boolean;
+  courseScope?: 'full' | 'month' | 'lesson';
+  courseFunding?: 'package' | 'balance' | 'topup' | 'direct';
+  schoolType?: string;
+  onsiteCredits?: number;
+  onlineCredits?: number;
+  studyCredits?: number;
+  unitPrice?: number;
 };
 
 function db() {
@@ -5827,6 +5834,11 @@ async function bookCourseWithCredit(payload: ActionPayload) {
   await learning().enrollCourse(payload.studentId ?? "", payload.runId ?? "", deliveryMode(payload.deliveryMode), "pass");
 }
 
+async function checkoutCourse(payload: ActionPayload) {
+  const result = await learning().checkoutCourse({ studentId: payload.studentId || '', runId: payload.runId || '', requestKey: payload.requestKey || '', mode: deliveryMode(payload.deliveryMode), scope: payload.courseScope || 'full', funding: payload.courseFunding || 'package', payMonthly: Boolean(payload.payMonthly), includeExtra: Boolean(payload.includeExtraOnsite), sessionId: payload.sessionId });
+  return { notice: result.orderId ? 'Your selected lessons are reserved. Awaiting campus payment confirmation.' : 'Your lessons are booked with your existing pass.', bookingPending: false };
+}
+
 async function purchasePass(payload: ActionPayload) {
   const orderId = await learning().createPassOrder({
     studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
@@ -6129,13 +6141,14 @@ async function updateEntity(payload: ActionPayload) {
   }
   if (payload.action === "updateStudent" && payload.studentId) {
     await execute(
-      "UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ?, avatar_url = COALESCE(NULLIF(?, ''), avatar_url) WHERE id = ?",
+      "UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ?, avatar_url = COALESCE(NULLIF(?, ''), avatar_url), school_type = COALESCE(?, school_type) WHERE id = ?",
       [
         payload.name?.trim() || "Untitled student",
         payload.level?.trim() || "Unassigned",
         payload.phone?.trim() || "",
         payload.email?.trim() || "",
         payload.avatarUrl?.trim() || "",
+        ['chinese', 'malay', 'independent', 'unspecified'].includes(payload.schoolType || '') ? payload.schoolType : null,
         payload.studentId,
       ],
     );
@@ -6668,6 +6681,19 @@ export async function POST(request: Request) {
     if (payload.action === "purchasePass" || payload.action === "recordPassPayment") {
       const result = payload.action === "purchasePass" ? await purchasePass(payload) : await recordPassPayment(payload);
       return Response.json({ ...(await (await readPortal(true)).json() as Row), ...result });
+    }
+    if (payload.action === 'checkoutCourse') {
+      const result = await checkoutCourse(payload);
+      return Response.json({ ...(await (await readPortal(true)).json() as Row), ...result });
+    }
+    if (payload.action === 'updateStudentSchool') {
+      if (!['chinese', 'malay', 'independent', 'unspecified'].includes(payload.schoolType || '')) throw new Error('Choose a school type.');
+      await execute('UPDATE students SET school_type = ? WHERE id = ?', [payload.schoolType, payload.studentId]);
+    }
+    if (payload.action === 'updatePassProduct') {
+      const values = [Number(payload.onsiteCredits), Number(payload.onlineCredits), Number(payload.studyCredits)];
+      if (values.some(value => !Number.isInteger(value) || value < 0) || !Number.isFinite(Number(payload.price)) || Number(payload.price) < 0 || payload.unitPrice != null && (!Number.isFinite(Number(payload.unitPrice)) || Number(payload.unitPrice) < 0)) throw new Error('Enter valid prices and whole credit quantities.');
+      await execute('UPDATE pass_products SET name = ?, price = ?, onsite_credits = ?, online_credits = ?, study_credits = ?, unit_price = ?, description = ? WHERE id = ?', [payload.name, Number(payload.price), ...values, payload.unitPrice ?? null, payload.note || '', payload.passProductId]);
     }
     if (payload.action === "bookLesson")
       await learning().bookLesson(payload.studentId ?? "", payload.sessionId ?? "", deliveryMode(payload.deliveryMode));

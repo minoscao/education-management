@@ -27,6 +27,29 @@
 .pass-extra-choice p, .pass-extra-choice small { display: block; margin: 7px 0; font-size: 12px; line-height: 1.5; }
 .pass-extra-choice label { display: flex; align-items: center; gap: 9px; min-height: 44px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .pass-extra-choice input { width: 18px; height: 18px; accent-color: #0786a1; }
+.course-booking-dialog { display: flex; flex-direction: column; max-height: calc(100dvh - 28px); }
+.course-booking-dialog > main { min-height: 0; overflow-y: auto; }
+.course-booking-dialog > header, .course-booking-dialog > footer { flex-shrink: 0; }
+.course-enrollment .table-scroll > .data-table:not(.resizable-data-table) { min-width: 0; width: 100%; table-layout: fixed; }
+.course-enrollment .table-scroll > .data-table td, .course-enrollment .table-scroll > .data-table th { white-space: normal; overflow-wrap: anywhere; padding: 10px 8px; }
+.course-enrollment .booking-teacher img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.enrolment-period, .enrolment-bonus, .enrolment-shortfall { padding: 12px; margin: 12px 0; background: #edf8fb; border-radius: 6px; line-height: 1.5; }
+.enrolment-period span { display: block; font-size: 13px; }
+.enrolment-shortfall { border: 1px solid #e6be76; background: #fff8ed; }
+.enrolment-follow { display: flex; align-items: center; gap: 10px; min-height: 48px; cursor: pointer; }
+.enrolment-follow input, .course-enrollment input[type=checkbox] { width: 18px; height: 18px; }
+.course-enrollment .booking-delivery button { min-height: 120px; }
+.course-enrollment .booking-payment-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.enrolment-payment, .enrolment-scope { margin: 12px 0; }
+.enrolment-payment-note { font-size: 13px; line-height: 1.5; color: #537280; }
+.student-course-entry { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px; border-block: 1px solid #b8dfe9; background: #eaf8fc; margin: 18px 0; }
+.student-course-entry > div { display: flex; gap: 12px; align-items: center; }
+.student-course-entry strong { font-size: 20px; }
+.student-course-entry span { display: block; font-size: 13px; margin-top: 6px; }
+.student-school-choice { max-width: 360px; margin: 14px 0; }
+.course-payment-warning { color: #9b5a08; background: #fff2d9; border: 1px solid #efcf9a; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+.learning-price-form { margin-top: 16px; }
+@media(max-width:600px) { .course-enrollment .booking-payment-options { grid-template-columns: 1fr; } .student-course-entry { flex-direction: column; align-items: stretch; padding: 16px; } .student-course-entry button { width: 100%; min-height: 44px; } .course-enrollment footer { flex-wrap: wrap; } }
 .pass-purchase-dialog .table-scroll > .data-table:not(.resizable-data-table) { min-width: 0; width: 100%; table-layout: fixed; }
 .pass-purchase-dialog .table-scroll > .data-table th, .pass-purchase-dialog .table-scroll > .data-table td { white-space: normal; overflow-wrap: anywhere; padding: 10px 8px; }
 .student-week-grid { grid-template-columns: repeat(7, minmax(130px, 1fr)); min-width: 910px; }

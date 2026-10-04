@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "education",
+  "routes": [{ "pattern": "campus.mia-dynamic.com", "custom_domain": true }],
   "main": "./dist/server/index.js",
   "compatibility_date": "2026-07-29",
   "compatibility_flags": ["nodejs_compat"],

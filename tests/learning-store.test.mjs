@@ -4,9 +4,150 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8');
+const checkoutSource = readFileSync(new URL('../app/lib/course-checkout.ts', import.meta.url), 'utf8').replace(/^import .*from '.\/learning-store';\r?\n/m, '');
+const source = readFileSync(new URL('../app/lib/learning-store.ts', import.meta.url), 'utf8').replace(/^import .*from '.\/course-checkout';\r?\n/m, '') + '\n' + checkoutSource;
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText + '\n//# sourceURL=learning-store.ts';
-const { LearningStore, passWindows, coursePassWindows, courseMonthlySchedule, monthCount, malaysiaDay, creditCoverage, passOfferCards, passOrderNotice, gradeCode, onlineLessonState, lessonAvailability } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { LearningStore, passWindows, coursePassWindows, courseMonthlySchedule, monthCount, malaysiaDay, creditCoverage, passOfferCards, passOrderNotice, gradeCode, onlineLessonState, lessonAvailability, courseQuote, courseBillState, recommendationRank } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+
+async function checkoutFixture() {
+  const f = await teachingFixture();
+  for (const [type, price] of [['onsite', 25], ['online', 15], ['study', 5]]) f.insert('pass_products', { id: `single-${type}`, code: `SINGLE-${type}`, name: `${type} lessons`, [`${type}_credits`]: 1, price, unit_price: price, status: 'active' });
+  return f;
+}
+
+test('this-month purchase prices only remaining lessons and issues 6 online and 2 study after receipt', async () => {
+  const f = await checkoutFixture();
+  try {
+    const input = { studentId: 'student', runId: 'run', requestKey: 'checkout-month', mode: 'onsite', scope: 'month', funding: 'package', payMonthly: false, includeExtra: false };
+    const { orderId } = await f.store.checkoutCourse(input);
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 50);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE status = 'booked'").get().n, 2);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE status = 'active'").get().n, 0);
+    assert.equal((await f.store.checkoutCourse(input)).orderId, orderId);
+    await f.store.payPass(orderId);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'onsite'").get().n, 2);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'online'").get().n, 6);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'study'").get().n, 2);
+  } finally { f.close(); }
+});
+
+test('online course is per lesson and never issues bonus onsite or study credits', async () => {
+  const f = await checkoutFixture();
+  try {
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'checkout-online', mode: 'online', scope: 'full', funding: 'direct', payMonthly: false, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 30);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'online'").get().n, 2);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type IN ('onsite','study')").get().n, 0);
+  } finally { f.close(); }
+});
+
+test('existing pass covers some dates and direct purchase charges only the uncovered lessons', async () => {
+  const f = await checkoutFixture();
+  try {
+    const old = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'checkout-balance', months: 1 });
+    await f.store.payPass(old);
+    f.db.exec("UPDATE student_passes SET onsite_remaining = 1 WHERE credit_type = 'onsite'");
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'checkout-difference', mode: 'onsite', scope: 'full', funding: 'direct', payMonthly: false, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 25);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'reserved'").get().n, 1);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'reserved'").get().n, 2);
+  } finally { f.close(); }
+});
+
+test('monthly reservation holds all sessions; future bills are not current arrears', async () => {
+  const f = await checkoutFixture();
+  try {
+    f.db.exec("UPDATE class_sessions SET starts_at = '2026-10-04 12:00', ends_at = '2026-10-04 13:30' WHERE id = 'session2'");
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'checkout-monthly', mode: 'onsite', scope: 'full', funding: 'package', payMonthly: true, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 2);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_orders').get().n, 2);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM pass_orders WHERE status = 'paid'").get().n, 1);
+    const bills = f.db.prepare('SELECT * FROM pass_orders').all();
+    assert.equal(courseBillState(bills, '2026-09-20').awaiting, false);
+    assert.equal(courseBillState(bills, '2026-10-04').awaiting, true);
+  } finally { f.close(); }
+});
+
+test('full-course payment stays pending even when existing credits cover the current month', async () => {
+  const f = await checkoutFixture();
+  try {
+    f.db.exec("UPDATE class_sessions SET starts_at = '2026-10-04 12:00', ends_at = '2026-10-04 13:30' WHERE id = 'session2'");
+    const old = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'current-month-paid-pass', months: 1 });
+    await f.store.payPass(old);
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'full-course-future-bill', mode: 'online', scope: 'full', funding: 'direct', payMonthly: false, includeExtra: false });
+    const bill = f.db.prepare('SELECT * FROM pass_orders WHERE id = ?').get(orderId);
+    assert.equal(bill.total_amount, 15);
+    assert.equal(bill.billing_month, '2026-10');
+    assert.equal(bill.due_at, malaysiaDay(f.store.now()));
+    assert.equal(courseBillState([bill], '2026-09-20').awaiting, true);
+    await assert.rejects(f.store.assertCourseBillPaid(bill.enrollment_id, '2026-09-20'), /Pay the course bill/);
+    await f.store.payPass(orderId);
+    assert.equal(courseBillState(f.db.prepare('SELECT * FROM pass_orders WHERE id = ?').all(orderId), '2026-09-20').awaiting, false);
+  } finally { f.close(); }
+});
+
+test('course recommendation uses grade and school preference without restricting enrolment', () => {
+  assert.equal(recommendationRank({ level: 'G4', school_type: 'chinese' }, { course_title: 'G4 English', name: 'Chinese-primary group' }), 3);
+  assert.equal(recommendationRank({ level: 'G4', school_type: 'chinese' }, { course_title: 'G4 English', name: 'Malay-primary group' }), 1);
+  assert.equal(recommendationRank({ level: 'G4' }, { course_title: 'G6 English' }), 0);
+});
+
+test('separate lessons in the same month can be bought without rebilling the first lesson', async () => {
+  const f = await checkoutFixture();
+  try {
+    const base = { studentId: 'student', runId: 'run', mode: 'online', scope: 'lesson', funding: 'direct', payMonthly: false, includeExtra: false };
+    const first = await f.store.checkoutCourse({ ...base, sessionId: 'session1', requestKey: 'first-online-lesson' });
+    await f.store.payPass(first.orderId);
+    const second = await f.store.checkoutCourse({ ...base, sessionId: 'session2', requestKey: 'second-online-lesson' });
+    await f.store.payPass(second.orderId);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n, SUM(total_amount) total FROM pass_orders').get().n, 2);
+    assert.equal(f.db.prepare('SELECT SUM(total_amount) total FROM pass_orders').get().total, 30);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'reserved'").get().n, 2);
+    await f.store.checkoutCourse({ ...base, sessionId: 'session2', requestKey: 'repeat-online-lesson' });
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM pass_orders').get().n, 2);
+  } finally { f.close(); }
+});
+
+test('following a selected lesson never includes earlier unbooked lessons', async () => {
+  const f = await checkoutFixture();
+  try {
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', sessionId: 'session2', requestKey: 'follow-selected-lesson', mode: 'online', scope: 'full', funding: 'direct', payMonthly: false, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 15);
+    assert.deepEqual(f.db.prepare('SELECT class_session_id FROM class_student_bookings').all().map(row => row.class_session_id), ['session2']);
+  } finally { f.close(); }
+});
+
+test('this-month plan excludes future months and a fifth lesson is included in remaining-lesson pricing', async () => {
+  const f = await checkoutFixture();
+  try {
+    for (let i = 0; i < 3; i++) f.insert('class_sessions', { id: `extra-${i}`, class_run_id: 'run', session_no: i + 3, starts_at: `2026-09-${21 + i} 12:00`, ends_at: `2026-09-${21 + i} 13:30` });
+    f.insert('class_sessions', { id: 'next-month', class_run_id: 'run', session_no: 6, starts_at: '2026-10-04 12:00', ends_at: '2026-10-04 13:30' });
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'month-five-lessons', mode: 'onsite', scope: 'month', funding: 'package', payMonthly: false, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 125);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 5);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'onsite'").get().n, 5);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM student_passes WHERE credit_type = 'online'").get().n, 6);
+  } finally { f.close(); }
+});
+
+test('pass top-up only buys the number of packages needed after existing credits', async () => {
+  const f = await checkoutFixture();
+  try {
+    const old = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'old-pass-for-topup', months: 1 });
+    await f.store.payPass(old);
+    f.db.exec("UPDATE student_passes SET onsite_remaining = 1 WHERE credit_type = 'onsite'");
+    const { orderId } = await f.store.checkoutCourse({ studentId: 'student', runId: 'run', requestKey: 'topup-course-pass', mode: 'onsite', scope: 'full', funding: 'topup', payMonthly: false, includeExtra: false });
+    assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders WHERE id = ?').get(orderId).total_amount, 160);
+    await f.store.payPass(orderId);
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM learning_credit_events WHERE status = 'reserved'").get().n, 2);
+    assert.equal(f.db.prepare("SELECT SUM(onsite_remaining) n FROM student_passes WHERE credit_type = 'onsite'").get().n, 5);
+  } finally { f.close(); }
+});
 
 test('historical pass expiry is distinct from paid status and retired offers cannot be paid', () => {
   const today = '2026-09-20';

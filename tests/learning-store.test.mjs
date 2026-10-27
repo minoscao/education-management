@@ -82,7 +82,7 @@ test('full-course payment stays pending even when existing credits cover the cur
     const bill = f.db.prepare('SELECT * FROM pass_orders WHERE id = ?').get(orderId);
     assert.equal(bill.total_amount, 15);
     assert.equal(bill.billing_month, '2026-10');
-    assert.equal(bill.due_at, malaysiaDay(f.store.now()));
+    assert.equal(bill.due_at, ''); // No payment deadline is invented before the campus configures one.
     assert.equal(courseBillState([bill], '2026-09-20').awaiting, true);
     await assert.rejects(f.store.assertCourseBillPaid(bill.enrollment_id, '2026-09-20'), /Pay the course bill/);
     await f.store.payPass(orderId);
@@ -293,7 +293,7 @@ test('monthly course payment reserves the entire course before payment and bills
     assert.equal(await f.store.createPassOrder(input), first);
     const orders = f.db.prepare('SELECT * FROM pass_orders ORDER BY billing_month').all();
     assert.equal(orders.length, 4);
-    assert.equal(orders[1].due_at, '2026-10-07');
+    assert.equal(orders[1].due_at, '');
     assert.equal(f.db.prepare('SELECT COUNT(*) n FROM class_student_bookings').get().n, 12);
     for (const [index, order] of orders.entries()) {
       await f.store.payPass(order.id);
@@ -323,7 +323,8 @@ test('fifth onsite lesson is quoted separately while online has no onsite surcha
   const product = { onsite_credits: 4, online_credits: 6 };
   assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-09-20')[0].extra, 1);
   assert.equal(courseMonthlySchedule(product, dates, 'online', '2026-09-20')[0].extra, 0);
-  assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-10-15')[0].dueAt, '2026-10-15');
+  assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-10-15')[0].dueAt, '');
+  assert.equal(courseMonthlySchedule(product, dates, 'onsite', '2026-10-15', 20)[0].dueAt, '2026-10-20');
 });
 
 test('unpaid monthly bills keep all seats but block attendance; extra credit needs separate consent and payment', async () => {
@@ -332,7 +333,7 @@ test('unpaid monthly bills keep all seats but block attendance; extra credit nee
     const order = await f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'extras-separate', months: 1, runId: 'run', mode: 'onsite', coursePlan: true, payMonthly: true });
     assert.equal(f.db.prepare('SELECT total_amount FROM pass_orders').get().total_amount, 160);
     f.store.now = () => new Date('2026-10-08T04:00:00Z');
-    await assert.rejects(f.store.markAttendance('student:extra-1', 'present', ''), /2026-10-07/);
+    await assert.rejects(f.store.markAttendance('student:extra-1', 'present', ''), /Pay the course bill for 2026-10/);
     assert.equal(f.db.prepare("SELECT COUNT(*) n FROM class_student_bookings WHERE status = 'booked'").get().n, 5);
     await f.store.payPass(order);
     f.store.now = () => new Date('2026-10-29T04:00:00Z');
@@ -501,7 +502,7 @@ test('a pass that cannot cover the whole course can be purchased without reservi
   } finally { f.close(); }
 });
 
-test('rolling monthly pass issues 12 independent tickets with the chosen 30-day window', async () => {
+test('new monthly pass issues 12 independent tickets for the natural month even with legacy product metadata', async () => {
   const f = await fixture();
   try {
     f.db.exec("UPDATE pass_products SET validity_type = 'rolling_days', validity_days = 30, issuance_mode = 'tickets'");
@@ -514,10 +515,11 @@ test('rolling monthly pass issues 12 independent tickets with the chosen 30-day 
     for (const [type, count] of [['onsite', 4], ['online', 6], ['study', 2]]) {
       assert.equal(tickets.filter(t => t.credit_type === type).length, count);
     }
-    assert.ok(tickets.every(t => t.credits_total === 1 && t.valid_from === '2026-09-21' && t.valid_until === '2026-10-20'));
+    assert.ok(tickets.every(t => t.credits_total === 1 && t.valid_from === '2026-09-01' && t.valid_until === '2026-09-30'));
     assert.equal(f.db.prepare('SELECT SUM(amount) n FROM pass_payments').get().n, 160);
-    await assert.rejects(f.store.consumeCredit('student', 'online', 'future-ticket'), /No online credit/);
-    await assert.rejects(f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'past-start-date', months: 1, start: '2026-09-18' }), /future start/);
+    f.store.now = () => new Date('2026-10-01T04:00:00Z');
+    await assert.rejects(f.store.consumeCredit('student', 'online', 'expired-ticket'), /No online credit/);
+    await assert.rejects(f.store.createPassOrder({ studentId: 'student', productId: 'monthly', requestKey: 'past-start-date', months: 1, start: '2026-09-18' }), /current month or a future month/);
     assert.deepEqual(passWindows({ validity_type: 'rolling_days', validity_days: 30 }, '2028-02-15', 1), [{ from: '2028-02-15', until: '2028-03-15' }]);
   } finally { f.close(); }
 });

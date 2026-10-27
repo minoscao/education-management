@@ -1,8 +1,8 @@
-import { creditCoverage, malaysiaDay, monthCount, passWindows, gradeCode, type RecordData } from './learning-store';
+import { creditCoverage, malaysiaDay, monthCount, passWindows, gradeCode, billingDeadline, type RecordData } from './learning-store';
 
 export type CourseScope = 'full' | 'month' | 'lesson';
 export type CourseFunding = 'package' | 'balance' | 'topup' | 'direct';
-export type CheckoutSelection = { mode: 'onsite' | 'online'; scope: CourseScope; funding: CourseFunding; payMonthly: boolean; includeExtra: boolean; sessionId?: string };
+export type CheckoutSelection = { mode: 'onsite' | 'online'; scope: CourseScope; funding: CourseFunding; payMonthly: boolean; includeExtra: boolean; sessionId?: string; dueDay?:number|null };
 export function singlePrice(products: RecordData[], type: 'onsite' | 'online' | 'study') {
   const product = products.find(item => item.status === 'active' && Number(item[`${type}_credits`]) > 0 && ['onsite', 'online', 'study'].every(other => other === type || !Number(item[`${other}_credits`])));
   const price = product?.unit_price != null ? Number(product.unit_price) : product ? Number(product.price) / Number(product[`${type}_credits`]) : NaN;
@@ -43,7 +43,7 @@ export function courseQuote(products: RecordData[], cards: RecordData[], session
       : { onsite: selection.mode === 'onsite' ? missing : 0, online: selection.mode === 'online' ? missing : 0, study: 0 };
     if (!fullPackage && selection.funding === 'package' && selection.mode === 'onsite' && lessons.length) { credits.online = Number(product.online_credits); credits.study = Number(product.study_credits); }
     const paymentMonth = selection.payMonthly ? window.from.slice(0, 7) : from.slice(0, 7);
-    return { ...window, month: window.from.slice(0, 7), lessons: lessons.length, covered, missing, quantity, extra, price: Math.round(price * 100) / 100, credits, dueAt: paymentMonth + '-07' < today ? today : paymentMonth + '-07' };
+    return { ...window, month: window.from.slice(0, 7), lessons: lessons.length, covered, missing, quantity, extra, price: Math.round(price * 100) / 100, credits, dueAt: billingDeadline(paymentMonth, today, selection.dueDay) };
   }).filter(period => period.lessons > 0);
   const total = Math.round(periods.reduce((sum, period) => sum + period.price, 0) * 100) / 100;
   return { product, selected, from, until, months: periods.length, periods, total, dueNow: selection.payMonthly ? periods[0].price : total, unitPrice,
@@ -52,7 +52,7 @@ export function courseQuote(products: RecordData[], cards: RecordData[], session
 
 export function recommendationRank(student: RecordData, course: RecordData) {
   const studentGrade = gradeCode(student.level);
-  const grade = gradeCode(course.course_title || course.title);
+  const grade = gradeCode(course.course_level) || gradeCode(course.level) || gradeCode(course.course_title || course.title);
   if (!studentGrade || grade !== studentGrade) return 0;
   const group = String(course.audience_group || course.name || '').toLowerCase();
   const preferred = student.school_type === 'chinese' ? /chinese|华小/ : student.school_type === 'malay' ? /malay|马小/ : null;
@@ -66,5 +66,5 @@ export function courseBillState(bills: RecordData[], today = malaysiaDay()) {
     try { fullPayment = JSON.parse(String(bill.offer_snapshot || '{}')).billing?.payMonthly === false; } catch { /* Older bills may have no snapshot. */ }
     return fullPayment || String(bill.billing_month || '').slice(0, 7) <= today.slice(0, 7);
   });
-  return { awaiting: due.length > 0, overdue: due.some(bill => String(bill.due_at || '') < today), remaining: unpaid.reduce((sum, bill) => sum + Number(bill.total_amount) - Number(bill.paid_amount), 0), nextDue: unpaid.sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)))[0] };
+  return { awaiting: due.length > 0, overdue: due.some(bill => Boolean(bill.due_at) && String(bill.due_at) < today), remaining: unpaid.reduce((sum, bill) => sum + Number(bill.total_amount) - Number(bill.paid_amount), 0), nextDue: unpaid.sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)))[0] };
 }

@@ -1,5 +1,5 @@
-import { ManagementPortal } from "../management-portal";
+import { PortalEntry } from "../portal-entry";
 
 export default function StudentPage() {
-  return <ManagementPortal initialView="studentHome" initialRole="student" />;
+  return <PortalEntry student />;
 }

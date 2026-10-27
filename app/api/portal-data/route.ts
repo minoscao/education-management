@@ -4,6 +4,12 @@ import { whatsappNumber } from "../../lib/contact";
 import { demoTeacherProfile } from "../../lib/teacher-profiles";
 import { weeklyPlanStatements } from "../../lib/weekly-plan";
 import { findResourceConflicts as findConflicts } from "../../lib/resource-conflicts";
+import { AccessError, PortalAuth, checkOrigin, passwordHash, type PortalActor } from '../../lib/portal-auth';
+import { BusinessWorkflow, RegistrationError } from '../../lib/business-workflow';
+import { MonthlyTimetable } from '../../lib/monthly-timetable';
+import { authorizePortalAction, scopePortalData } from '../../lib/portal-access';
+import { LocalOperations } from '../../lib/local-operations';
+import { buildFinanceLedger } from '../../lib/finance-ledger';
 
 type Row = Record<string, unknown>;
 
@@ -105,7 +111,25 @@ function db() {
   return env.DB;
 }
 
-function learning() { return new LearningStore(db() as unknown as Database); }
+function learning() { return new LearningStore(db() as unknown as Database, undefined, (studentId, runId, sessionId) => workflow().assertBooking(studentId, runId, sessionId)); }
+function workflow() { return new BusinessWorkflow(db() as unknown as Database); }
+function operations() { return new LocalOperations(db() as unknown as Database); }
+
+async function deliverWelcome(registrationId: string) {
+  const configuration = env as unknown as Record<string,string|undefined>;
+  const endpoint = configuration.PORTAL_MAIL_WEBHOOK_URL;
+  if (!endpoint) return;
+  if (!endpoint.startsWith('https://')) throw new AccessError('Configure a secure mail delivery endpoint.',400);
+  const message = await db().prepare("UPDATE notification_outbox SET status='sending',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND (status IN ('pending','failed') OR (status='sending' AND updated_at < datetime('now','-10 minutes'))) RETURNING *").bind(`welcome:${registrationId}`).first<Row>();
+  if (!message) return;
+  try {
+    const response = await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',...(configuration.PORTAL_MAIL_WEBHOOK_TOKEN?{Authorization:`Bearer ${configuration.PORTAL_MAIL_WEBHOOK_TOKEN}`}:{})},body:JSON.stringify({id:message.id,to:message.recipient,subject:message.subject,text:message.body}),signal:AbortSignal.timeout(10000)});
+    if (!response.ok) throw new Error(`Mail delivery returned ${response.status}.`);
+    await execute("UPDATE notification_outbox SET status='sent',last_error='',updated_at=CURRENT_TIMESTAMP WHERE id=?",[message.id]);
+  } catch(error) {
+    await execute("UPDATE notification_outbox SET status='failed',last_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",[error instanceof Error?error.message:'Mail delivery failed.',message.id]);
+  }
+}
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -800,7 +824,7 @@ function requireSingleGradeCourse(title: string, level: string) {
   const hasBroadStage =
     /\b(primary|lower secondary|higher secondary|secondary)\b/i.test(value);
   const hasGrade =
-    /\b(G[4-6]|F[1-5]|H[1-3]|L[1-3]|Year\s+[1-9]|Form\s+[1-5])\b/i.test(value);
+    /\b(G[1-6]|F[1-6]|[JSLH][1-3]|Year\s+(?:1[0-3]|[1-9])|Form\s+[1-6])\b/i.test(value);
   if (hasBroadStage && !hasGrade) {
     throw new Error(
       "Create one grade and one subject per course, for example G4 Bahasa. Teaching language belongs to the class.",
@@ -4563,176 +4587,17 @@ function selectedSessionIds(value: unknown) {
 }
 
 async function applyClassAssignments(payload: ActionPayload) {
-  if (!payload.runId || !payload.teacherId || !payload.classroomId)
-    throw new Error("Choose a teacher and classroom.");
+  if (!payload.runId || !payload.teacherId || !payload.classroomId) throw new AccessError('Choose a teacher and classroom.',400);
   const picked = selectedSessionIds(payload.sessionIds);
-  const all = await rows<{
-    id: string;
-    topic: string;
-    starts_at: string;
-    ends_at: string;
-  }>(
-    "SELECT id, topic, starts_at, ends_at FROM class_sessions WHERE class_run_id = ? ORDER BY starts_at, session_no",
-    [payload.runId],
-  );
-  const sessions = picked.length
-    ? all.filter((session) => picked.includes(session.id))
-    : all;
-  if (!sessions.length) throw new Error("No lessons are available to update.");
-  const duration = Math.max(
-    30,
-    number(
-      payload.durationMinutes,
-      minutesBetween(sessions[0].starts_at, sessions[0].ends_at),
-    ),
-  );
-  const students = await rows<{ student_id: string; name: string }>(
-    "SELECT students.id AS student_id, students.name FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id WHERE class_enrollments.class_run_id = ? AND class_enrollments.status = 'enrolled'",
-    [payload.runId],
-  );
-  const planned = sessions.map((session) => ({
-    ...session,
-    ends_at: later(session.starts_at, duration),
-  }));
-  for (const session of planned) {
-    const roomConflicts = await rows<{ starts_at: string; ends_at: string }>(
-      "SELECT starts_at, ends_at FROM class_resource_bookings WHERE classroom_id = ? AND class_session_id != ? AND status != 'cancelled'",
-      [payload.classroomId, session.id],
-    );
-    if (
-      roomConflicts.some((item) =>
-        overlaps(
-          session.starts_at,
-          session.ends_at,
-          item.starts_at,
-          item.ends_at,
-        ),
-      )
-    )
-      throw new Error(`The classroom is not available for ${session.topic}.`);
-    const teacherConflicts = await rows<{ starts_at: string; ends_at: string }>(
-      "SELECT starts_at, ends_at FROM class_teacher_bookings WHERE teacher_id = ? AND class_session_id != ? AND status != 'cancelled'",
-      [payload.teacherId, session.id],
-    );
-    if (
-      teacherConflicts.some((item) =>
-        overlaps(
-          session.starts_at,
-          session.ends_at,
-          item.starts_at,
-          item.ends_at,
-        ),
-      )
-    )
-      throw new Error(`The teacher is not available for ${session.topic}.`);
-    for (const student of students) {
-      const conflicts = await rows<{ starts_at: string; ends_at: string }>(
-        "SELECT class_sessions.starts_at, class_sessions.ends_at FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_student_bookings.student_id = ? AND class_student_bookings.class_session_id != ? AND class_student_bookings.status != 'cancelled'",
-        [student.student_id, session.id],
-      );
-      if (
-        conflicts.some((item) =>
-          overlaps(
-            session.starts_at,
-            session.ends_at,
-            item.starts_at,
-            item.ends_at,
-          ),
-        )
-      )
-        throw new Error(
-          `${student.name} has another class at ${session.topic}.`,
-        );
-    }
-  }
-  for (const session of planned) {
-    await execute("UPDATE class_sessions SET ends_at = ? WHERE id = ?", [
-      session.ends_at,
-      session.id,
-    ]);
-    const roomBooking = await row<{ id: string }>(
-      "SELECT id FROM class_resource_bookings WHERE class_session_id = ?",
-      [session.id],
-    );
-    if (roomBooking)
-      await execute(
-        "UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ?, status = 'reserved' WHERE id = ?",
-        [
-          payload.classroomId,
-          session.starts_at,
-          session.ends_at,
-          roomBooking.id,
-        ],
-      );
-    else
-      await execute(
-        "INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')",
-        [
-          id("room-booking"),
-          session.id,
-          payload.classroomId,
-          session.starts_at,
-          session.ends_at,
-        ],
-      );
-    const teacherBooking = await row<{ id: string }>(
-      "SELECT id FROM class_teacher_bookings WHERE class_session_id = ?",
-      [session.id],
-    );
-    if (teacherBooking)
-      await execute(
-        "UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ?, pay_amount = ? WHERE id = ?",
-        [
-          payload.teacherId,
-          session.starts_at,
-          session.ends_at,
-          number(payload.payAmount),
-          teacherBooking.id,
-        ],
-      );
-    else
-      await execute(
-        "INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')",
-        [
-          id("teacher-booking"),
-          session.id,
-          payload.teacherId,
-          session.starts_at,
-          session.ends_at,
-          number(payload.payAmount),
-        ],
-      );
-  }
-  const teacher = await row<{ name: string }>(
-    "SELECT name FROM teachers WHERE id = ?",
-    [payload.teacherId],
-  );
-  const room = await row<{ name: string }>(
-    "SELECT name FROM classrooms WHERE id = ?",
-    [payload.classroomId],
-  );
-  const message = `${sessions.length} lesson${sessions.length === 1 ? "" : "s"} updated with ${teacher?.name ?? "the selected teacher"} in ${room?.name ?? "the selected classroom"}.`;
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-    [
-      id("notice"),
-      "teacher",
-      payload.teacherId,
-      "Class assignment updated",
-      message,
-    ],
-  );
-  for (const student of students)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-      [
-        id("notice"),
-        "student",
-        student.student_id,
-        "Class assignment updated",
-        message,
-      ],
-    );
+  const all = await rows<Row>("SELECT * FROM class_sessions WHERE class_run_id=? AND status NOT IN ('cancelled','completed') ORDER BY starts_at,session_no",[payload.runId]);
+  const sessions = picked.length ? all.filter(s=>picked.includes(String(s.id))) : all;
+  if (!sessions.length) throw new AccessError('No active lessons are available to update.',400);
+  const duration = payload.durationMinutes===undefined ? undefined : Number(payload.durationMinutes);
+  if(duration!==undefined&&(!Number.isFinite(duration)||duration<30||duration>720))throw new AccessError('Choose a duration from 30 to 720 minutes.',400);
+  await new MonthlyTimetable(db() as unknown as Database).applyPlan(sessions.map(s=>({
+    id:String(s.id),runId:payload.runId!,topic:String(s.topic),startsAt:String(s.starts_at),endsAt:duration===undefined?String(s.ends_at):later(String(s.starts_at),duration),
+    classroomId:payload.classroomId!,teacherId:payload.teacherId!,payAmount:payload.payAmount===undefined?undefined:number(payload.payAmount)
+  })));
 }
 
 function minutesBetween(startsAt: string, endsAt: string) {
@@ -4806,7 +4671,7 @@ async function createClassRun(payload: ActionPayload) {
       payload.name?.trim() || `${course.title} class`,
       Math.max(1, Math.floor(number(payload.capacity, 16))),
       number(payload.price, course.list_price),
-      "open",
+      "draft",
       localDate(-1),
       localDate(30),
       payload.languageId,
@@ -4817,257 +4682,15 @@ async function createClassRun(payload: ActionPayload) {
 }
 
 async function createSession(payload: ActionPayload) {
-  if (!payload.runId || !payload.classroomId || !payload.teacherId)
-    throw new Error("Please select class, classroom and teacher.");
-  const run = await row<{ default_minutes: number }>(
-    `SELECT course_catalogs.default_minutes FROM class_runs
-     JOIN course_catalogs ON course_catalogs.id = class_runs.course_id WHERE class_runs.id = ?`,
-    [payload.runId],
-  );
-  if (!run) throw new Error("Class not found.");
-  const startsAt = payload.startsAt?.replace("T", " ") || localDate(7, "09:00");
-  const endsAt =
-    payload.endsAt?.replace("T", " ") || later(startsAt, run.default_minutes);
-  if (
-    new Date(startsAt.replace(" ", "T")) >= new Date(endsAt.replace(" ", "T"))
-  )
-    throw new Error("End time must be later than start time.");
-  if (await conflictExists("classroom", payload.classroomId, startsAt, endsAt))
-    throw new Error("This classroom is already booked for that time.");
-  if (await conflictExists("teacher", payload.teacherId, startsAt, endsAt))
-    throw new Error("This teacher is already booked for that time.");
-  const enrollments = await rows<{
-    id: string;
-    student_id: string;
-    contracted_fee: number;
-    student_name: string;
-  }>(
-    `SELECT class_enrollments.id, class_enrollments.student_id, class_enrollments.contracted_fee, students.name AS student_name
-     FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id
-     WHERE class_enrollments.class_run_id = ? AND class_enrollments.status = 'enrolled'`,
-    [payload.runId],
-  );
-  for (const enrollment of enrollments) {
-    if (
-      await conflictExists("student", enrollment.student_id, startsAt, endsAt)
-    ) {
-      throw new Error(
-        `${enrollment.student_name} is already booked for this time.`,
-      );
-    }
-  }
-
-  const next = await row<{ next_no: number }>(
-    "SELECT COALESCE(MAX(session_no), 0) + 1 AS next_no FROM class_sessions WHERE class_run_id = ?",
-    [payload.runId],
-  );
-  const sessionId = id("session");
-  await execute(
-    "INSERT INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [
-      sessionId,
-      payload.runId,
-      next?.next_no ?? 1,
-      payload.topic?.trim() || `Lesson ${next?.next_no ?? 1}`,
-      startsAt,
-      endsAt,
-      "scheduled",
-    ],
-  );
-  await execute(
-    "INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?)",
-    [
-      id("room-booking"),
-      sessionId,
-      payload.classroomId,
-      startsAt,
-      endsAt,
-      "reserved",
-    ],
-  );
-  await execute(
-    "INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      id("teacher-booking"),
-      sessionId,
-      payload.teacherId,
-      startsAt,
-      endsAt,
-      number(payload.payAmount),
-      "unpaid",
-      "confirmed",
-    ],
-  );
-
-  const totalSessions = await row<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM class_sessions WHERE class_run_id = ?",
-    [payload.runId],
-  );
-  for (const enrollment of enrollments) {
-    const bookingId = id("student-booking");
-    const allocated =
-      Math.round(
-        (number(enrollment.contracted_fee) /
-          Math.max(1, number(totalSessions?.count))) *
-          100,
-      ) / 100;
-    // A class price is fixed at enrollment. When its schedule grows, redistribute
-    // that same contracted fee across every booked lesson rather than charging more.
-    await execute(
-      "UPDATE class_student_bookings SET allocated_fee = ? WHERE enrollment_id = ?",
-      [allocated, enrollment.id],
-    );
-    await execute(
-      "INSERT INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status) VALUES (?, ?, ?, ?, ?, ?)",
-      [
-        bookingId,
-        sessionId,
-        enrollment.id,
-        enrollment.student_id,
-        allocated,
-        "booked",
-      ],
-    );
-    await execute(
-      "INSERT INTO class_attendance (id, student_booking_id, status, note) VALUES (?, ?, ?, ?)",
-      [id("attendance"), bookingId, "pending", ""],
-    );
-  }
+  await new MonthlyTimetable(db() as unknown as Database).createSession(payload);
 }
 
 async function updateSession(payload: ActionPayload) {
-  if (!payload.sessionId || !payload.classroomId || !payload.teacherId)
-    throw new Error("Please select the lesson time, classroom and teacher.");
-  const current = await row<{
-    class_run_id: string;
-    session_no: number;
-    topic: string;
-    starts_at: string;
-    ends_at: string;
-  }>(
-    "SELECT class_run_id, session_no, topic, starts_at, ends_at FROM class_sessions WHERE id = ?",
-    [payload.sessionId],
-  );
-  if (!current) throw new Error("Lesson not found.");
-  const startsAt = payload.startsAt?.replace("T", " ");
-  const endsAt = payload.endsAt?.replace("T", " ");
-  if (
-    !startsAt ||
-    !endsAt ||
-    new Date(startsAt.replace(" ", "T")) >= new Date(endsAt.replace(" ", "T"))
-  )
-    throw new Error("End time must be later than start time.");
-  const roomConflicts = await rows<{
-    class_session_id: string;
-    starts_at: string;
-    ends_at: string;
-  }>(
-    "SELECT class_session_id, starts_at, ends_at FROM class_resource_bookings WHERE classroom_id = ? AND class_session_id != ? AND status != 'cancelled'",
-    [payload.classroomId, payload.sessionId],
-  );
-  if (
-    roomConflicts.some((item) =>
-      overlaps(startsAt, endsAt, item.starts_at, item.ends_at),
-    )
-  )
-    throw new Error("This classroom is already booked for that time.");
-  const teacherConflicts = await rows<{
-    class_session_id: string;
-    starts_at: string;
-    ends_at: string;
-  }>(
-    "SELECT class_session_id, starts_at, ends_at FROM class_teacher_bookings WHERE teacher_id = ? AND class_session_id != ? AND status != 'cancelled'",
-    [payload.teacherId, payload.sessionId],
-  );
-  if (
-    teacherConflicts.some((item) =>
-      overlaps(startsAt, endsAt, item.starts_at, item.ends_at),
-    )
-  )
-    throw new Error("This teacher is already booked for that time.");
-  const bookedStudents = await rows<{ student_id: string; name: string }>(
-    "SELECT class_student_bookings.student_id, students.name FROM class_student_bookings JOIN students ON students.id = class_student_bookings.student_id WHERE class_student_bookings.class_session_id = ?",
-    [payload.sessionId],
-  );
-  for (const student of bookedStudents) {
-    const conflicts = await rows<{
-      class_session_id: string;
-      starts_at: string;
-      ends_at: string;
-    }>(
-      "SELECT class_student_bookings.class_session_id, class_sessions.starts_at, class_sessions.ends_at FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_student_bookings.student_id = ? AND class_student_bookings.class_session_id != ? AND class_student_bookings.status != 'cancelled'",
-      [student.student_id, payload.sessionId],
-    );
-    if (
-      conflicts.some((item) =>
-        overlaps(startsAt, endsAt, item.starts_at, item.ends_at),
-      )
-    )
-      throw new Error(`${student.name} is already booked for this time.`);
-  }
-  const nextTopic = payload.topic?.trim() || current.topic;
-  await executeBatch([
-    { sql: "UPDATE class_sessions SET topic = ?, starts_at = ?, ends_at = ?, online_url = COALESCE(?, online_url), status = 'scheduled' WHERE id = ?", values: [nextTopic, startsAt, endsAt, payload.onlineUrl?.trim() ?? null, payload.sessionId] },
-    { sql: "UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", values: [payload.classroomId, startsAt, endsAt, payload.sessionId] },
-    { sql: "UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ? WHERE class_session_id = ?", values: [payload.teacherId, startsAt, endsAt, payload.sessionId] },
-  ]);
-  const classroom = await row<{ name: string }>(
-    "SELECT name FROM classrooms WHERE id = ?",
-    [payload.classroomId],
-  );
-  const title = "Lesson updated";
-  if (
-    nextTopic !== current.topic ||
-    startsAt !== current.starts_at ||
-    endsAt !== current.ends_at
-  )
-    await execute(
-      "INSERT INTO class_session_changes (id, class_session_id, change_type, original_session_no, original_topic, original_starts_at, original_ends_at, new_session_no, new_topic, new_starts_at, new_ends_at) VALUES (?, ?, 'changed', ?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        id("session-change"),
-        payload.sessionId,
-        current.session_no,
-        current.topic,
-        current.starts_at,
-        current.ends_at,
-        current.session_no,
-        nextTopic,
-        startsAt,
-        endsAt,
-      ],
-    );
-  const body = `${nextTopic} is now scheduled for ${startsAt} in ${classroom?.name ?? "the classroom"}.`;
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-    [id("notice"), "teacher", payload.teacherId, title, body],
-  );
-  for (const student of bookedStudents)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-      [id("notice"), "student", student.student_id, title, body],
-    );
+  await new MonthlyTimetable(db() as unknown as Database).updateSession(payload);
 }
 
 async function cancelSession(payload: ActionPayload) {
-  if (!payload.sessionId) throw new Error("Lesson not found.");
-  const current = await row<{
-    session_no: number;
-    topic: string;
-    starts_at: string;
-    ends_at: string;
-    status: string;
-  }>(
-    "SELECT session_no, topic, starts_at, ends_at, status FROM class_sessions WHERE id = ?",
-    [payload.sessionId],
-  );
-  if (!current) throw new Error("Lesson not found.");
-  if (current.status === "cancelled") return;
-  await executeBatch([
-    { sql: "UPDATE class_sessions SET status = 'cancelled' WHERE id = ?", values: [payload.sessionId] },
-    { sql: "UPDATE class_resource_bookings SET status = 'cancelled' WHERE class_session_id = ?", values: [payload.sessionId] },
-    { sql: "UPDATE class_teacher_bookings SET status = 'cancelled' WHERE class_session_id = ?", values: [payload.sessionId] },
-    { sql: "INSERT INTO class_session_changes (id, class_session_id, change_type, original_session_no, original_topic, original_starts_at, original_ends_at) VALUES (?, ?, 'cancelled', ?, ?, ?, ?)", values: [id('session-change'), payload.sessionId, current.session_no, current.topic, current.starts_at, current.ends_at] },
-  ]);
+  await new MonthlyTimetable(db() as unknown as Database).cancelSession(payload);
 }
 
 async function swapSessionOrder(payload: ActionPayload) {
@@ -5090,18 +4713,10 @@ async function swapSessionOrder(payload: ActionPayload) {
   )
     throw new Error("Lessons must belong to the same class.");
   const [first, second] = sessions;
-  await execute("UPDATE class_sessions SET session_no = -1 WHERE id = ?", [
-    first.id,
-  ]);
-  await execute("UPDATE class_sessions SET session_no = ? WHERE id = ?", [
-    first.session_no,
-    second.id,
-  ]);
-  await execute("UPDATE class_sessions SET session_no = ? WHERE id = ?", [
-    second.session_no,
-    first.id,
-  ]);
   await executeBatch([
+    { sql: "UPDATE class_sessions SET session_no = -1 WHERE id = ?", values: [first.id] },
+    { sql: "UPDATE class_sessions SET session_no = ? WHERE id = ?", values: [first.session_no, second.id] },
+    { sql: "UPDATE class_sessions SET session_no = ? WHERE id = ?", values: [second.session_no, first.id] },
     {
       sql: "INSERT INTO class_session_changes (id, class_session_id, change_type, original_session_no, original_topic, original_starts_at, original_ends_at, new_session_no, new_topic, new_starts_at, new_ends_at) VALUES (?, ?, 'reordered', ?, ?, ?, ?, ?, ?, ?, ?)",
       values: [
@@ -5171,6 +4786,7 @@ function parsedWeeklySlots(payload: ActionPayload): WeeklySlot[] {
   } catch {
     throw new Error("Unable to read the weekly schedule.");
   }
+  if (!Array.isArray(slots) || slots.length > 14) throw new AccessError("Choose at most 14 weekly time slots.", 400);
   if (
     !slots.length &&
     payload.startDate &&
@@ -5195,7 +4811,7 @@ function parsedWeeklySlots(payload: ActionPayload): WeeklySlot[] {
   }
   const clean = slots.map((slot) => ({
     anchorDate: String(slot.anchorDate || ""),
-    weekday: Math.max(0, Math.min(6, Number(slot.weekday))),
+    weekday: Number(slot.weekday),
     startTime: String(slot.startTime || ""),
     endTime: String(slot.endTime || ""),
     teacherId: String(slot.teacherId || ""),
@@ -5205,15 +4821,14 @@ function parsedWeeklySlots(payload: ActionPayload): WeeklySlot[] {
     !clean.length ||
     clean.some(
       (slot) =>
-        !slot.anchorDate ||
-        !slot.startTime ||
-        !slot.endTime ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(slot.anchorDate) ||
+        !Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6 ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.startTime) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.endTime) ||
+        slot.endTime <= slot.startTime ||
         !slot.teacherId ||
         !slot.classroomId ||
-        minutesBetween(
-          `2000-01-01 ${slot.startTime}`,
-          `2000-01-01 ${slot.endTime}`,
-        ) < 30,
+        (Date.parse(`2000-01-01T${slot.endTime}:00Z`) - Date.parse(`2000-01-01T${slot.startTime}:00Z`)) / 60_000 < 30,
     )
   )
     throw new Error(
@@ -5223,9 +4838,10 @@ function parsedWeeklySlots(payload: ActionPayload): WeeklySlot[] {
 }
 
 function firstWeeklyDate(anchorDate: string, weekday: number) {
-  const date = new Date(`${anchorDate}T12:00:00`);
-  while (date.getDay() !== weekday) date.setDate(date.getDate() + 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const date=new Date(anchorDate+'T12:00:00Z');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)||!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==anchorDate||!Number.isInteger(weekday)||weekday<0||weekday>6)throw new AccessError('Choose a valid date and weekday.',400);
+  date.setUTCDate(date.getUTCDate()+((weekday-date.getUTCDay()+7)%7));
+  return date.toISOString().slice(0,10);
 }
 
 async function configureClassRun(payload: ActionPayload) {
@@ -5244,17 +4860,18 @@ async function configureClassRun(payload: ActionPayload) {
     id: string;
     session_no: number;
     topic: string;
+    status: string;
   }>(
-    "SELECT id, session_no, topic FROM class_sessions WHERE class_run_id = ? ORDER BY session_no",
+    "SELECT id, session_no, topic, status FROM class_sessions WHERE class_run_id = ? ORDER BY session_no",
     [payload.runId],
   );
-  let sessions: PlannedSession[] = existing.map((session) => ({
+  let sessions: PlannedSession[] = existing.filter(session => !['cancelled','completed'].includes(session.status)).map((session) => ({
     ...session,
     exists: true,
   }));
   if (sessions.length < templates.length) {
     const existingNumbers = new Set(
-      sessions.map((session) => session.session_no),
+      existing.map((session) => session.session_no),
     );
     sessions = [
       ...sessions,
@@ -5272,10 +4889,6 @@ async function configureClassRun(payload: ActionPayload) {
     throw new Error(
       "Add at least one lesson to the Course plan before scheduling this class.",
     );
-  const studentRows = await rows<{ student_id: string; name: string }>(
-    "SELECT students.id AS student_id, students.name FROM class_enrollments JOIN students ON students.id = class_enrollments.student_id WHERE class_enrollments.class_run_id = ? AND class_enrollments.status = 'enrolled'",
-    [payload.runId],
-  );
   const occurrences = slots
     .flatMap((slot) =>
       Array.from({ length: sessions.length }, (_, index) => {
@@ -5304,376 +4917,36 @@ async function configureClassRun(payload: ActionPayload) {
     ...session,
     ...occurrences[index],
   }));
-  for (const [index, session] of planned.entries())
-    for (const previous of planned.slice(0, index)) {
-      if (
-        session.classroomId === previous.classroomId &&
-        overlaps(
-          session.startsAt,
-          session.endsAt,
-          previous.startsAt,
-          previous.endsAt,
-        )
-      )
-        throw new Error("Two weekly times overlap in the same classroom.");
-      if (
-        session.teacherId === previous.teacherId &&
-        overlaps(
-          session.startsAt,
-          session.endsAt,
-          previous.startsAt,
-          previous.endsAt,
-        )
-      )
-        throw new Error("Two weekly times overlap for the same teacher.");
-    }
-  for (const session of planned) {
-    const roomConflicts = await rows<{
-      class_session_id: string;
-      starts_at: string;
-      ends_at: string;
-    }>(
-      "SELECT class_session_id, starts_at, ends_at FROM class_resource_bookings WHERE classroom_id = ? AND class_session_id NOT IN (SELECT id FROM class_sessions WHERE class_run_id = ?) AND status != 'cancelled'",
-      [session.classroomId, payload.runId],
-    );
-    if (
-      roomConflicts.some((item) =>
-        overlaps(
-          session.startsAt,
-          session.endsAt,
-          item.starts_at,
-          item.ends_at,
-        ),
-      )
-    )
-      throw new Error(
-        `The classroom is not available for lesson ${session.session_no}.`,
-      );
-    const teacherConflicts = await rows<{
-      class_session_id: string;
-      starts_at: string;
-      ends_at: string;
-    }>(
-      "SELECT class_session_id, starts_at, ends_at FROM class_teacher_bookings WHERE teacher_id = ? AND class_session_id NOT IN (SELECT id FROM class_sessions WHERE class_run_id = ?) AND status != 'cancelled'",
-      [session.teacherId, payload.runId],
-    );
-    if (
-      teacherConflicts.some((item) =>
-        overlaps(
-          session.startsAt,
-          session.endsAt,
-          item.starts_at,
-          item.ends_at,
-        ),
-      )
-    )
-      throw new Error(
-        `The teacher is not available for lesson ${session.session_no}.`,
-      );
-    for (const student of studentRows) {
-      const conflicts = await rows<{ starts_at: string; ends_at: string }>(
-        "SELECT class_sessions.starts_at, class_sessions.ends_at FROM class_student_bookings JOIN class_sessions ON class_sessions.id = class_student_bookings.class_session_id WHERE class_student_bookings.student_id = ? AND class_sessions.class_run_id != ? AND class_student_bookings.status != 'cancelled'",
-        [student.student_id, payload.runId],
-      );
-      if (
-        conflicts.some((item) =>
-          overlaps(
-            session.startsAt,
-            session.endsAt,
-            item.starts_at,
-            item.ends_at,
-          ),
-        )
-      )
-        throw new Error(
-          `${student.name} has another class at lesson ${session.session_no}.`,
-        );
-    }
-  }
-  for (const session of planned) {
-    if (!session.exists)
-      await execute(
-        "INSERT INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')",
-        [
-          session.id,
-          payload.runId,
-          session.session_no,
-          session.topic,
-          session.startsAt,
-          session.endsAt,
-        ],
-      );
-    else
-      await execute(
-        "UPDATE class_sessions SET starts_at = ?, ends_at = ?, status = 'scheduled' WHERE id = ?",
-        [session.startsAt, session.endsAt, session.id],
-      );
-    const resource = await row<{ id: string }>(
-      "SELECT id FROM class_resource_bookings WHERE class_session_id = ?",
-      [session.id],
-    );
-    if (resource)
-      await execute(
-        "UPDATE class_resource_bookings SET classroom_id = ?, starts_at = ?, ends_at = ?, status = 'reserved' WHERE id = ?",
-        [session.classroomId, session.startsAt, session.endsAt, resource.id],
-      );
-    else
-      await execute(
-        "INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')",
-        [
-          id("room-booking"),
-          session.id,
-          session.classroomId,
-          session.startsAt,
-          session.endsAt,
-        ],
-      );
-    const teacherBooking = await row<{ id: string }>(
-      "SELECT id FROM class_teacher_bookings WHERE class_session_id = ?",
-      [session.id],
-    );
-    if (teacherBooking)
-      await execute(
-        "UPDATE class_teacher_bookings SET teacher_id = ?, starts_at = ?, ends_at = ?, pay_amount = 0 WHERE id = ?",
-        [
-          session.teacherId,
-          session.startsAt,
-          session.endsAt,
-          teacherBooking.id,
-        ],
-      );
-    else
-      await execute(
-        "INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, 0, 'unpaid', 'confirmed')",
-        [
-          id("teacher-booking"),
-          session.id,
-          session.teacherId,
-          session.startsAt,
-          session.endsAt,
-        ],
-      );
-  }
-  const notice = `Class schedule updated: ${sessions.length} lessons have been placed using ${slots.length} weekly time${slots.length === 1 ? "" : "s"}.`;
-  for (const teacherId of Array.from(
-    new Set(planned.map((session) => session.teacherId)),
-  ))
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-      [id("notice"), "teacher", teacherId, "Class schedule updated", notice],
-    );
-  for (const student of studentRows)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, ?, ?, ?, ?, 'unread')",
-      [
-        id("notice"),
-        "student",
-        student.student_id,
-        "Class schedule updated",
-        notice,
-      ],
-    );
+  await new MonthlyTimetable(db() as unknown as Database).applyPlan(planned.map(session=>({
+    id:session.id,runId:payload.runId!,sessionNo:session.session_no,topic:session.topic,
+    startsAt:session.startsAt,endsAt:session.endsAt,classroomId:session.classroomId,teacherId:session.teacherId
+  })));
 }
 
 async function syncClassLessons(payload: ActionPayload) {
-  if (!payload.runId) throw new Error("Class not found.");
-  const run = await row<{ course_id: string }>(
-    "SELECT course_id FROM class_runs WHERE id = ?",
-    [payload.runId],
-  );
-  if (!run) throw new Error("Class not found.");
-  const templates = await rows<{
-    lesson_no: number;
-    title: string;
-    default_duration_minutes: number;
-  }>(
-    "SELECT lesson_no, title, default_duration_minutes FROM course_lesson_templates WHERE course_id = ? ORDER BY lesson_no",
-    [run.course_id],
-  );
-  const sessions = await rows<{
-    id: string;
-    session_no: number;
-    topic: string;
-    starts_at: string;
-    ends_at: string;
-  }>(
-    "SELECT id, session_no, topic, starts_at, ends_at FROM class_sessions WHERE class_run_id = ? ORDER BY session_no",
-    [payload.runId],
-  );
-  if (!templates.length)
-    throw new Error("Add lessons to the Course plan first.");
-  if (!sessions.length)
-    throw new Error("Use Quick schedule to place the first class lessons.");
-  const missing = templates.filter(
-    (template) =>
-      !sessions.some((session) => session.session_no === template.lesson_no),
-  );
-  if (!missing.length) return;
-  const last = sessions.at(-1)!;
-  const previous = sessions.at(-2);
-  const gapMinutes = previous
-    ? Math.max(
-        30,
-        Math.round(
-          (new Date(last.starts_at.replace(" ", "T")).getTime() -
-            new Date(previous.starts_at.replace(" ", "T")).getTime()) /
-            60000,
-        ),
-      )
-    : 7 * 24 * 60;
-  const lastStart = new Date(last.starts_at.replace(" ", "T")).getTime();
-  const lastTeacher = await row<{ teacher_id: string; pay_amount: number }>(
-    "SELECT teacher_id, pay_amount FROM class_teacher_bookings WHERE class_session_id = ?",
-    [last.id],
-  );
-  const lastRoom = await row<{ classroom_id: string }>(
-    "SELECT classroom_id FROM class_resource_bookings WHERE class_session_id = ?",
-    [last.id],
-  );
-  if (!lastTeacher?.teacher_id || !lastRoom?.classroom_id)
-    throw new Error(
-      "Set a teacher and classroom before updating the class schedule.",
-    );
-  const enrollments = await rows<{
-    id: string;
-    student_id: string;
-    contracted_fee: number;
-  }>(
-    "SELECT id, student_id, contracted_fee FROM class_enrollments WHERE class_run_id = ? AND status = 'enrolled'",
-    [payload.runId],
-  );
-  for (const [index, template] of missing.entries()) {
-    const startsAt = new Date(lastStart + gapMinutes * 60000 * (index + 1));
-    const startText = `${startsAt.getFullYear()}-${String(startsAt.getMonth() + 1).padStart(2, "0")}-${String(startsAt.getDate()).padStart(2, "0")} ${String(startsAt.getHours()).padStart(2, "0")}:${String(startsAt.getMinutes()).padStart(2, "0")}`;
-    const endsAt = later(
-      startText,
-      Math.max(
-        30,
-        number(
-          template.default_duration_minutes,
-          minutesBetween(last.starts_at, last.ends_at),
-        ),
-      ),
-    );
-    const sessionId = id("session");
-    await execute(
-      "INSERT INTO class_sessions (id, class_run_id, session_no, topic, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, 'scheduled')",
-      [
-        sessionId,
-        payload.runId,
-        template.lesson_no,
-        template.title,
-        startText,
-        endsAt,
-      ],
-    );
-    await execute(
-      "INSERT INTO class_resource_bookings (id, class_session_id, classroom_id, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, 'reserved')",
-      [id("room-booking"), sessionId, lastRoom.classroom_id, startText, endsAt],
-    );
-    await execute(
-      "INSERT INTO class_teacher_bookings (id, class_session_id, teacher_id, starts_at, ends_at, pay_amount, pay_status, status) VALUES (?, ?, ?, ?, ?, ?, 'unpaid', 'confirmed')",
-      [
-        id("teacher-booking"),
-        sessionId,
-        lastTeacher.teacher_id,
-        startText,
-        endsAt,
-        number(lastTeacher.pay_amount),
-      ],
-    );
-  }
-  const totalSessions = await row<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM class_sessions WHERE class_run_id = ?",
-    [payload.runId],
-  );
-  const allSessions = await rows<{ id: string }>(
-    "SELECT id FROM class_sessions WHERE class_run_id = ? ORDER BY session_no",
-    [payload.runId],
-  );
-  for (const enrollment of enrollments) {
-    const allocated =
-      Math.round(
-        (number(enrollment.contracted_fee) /
-          Math.max(1, number(totalSessions?.count))) *
-          100,
-      ) / 100;
-    await execute(
-      "UPDATE class_student_bookings SET allocated_fee = ? WHERE enrollment_id = ?",
-      [allocated, enrollment.id],
-    );
-    for (const session of allSessions) {
-      const exists = await row<{ id: string }>(
-        "SELECT id FROM class_student_bookings WHERE class_session_id = ? AND enrollment_id = ?",
-        [session.id, enrollment.id],
-      );
-      if (exists) continue;
-      const bookingId = id("student-booking");
-      await execute(
-        "INSERT INTO class_student_bookings (id, class_session_id, enrollment_id, student_id, allocated_fee, status) VALUES (?, ?, ?, ?, ?, 'booked')",
-        [
-          bookingId,
-          session.id,
-          enrollment.id,
-          enrollment.student_id,
-          allocated,
-        ],
-      );
-      await execute(
-        "INSERT INTO class_attendance (id, student_booking_id, status, note) VALUES (?, ?, 'pending', '')",
-        [id("attendance"), bookingId],
-      );
-    }
-  }
-  const notice = `${missing.length} new lesson${missing.length === 1 ? "" : "s"} added to this class schedule.`;
-  await execute(
-    "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'teacher', ?, 'Class schedule updated', ?, 'unread')",
-    [id("notice"), lastTeacher.teacher_id, notice],
-  );
-  for (const enrollment of enrollments)
-    await execute(
-      "INSERT INTO portal_notifications (id, recipient_type, recipient_id, title, body, status) VALUES (?, 'student', ?, 'Class schedule updated', ?, 'unread')",
-      [id("notice"), enrollment.student_id, notice],
-    );
+  if(!payload.runId)throw new AccessError('Class not found.',400);
+  const run=await row<Row>('SELECT course_id FROM class_runs WHERE id=?',[payload.runId]);
+  if(!run)throw new AccessError('Class not found.',404);
+  const templates=await rows<Row>('SELECT lesson_no,title,default_duration_minutes FROM course_lesson_templates WHERE course_id=? ORDER BY lesson_no',[run.course_id]);
+  const history=await rows<Row>("SELECT * FROM class_sessions WHERE class_run_id=? ORDER BY starts_at,session_no",[payload.runId]);
+  const sessions=history.filter(s=>!['cancelled','completed'].includes(String(s.status)));
+  if(!templates.length)throw new AccessError('Add lessons to the course plan first.',400);
+  if(!sessions.length)throw new AccessError('Use Quick schedule to place the first lessons.',400);
+  const missing=templates.filter(t=>!history.some(s=>s.session_no===t.lesson_no));
+  if(!missing.length)return;
+  const last=sessions.at(-1)!,previous=sessions.at(-2);
+  const gapMinutes=previous?Math.max(30,(Date.parse(String(last.starts_at).replace(' ','T')+'+08:00')-Date.parse(String(previous.starts_at).replace(' ','T')+'+08:00'))/60000):7*24*60;
+  const teacher=await row<Row>("SELECT teacher_id,pay_amount FROM class_teacher_bookings WHERE class_session_id=? AND status!='cancelled'",[last.id]);
+  const room=await row<Row>("SELECT classroom_id FROM class_resource_bookings WHERE class_session_id=? AND status!='cancelled'",[last.id]);
+  if(!teacher||!room)throw new AccessError('Assign a teacher and classroom before extending the schedule.',400);
+  await new MonthlyTimetable(db() as unknown as Database).applyPlan(missing.map((t,index)=>{
+    const startsAt=later(String(last.starts_at),gapMinutes*(index+1));
+    return {id:id('session'),runId:payload.runId!,sessionNo:Number(t.lesson_no),topic:String(t.title),startsAt,endsAt:later(startsAt,Math.max(30,number(t.default_duration_minutes,90))),classroomId:String(room.classroom_id),teacherId:String(teacher.teacher_id),payAmount:number(teacher.pay_amount)};
+  }));
 }
 
 async function deleteCourse(payload: ActionPayload) {
-  if (!payload.courseId) throw new Error("Course not found.");
-  const enrolled = await row<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM class_enrollments JOIN class_runs ON class_runs.id = class_enrollments.class_run_id WHERE class_runs.course_id = ?",
-    [payload.courseId],
-  );
-  if (number(enrolled?.count) > 0)
-    throw new Error("This course has student records and cannot be deleted.");
-  const sessionIds =
-    "SELECT id FROM class_sessions WHERE class_run_id IN (SELECT id FROM class_runs WHERE course_id = ?)";
-  await execute(
-    `DELETE FROM class_attendance WHERE student_booking_id IN (SELECT id FROM class_student_bookings WHERE class_session_id IN (${sessionIds}))`,
-    [payload.courseId],
-  );
-  await execute(
-    `DELETE FROM class_student_bookings WHERE class_session_id IN (${sessionIds})`,
-    [payload.courseId],
-  );
-  await execute(
-    `DELETE FROM class_resource_bookings WHERE class_session_id IN (${sessionIds})`,
-    [payload.courseId],
-  );
-  await execute(
-    `DELETE FROM class_teacher_bookings WHERE class_session_id IN (${sessionIds})`,
-    [payload.courseId],
-  );
-  await execute(
-    `DELETE FROM class_sessions WHERE class_run_id IN (SELECT id FROM class_runs WHERE course_id = ?)`,
-    [payload.courseId],
-  );
-  await execute("DELETE FROM class_runs WHERE course_id = ?", [
-    payload.courseId,
-  ]);
-  await execute("DELETE FROM course_lesson_templates WHERE course_id = ?", [
-    payload.courseId,
-  ]);
-  await execute("DELETE FROM course_catalogs WHERE id = ?", [payload.courseId]);
+  await new MonthlyTimetable(db() as unknown as Database).deleteCourse(payload);
 }
 
 type EnrollmentOptions = {
@@ -5840,6 +5113,7 @@ async function checkoutCourse(payload: ActionPayload) {
 }
 
 async function purchasePass(payload: ActionPayload) {
+  if (payload.payNow === true || payload.payNow === "true") throw new AccessError('Confirm the actual received payment in Plans & billing after creating the order.',400);
   const orderId = await learning().createPassOrder({
     studentId: payload.studentId ?? "", productId: payload.passProductId ?? "",
     requestKey: payload.requestKey ?? "", months: number(payload.reservationMonths, 1),
@@ -5848,9 +5122,7 @@ async function purchasePass(payload: ActionPayload) {
     includeExtraOnsite: payload.includeExtraOnsite === true,
     start: payload.passStartAt, runId: payload.runId, sessionId: payload.sessionId, mode: payload.deliveryMode, reserveSelection: payload.reserveSelection,
   });
-  if (payload.payNow === true || payload.payNow === "true")
-    return await recordPassPayment({ ...payload, passOrderId: orderId });
-  return { notice: payload.coursePlan && !payload.sessionId ? "Your complete course is reserved. Monthly bills are ready; pay by the 7th. Credits are issued after payment." : "Your order is saved. Credits will be issued after payment.", bookingPending: false };
+  return { orderId, notice: payload.coursePlan && !payload.sessionId ? "Your course is reserved. Each monthly bill shows its payment deadline. Credits are issued after campus payment confirmation." : "Your order is saved. Credits will be issued after campus payment confirmation.", bookingPending: false };
 }
 
 
@@ -6108,7 +5380,7 @@ async function sendMessage(payload: ActionPayload) {
   );
 }
 
-async function updateEntity(payload: ActionPayload) {
+async function updateEntity(payload: ActionPayload, actor: PortalActor) {
   if (payload.action === "updateCourse" && payload.courseId) {
     const title = payload.title?.trim() || "Untitled course";
     const level = payload.level?.trim() || "Mixed";
@@ -6140,18 +5412,10 @@ async function updateEntity(payload: ActionPayload) {
     ]);
   }
   if (payload.action === "updateStudent" && payload.studentId) {
-    await execute(
-      "UPDATE students SET name = ?, level = ?, guardian_phone = ?, email = ?, avatar_url = COALESCE(NULLIF(?, ''), avatar_url), school_type = COALESCE(?, school_type) WHERE id = ?",
-      [
-        payload.name?.trim() || "Untitled student",
-        payload.level?.trim() || "Unassigned",
-        payload.phone?.trim() || "",
-        payload.email?.trim() || "",
-        payload.avatarUrl?.trim() || "",
-        ['chinese', 'malay', 'independent', 'unspecified'].includes(payload.schoolType || '') ? payload.schoolType : null,
-        payload.studentId,
-      ],
-    );
+    const current = (await workflow().snapshot(actor)).registrations.find(item => item.student_id === payload.studentId);
+    if (!current?.schoolSystem) throw new AccessError('Complete this student’s full profile in Admissions first.',400);
+    await workflow().updateStudentProfile({...current,studentId:payload.studentId,fullName:payload.name,level:payload.level,guardianPhone:payload.phone,email:payload.email},actor);
+    if (payload.avatarUrl) await execute('UPDATE students SET avatar_url=? WHERE id=?',[payload.avatarUrl,payload.studentId]);
   }
   if (payload.action === "updateTeacher" && payload.teacherId) {
     await execute(
@@ -6187,7 +5451,6 @@ async function createBaseRecord(payload: ActionPayload) {
   }
   if (payload.action === "createTeacher") {
     const teacherId = id("teacher");
-    const profile = demoTeacherProfile(teacherId, payload.subject?.trim() || "General");
     await execute(
       "INSERT INTO teachers (id, code, name, subject, phone, status, bio, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       [
@@ -6197,8 +5460,8 @@ async function createBaseRecord(payload: ActionPayload) {
         payload.subject?.trim() || "General",
         payload.phone?.trim() || "",
         "available",
-        payload.bio?.trim() || profile.bio,
-        payload.avatarUrl?.trim() || profile.avatar_url,
+        payload.bio?.trim() || '',
+        payload.avatarUrl?.trim() || '',
       ],
     );
   }
@@ -6374,14 +5637,8 @@ async function ensureTeacherProfiles() {
   await execute("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('teacher_profiles_v1', 'true')");
 }
 
-async function readPortal(includeAttendance = false) {
-  await seedDatabase();
-  if (!(await rows("SELECT key FROM app_settings WHERE key = 'single_room_plan_v1'")).length) {
-    await db().batch(weeklyPlanStatements().map(({ sql, values }) => db().prepare(sql).bind(...values)));
-  }
-  await ensureTeacherProfiles();
-  await learning().migrateLegacyCards();
-  await learning().reconcileDemoEnrollments();
+async function readPortal(includeAttendance: boolean, actor: PortalActor) {
+  await operations().releaseOverdue();
   const bookings = await rows("SELECT * FROM class_student_bookings ORDER BY created_at DESC");
   const studyBookings = await rows("SELECT b.*, c.name AS classroom_name FROM study_bookings b JOIN classrooms c ON c.id = b.classroom_id ORDER BY starts_at");
   const [
@@ -6421,7 +5678,7 @@ async function readPortal(includeAttendance = false) {
           LEFT JOIN teachers ON teachers.id = course_lesson_templates.default_teacher_id
           LEFT JOIN classrooms ON classrooms.id = course_lesson_templates.default_classroom_id
           ORDER BY course_lesson_templates.course_id, course_lesson_templates.lesson_no`),
-    rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, teaching_languages.name AS language_name, teaching_languages.display_color AS language_color, teachers.name AS teacher_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
+    rows(`SELECT class_runs.*, course_catalogs.title AS course_title, course_catalogs.level AS course_level, course_catalogs.subject, course_catalogs.display_color AS run_course_color, academic_terms.name AS term_name, teaching_languages.name AS language_name, teaching_languages.display_color AS language_color, teachers.name AS teacher_name, MIN(class_sessions.starts_at) AS starts_at, MAX(class_sessions.ends_at) AS ends_at, COUNT(DISTINCT class_sessions.id) AS session_count, COUNT(DISTINCT class_enrollments.id) AS student_count
           FROM class_runs JOIN course_catalogs ON course_catalogs.id = class_runs.course_id JOIN academic_terms ON academic_terms.id = class_runs.term_id
           LEFT JOIN teaching_languages ON teaching_languages.id = class_runs.language_id LEFT JOIN teachers ON teachers.id = class_runs.teacher_id
           LEFT JOIN class_sessions ON class_sessions.class_run_id = class_runs.id LEFT JOIN class_enrollments ON class_enrollments.class_run_id = class_runs.id AND class_enrollments.status = 'enrolled'
@@ -6432,7 +5689,7 @@ async function readPortal(includeAttendance = false) {
           LEFT JOIN class_resource_bookings ON class_resource_bookings.class_session_id = class_sessions.id LEFT JOIN classrooms ON classrooms.id = class_resource_bookings.classroom_id
           LEFT JOIN class_teacher_bookings ON class_teacher_bookings.class_session_id = class_sessions.id LEFT JOIN teachers ON teachers.id = class_teacher_bookings.teacher_id
           ORDER BY class_sessions.starts_at ASC`),
-    rows("SELECT * FROM students ORDER BY code"),
+    rows("SELECT s.*,p.school_system,m.status AS membership_status,m.valid_until AS membership_until FROM students s LEFT JOIN student_profiles p ON p.student_id=s.id LEFT JOIN student_memberships m ON m.student_id=s.id ORDER BY s.code"),
     rows(`SELECT teachers.*, COALESCE(GROUP_CONCAT(teaching_languages.name, ' · '), '') AS language_names
           FROM teachers LEFT JOIN teacher_languages ON teacher_languages.teacher_id = teachers.id LEFT JOIN teaching_languages ON teaching_languages.id = teacher_languages.language_id
           WHERE teachers.status != 'inactive'
@@ -6507,12 +5764,8 @@ async function readPortal(includeAttendance = false) {
       "Teacher",
     )),
   ];
-  const outstanding = [...invoices, ...passOrders].reduce(
-    (sum, invoice) =>
-      sum +
-      Math.max(0, number(invoice.total_amount) - number(invoice.paid_amount)),
-    0,
-  );
+  const workflowData = await workflow().snapshot(actor);
+  const outstanding = buildFinanceLedger({invoices,payments,passOrders,passPayments,workflow:workflowData,students}).totals.outstanding;
   let businessHours: {
     start: string;
     end: string;
@@ -6567,7 +5820,7 @@ async function readPortal(includeAttendance = false) {
   } catch {
     /* Use connection defaults. */
   }
-  return Response.json({
+  return Response.json(scopePortalData({
     bookings,
     studyBookings,
     terms,
@@ -6595,6 +5848,10 @@ async function readPortal(includeAttendance = false) {
     resourceBookings,
     teacherBookings,
     conflicts: conflictRows,
+    actor,
+    operations: await operations().snapshot(actor),
+    workflow: workflowData,
+    timetable: actor.role === 'admin' ? await new MonthlyTimetable(db() as unknown as Database).timetableSnapshot() : {slots:[],teacherProfiles:[]},
     settings: { businessHours, mail },
     metrics: {
       openRuns: runs.filter((item) => item.status === "open").length,
@@ -6610,50 +5867,121 @@ async function readPortal(includeAttendance = false) {
       outstanding: Math.round(outstanding * 100) / 100,
       conflicts: conflictRows.length,
     },
-  });
+  },actor),{headers:{'Cache-Control':'no-store','Vary':'Cookie'}});
 }
 
 
 export async function GET(request: Request) {
   try {
+    const actor = await new PortalAuth(db() as unknown as Database).actor(request);
     if (new URL(request.url).searchParams.get("scope") === "attendance") {
-      return Response.json({ attendance: await readAttendance() });
+      const scoped = await readPortal(true,actor);
+      const data = await scoped.json() as {attendance:Row[]};
+      return Response.json({ attendance: data.attendance },{headers:{'Cache-Control':'no-store'}});
     }
-    return await readPortal();
+    return await readPortal(false,actor);
   } catch (error) {
     console.error('Portal load failed', error);
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Unable to load data.",
       },
-      { status: 500 },
+      { status: error instanceof AccessError ? error.status : 500 },
     );
   }
 }
 
 export async function POST(request: Request) {
   try {
-    await seedDatabase();
-    const payload = await request.json<ActionPayload>();
+    checkOrigin(request);
+    const actor = await new PortalAuth(db() as unknown as Database).actor(request);
+    const text = await request.text();
+    if (text.length > 2_000_000) throw new AccessError('This request is too large.',413);
+    let payload:ActionPayload & Row;
+    try{payload=JSON.parse(text);}catch{throw new AccessError('This request is not valid JSON.',400);}
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof payload.action !== 'string') throw new AccessError('Choose an action.',400);
+    await authorizePortalAction(db() as unknown as Database,actor,payload);
+    const operationActions: Record<string,(input: Row, actor: PortalActor)=>Promise<unknown>> = {
+      saveOperatingRules: (input, who) => operations().saveRules(input, who),
+      createManualCoursePlan: (input, who) => operations().createManualCoursePlan(input, who),
+      adjustCourseOrder: (input, who) => operations().adjustOrder(input, who),
+      confirmCoursePayment: (input, who) => operations().confirmPayment(input, who),
+      extendCourseHold: (input, who) => operations().extendHold(input, who),
+      releaseCourseHold: (input, who) => operations().releaseHold(input, who),
+      releaseOverdueSeats: (input, who) => operations().releaseOverdue(input, who),
+      releaseOverdueHolds: (input, who) => operations().releaseOverdue(input, who),
+      scheduleCampusMakeup: (input, who) => operations().scheduleMakeup(input, who),
+      convertLessonMode: (input, who) => operations().convertBooking(input, who),
+    };
+    if (Object.hasOwn(operationActions,payload.action!)) {
+      const result = await operationActions[payload.action!](payload,actor);
+      return Response.json({...(await (await readPortal(true,actor)).json() as Row),...(result as Row || {})},{headers:{'Cache-Control':'no-store'}});
+    }
+    if (['resetClientTeachingPlan','refreshClientPlanStudentNames','expandPpmCourseProducts','applyPpmAndPbTeachingPlan'].includes(payload.action!)) throw new AccessError('Demo reset actions are disabled in the operating system.',403);
+    if (['checkoutCourse','purchasePass','bookCourseWithCredit','enrollStudent','enrollStudentWithPayment'].includes(payload.action!)) await operations().assertSelfService(String(payload.studentId || actor.student_id || ''));
+    if (payload.action === 'recordPassPayment') throw new AccessError('Open Plans & billing to enter the actual amount, payment method, date and reference.',400);
+    const timetable = new MonthlyTimetable(db() as unknown as Database);
+    if (payload.action === 'previewMonthlyTimetable') return Response.json({preview:await timetable.preview(payload)},{headers:{'Cache-Control':'no-store'}});
+    if (['saveTeacherQualifications','saveTimetableSlot','removeTimetableSlot','applyMonthlyTimetable','publishClassRun'].includes(String(payload.action))) {
+      if(payload.action==='saveTeacherQualifications') await timetable.saveTeacher(payload);
+      if(payload.action==='saveTimetableSlot') await timetable.saveSlot(payload);
+      if(payload.action==='removeTimetableSlot') await execute('UPDATE classroom_time_slots SET active=0 WHERE id=?',[String(payload.slotId)]);
+      if(payload.action==='applyMonthlyTimetable') await timetable.apply(payload);
+      if(payload.action==='publishClassRun') await timetable.publish(payload);
+      return await readPortal(true,actor);
+    }
+    const workflowActions = ['submitRegistration','updateStudentProfile','reviewRegistration','saveCourseRequirements','cancelMembershipInvoice','issueMembershipInvoice','confirmMembershipPayment','saveBookingPolicy','updateOnboardingTask','retryWelcomeEmail','createStaffAccount'];
+    if (workflowActions.includes(String(payload.action))) {
+      if (payload.action==='updateStudentProfile') await workflow().updateStudentProfile(payload,actor);
+      if (payload.action==='submitRegistration') await workflow().submitRegistration(payload,actor);
+      if (payload.action==='reviewRegistration') { await workflow().reviewRegistration(payload,actor); if(payload.status==='accepted') await deliverWelcome(String(payload.registrationId)); }
+      if (payload.action==='saveCourseRequirements') await workflow().saveCourseRequirements(payload);
+      if (payload.action==='cancelMembershipInvoice') await workflow().cancelMembershipInvoice(payload);
+      if (payload.action==='issueMembershipInvoice') await workflow().issueMembershipInvoice(payload);
+      if (payload.action==='confirmMembershipPayment') await workflow().confirmMembershipPayment(payload,actor);
+      if (payload.action==='saveBookingPolicy') await workflow().savePolicy(payload);
+      if (payload.action==='updateOnboardingTask') {
+        if (!['pending','scheduled','completed','cancelled'].includes(String(payload.status))) throw new AccessError('Choose a task status.',400);
+        const scheduled=String(payload.scheduledAt||'');
+        if(scheduled&&!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(scheduled))throw new AccessError('Choose a valid meeting date and time.',400);
+        if(!await row('SELECT id FROM onboarding_tasks WHERE id=?',[String(payload.taskId||'')]))throw new AccessError('Follow-up task not found.',404);
+        await execute('UPDATE onboarding_tasks SET status=?,scheduled_at=?,note=? WHERE id=?',[payload.status,String(payload.scheduledAt||''),String(payload.note||''),String(payload.taskId||'')]);
+      }
+      if (payload.action==='retryWelcomeEmail') {
+        if (!(env as unknown as Record<string,unknown>).PORTAL_MAIL_WEBHOOK_URL) throw new AccessError('Mail delivery is not configured. The welcome email remains queued.',400);
+        await deliverWelcome(String(payload.registrationId));
+      }
+      if (payload.action==='createStaffAccount') {
+        if (!['teacher','student'].includes(String(payload.role)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(payload.email))) throw new AccessError('Choose a role and valid email.',400);
+        const target = payload.role==='teacher' ? await row('SELECT id,name FROM teachers WHERE id=?',[payload.teacherId]) : await row('SELECT id,name,email FROM students WHERE id=?',[payload.studentId]);
+        if (!target) throw new AccessError('Choose an existing person.',400);
+        if(payload.role==='student'&&String(target.email||'').toLowerCase()!==String(payload.email).trim().toLowerCase())throw new AccessError('Use the student email recorded in their registration.',400);
+        await execute('INSERT INTO portal_accounts(id,email,password_hash,display_name,role,teacher_id,student_id) VALUES (?,?,?,?,?,?,?)',[id('account'),String(payload.email).trim().toLowerCase(),await passwordHash(String(payload.password||'')),target.name,payload.role,payload.role==='teacher'?target.id:null,payload.role==='student'?target.id:null]);
+      }
+      return await readPortal(true,actor);
+    }
+    if (['checkoutCourse','bookLesson','bookCourseWithCredit','enrollStudent','enrollStudentWithPayment','useOnlineCredit','bookStudy','useStudyCredit','purchasePass'].includes(String(payload.action))) {
+      await workflow().assertBooking(String(payload.studentId||''),payload.runId,payload.sessionId);
+    }
     if (payload.action === "resetClientTeachingPlan") {
       await resetToClientTeachingPlan();
-      return await readPortal();
+      return await readPortal(false,actor);
     }
     if (payload.action === "refreshClientPlanStudentNames") {
       await refreshClientPlanStudentNames();
-      return await readPortal();
+      return await readPortal(false,actor);
     }
     if (payload.action === "expandPpmCourseProducts") {
       await expandPpmCourseProducts();
-      return await readPortal();
+      return await readPortal(false,actor);
     }
     if (payload.action === "applyPpmAndPbTeachingPlan") {
       await applyPpmAndPbTeachingPlan();
-      return await readPortal();
+      return await readPortal(false,actor);
     }
     if (payload.action === "setAttendance") {
       await setAttendance(payload);
-      return await readPortal(true);
+      return await readPortal(true,actor);
     }
     if (payload.action === "createCourse") await createCourse(payload);
     if (payload.action === "saveCourseLessons")
@@ -6680,15 +6008,14 @@ export async function POST(request: Request) {
       await enrollStudentWithPayment(payload);
     if (payload.action === "purchasePass" || payload.action === "recordPassPayment") {
       const result = payload.action === "purchasePass" ? await purchasePass(payload) : await recordPassPayment(payload);
-      return Response.json({ ...(await (await readPortal(true)).json() as Row), ...result });
+      return Response.json({ ...(await (await readPortal(true,actor)).json() as Row), ...result });
     }
     if (payload.action === 'checkoutCourse') {
       const result = await checkoutCourse(payload);
-      return Response.json({ ...(await (await readPortal(true)).json() as Row), ...result });
+      return Response.json({ ...(await (await readPortal(true,actor)).json() as Row), ...result });
     }
     if (payload.action === 'updateStudentSchool') {
-      if (!['chinese', 'malay', 'independent', 'unspecified'].includes(payload.schoolType || '')) throw new Error('Choose a school type.');
-      await execute('UPDATE students SET school_type = ? WHERE id = ?', [payload.schoolType, payload.studentId]);
+      throw new AccessError('Use Edit full profile in Admissions to change the school system and grade together.',400);
     }
     if (payload.action === 'updatePassProduct') {
       const values = [Number(payload.onsiteCredits), Number(payload.onlineCredits), Number(payload.studyCredits)];
@@ -6700,7 +6027,7 @@ export async function POST(request: Request) {
     if (payload.action === "addCourseExtra") await learning().addCourseExtra(payload.passOrderId ?? "");
     if (payload.action === "useOnlineCredit") {
       const joinUrl = await learning().joinOnline(payload.studentId ?? "", payload.sessionId ?? "");
-      return Response.json({ ...(await (await readPortal(true)).json() as Row), joinUrl });
+      return Response.json({ ...(await (await readPortal(true,actor)).json() as Row), joinUrl });
     }
     if (payload.action === "bookStudy")
       await learning().bookStudy(payload.studentId ?? "", payload.classroomId ?? "", payload.startsAt ?? "", payload.endsAt ?? "", payload.requestKey ?? "");
@@ -6718,8 +6045,8 @@ export async function POST(request: Request) {
       payload.action === "updateStudent" ||
       payload.action === "updateTeacher"
     )
-      await updateEntity(payload);
-    if (payload.action === "updateRunDeliveryMode") await updateEntity(payload);
+      await updateEntity(payload,actor);
+    if (payload.action === "updateRunDeliveryMode") await updateEntity(payload,actor);
     if (payload.action === "createCampus") await createCampus(payload);
     if (payload.action === "updateCampus") await updateCampus(payload);
     if (
@@ -6737,13 +6064,14 @@ export async function POST(request: Request) {
       await updateMailSettings(payload);
     if (payload.action === "updateCampusFloorplan")
       await updateCampusFloorplan(payload);
-    return await readPortal(true);
+    return await readPortal(true,actor);
   } catch (error) {
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Unable to save data.",
+        fields: error instanceof RegistrationError ? error.fields : undefined,
       },
-      { status: 400 },
+      { status: error instanceof AccessError ? error.status : 400 },
     );
   }
 }

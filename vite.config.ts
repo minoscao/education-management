@@ -37,6 +37,7 @@ export default defineConfig(async ({ command }) => {
       vinext(),
       sites(),
       cloudflare({
+        ...(process.env.PORTAL_LOCAL_STATE_PATH && command === 'serve' ? {persistState:{path:process.env.PORTAL_LOCAL_STATE_PATH}} : {}),
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         config: {
           ...buildConfig,

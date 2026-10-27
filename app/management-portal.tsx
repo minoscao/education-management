@@ -62,6 +62,12 @@ import {
 } from "react";
 import { creditCoverage, malaysiaDay, monthCount, passOfferCards, passWindows, coursePassWindows, courseMonthlySchedule, extraOnsiteUnitPrice, passOrderNotice, gradeCode, onlineLessonState, lessonAvailability, leavePolicy } from "./lib/learning-store";
 import { CourseEnrollment } from './course-enrollment';
+import { RegistrationForm } from './registration-form';
+import { MonthlyTimetableWorkspace } from './monthly-timetable';
+import { StudentSelection } from './student-selection';
+import { WorkflowWorkspace, emptyWorkflow, type WorkflowData } from './workflow-workspace';
+import { RecordingOperationsWorkspace, emptyRecordingOperations, type RecordingOperationsData } from './recording-operations';
+import type { PortalActor } from './lib/portal-auth';
 import { recommendationRank, courseBillState } from './lib/course-checkout';
 import { LearningSettings } from './learning-settings';
 import { studySlots, studySeats } from "./lib/study-calendar";
@@ -71,10 +77,12 @@ import { whatsappLink, whatsappNumber } from "./lib/contact";
 import { demoTeacherProfile } from "./lib/teacher-profiles";
 import { teachingDisplay, teachingPalette, teachingSubject } from "./lib/teaching-display";
 import { useStoredChoice } from "./lib/use-stored-choice";
+import { buildFinanceLedger } from "./lib/finance-ledger";
 import { createPortal } from "react-dom";
 
 type Row = Record<string, unknown>;
 const StudentDirectoryContext = createContext<ReadonlyMap<string, Row>>(new Map());
+const PortalRoleContext = createContext<Role>("student");
 
 function StudentContact({ row }: { row: Row }) {
   const students = useContext(StudentDirectoryContext);
@@ -92,6 +100,9 @@ type StudentTheme = "sky" | "ocean" | "mint";
 type BookingTarget = { runId: string; sessionId?: string; deliveryMode: "onsite" | "online" };
 type View =
   | "dashboard"
+  | "registrations"
+  | "operations"
+  | "timetables"
   | "calendar"
   | "campus"
   | "students"
@@ -129,6 +140,9 @@ type Detail = {
 } | null;
 
 type PortalData = {
+  workflow: WorkflowData;
+  operations: RecordingOperationsData;
+  timetable?: { slots: Row[]; teacherProfiles: Row[] };
   bookings: Row[];
   studyBookings: Row[];
   terms: Row[];
@@ -182,6 +196,8 @@ type PortalData = {
 };
 
 const emptyData: PortalData = {
+  workflow: emptyWorkflow,
+  operations: emptyRecordingOperations,
   bookings: [],
   studyBookings: [],
   terms: [],
@@ -700,7 +716,7 @@ function scheduleWindow(
   };
 }
 
-export function ManagementPortal({ initialView = "dashboard", initialRole = "admin" }: { initialView?: View; initialRole?: Role }) {
+export function ManagementPortal({ initialView = "dashboard", initialRole = "admin", actor, onLogout }: { initialView?: View; initialRole?: Role; actor: PortalActor; onLogout: () => Promise<void> }) {
   const [data, setData] = useState<PortalData>(emptyData);
   const studentDirectory = useMemo(() => new Map(data.students.map(student => [String(student.id), student])), [data.students]);
   const [view, setView] = useState<View>(initialView);
@@ -720,8 +736,8 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [preferredStudentId, setSelectedStudentId] = useState("");
-  const [preferredTeacherId, setSelectedTeacherId] = useState("");
+  const [preferredStudentId, setSelectedStudentId] = useState(actor.student_id || "");
+  const [preferredTeacherId, setSelectedTeacherId] = useState(actor.teacher_id || "");
   const selectedStudentId = get(data.students.find(item => get(item, "id") === preferredStudentId) ?? data.students[0], "id");
   const selectedTeacherId = get(data.teachers.find(item => get(item, "id") === preferredTeacherId) ?? data.teachers[0], "id");
   const [studentTheme, setStudentTheme] = useStoredChoice<StudentTheme>("student-portal-theme", ["sky", "ocean", "mint"], "sky");
@@ -742,6 +758,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
       const payload = (await response.json()) as PortalData & {
         error?: string;
       };
+      if(response.status===401){await onLogout();return;}
       if (!response.ok || payload.error)
         throw new Error(payload.error || "Unable to load data");
       setData(payload);
@@ -819,6 +836,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
           note?: string;
         };
       };
+      if(response.status===401){await onLogout();return false;}
       if (!response.ok || payload.error)
         throw new Error(payload.error || "Unable to save changes");
       if (payload.attendanceUpdate?.studentBookingId) {
@@ -876,6 +894,22 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
     return () => window.clearTimeout(timer);
   }, [attendanceNeeded, attendanceLoaded]);
 
+  useEffect(() => {
+    if (busy || loading) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const response = await fetch('/api/portal-data', {cache:'no-store',signal:controller.signal});
+        if (response.ok) {
+          const next = await response.json() as PortalData;
+          if (!controller.signal.aborted) setData(current => ({...next,attendance:current.attendance}));
+        }
+      } catch { /* Preserve the current screen while the connection recovers. */ }
+    }, 60000);
+    return () => {controller.abort();window.clearInterval(timer);};
+  }, [busy,loading]);
+
   const filteredStudents = useMemo(
     () =>
       data.students.filter((item) =>
@@ -904,6 +938,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
           get(item, "recipient_id") === selectedTeacherId),
   );
   function changeRole(next: Role) {
+    if (actor.role !== "admin") return;
     setRole(next);
     setDetail(null);
     setView(
@@ -916,7 +951,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
   }
 
   return (
-    <StudentDirectoryContext.Provider value={studentDirectory}><main
+    <StudentDirectoryContext.Provider value={studentDirectory}><PortalRoleContext.Provider value={role}><main
       className={`operation-app role-${role} student-theme-${studentTheme}${view === "calendar" ? " calendar-screen" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
     >
       <aside className="operation-sidebar">
@@ -952,6 +987,8 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
               current={view}
               setView={setView}
               items={[
+                ["registrations", ClipboardCheck, "Admissions & membership"],
+                ["operations", ReceiptText, "Plans & billing"],
                 ["enrollment", UserRoundPlus, "Enrolments"],
                 ["payments", Banknote, "Payments"],
               ]}
@@ -975,6 +1012,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
               current={view}
               setView={setView}
               items={[
+                ["timetables", CalendarDays, "Monthly timetable"],
                 ["courses", LayoutGrid, "Course catalogue"],
                 ["classrooms", DoorOpen, "Campus setup"],
                 ["settings", SlidersHorizontal, "Business rules"],
@@ -1002,6 +1040,8 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
             setView={setView}
             items={[
               ["studentHome", Home, "Home"],
+              ["registrations", ClipboardCheck, "My membership"],
+              ["operations", ReceiptText, "My bills & plans"],
               ["studentPasses", Banknote, "My pass"],
               ["studentCourses", BookOpen, "My courses"],
               ["studentBooking", CalendarDays, "Book a course"],
@@ -1011,7 +1051,8 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
           />
         ) : null}
         <div className="sidebar-bottom">
-          <RoleSwitcher role={role} onChange={changeRole} />
+          {actor.role === "admin" ? <RoleSwitcher role={role} onChange={changeRole} /> : null}
+          <div className="workflow-account"><span>{actor.display_name}</span><button className="quiet-button" type="button" disabled={busy} onClick={() => void onLogout()}>Sign out</button></div>
           <div className="sidebar-footer">
             <School size={17} />
             <span>{get(data.campuses[0], "name") || "Campus"}</span>
@@ -1026,7 +1067,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                 ? "LEARN"
                 : role === "teacher"
                   ? "TEACH"
-                  : ["enrollment", "payments"].includes(view)
+                  : ["registrations", "enrollment", "payments"].includes(view)
                     ? "SELL"
                     : [
                           "dashboard",
@@ -1040,7 +1081,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                       ? "MANAGE"
                       : "SETUP"}
             </p>
-            <h1>{pageTitle(view, t)} <span className="demo-badge">Demo</span></h1>
+            <h1>{pageTitle(view, t)} <span className="demo-badge">Workspace</span></h1>
           </div>
           <div className="header-tools">
             {role === "student" ? (
@@ -1049,7 +1090,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                 onChange={setStudentTheme}
               />
             ) : null}
-            {role !== "admin" ? (
+            {role !== "admin" && actor.role === "admin" ? (
               <PersonaPicker
                 role={role}
                 rows={role === "student" ? data.students : data.teachers}
@@ -1063,7 +1104,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                 }
               />
             ) : null}
-            <label className="search-box">
+            {["students", "teachers"].includes(view) ? <label className="search-box">
               <Search size={16} />
               <input
                 value={search}
@@ -1071,7 +1112,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
                 placeholder={t.search}
                 aria-label={t.search}
               />
-            </label>
+            </label> : null}
             <button
               className="header-icon notification-button"
               onClick={() => setNotificationsOpen(true)}
@@ -1109,6 +1150,9 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
             </button>
           </div>
         </header>
+        {view === "timetables" && role === "admin" ? <MonthlyTimetableWorkspace data={data} busy={busy} run={run} /> : null}
+        {view === "registrations" ? <WorkflowWorkspace data={data} admin={role === "admin"} studentId={selectedStudentId} busy={busy} run={run} /> : null}
+        {view === "operations" ? <RecordingOperationsWorkspace data={data} admin={role === "admin"} studentId={selectedStudentId} busy={busy} run={run} /> : null}
         {view === "dashboard" ? (
           <AdminDashboard
             data={data}
@@ -1203,7 +1247,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
           <EnrollmentManager data={data} run={run} busy={busy} t={t} />
         ) : null}
         {view === "payments" ? (
-          <PaymentWorkspace data={data} run={run} busy={busy} />
+              <PaymentWorkspace data={data} run={run} busy={busy} onNavigate={setView} />
         ) : null}
         {view === "reports" ? <ReportView data={data} t={t} /> : null}
         {view === "settings" ? (
@@ -1223,7 +1267,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
           <StudentHome
             data={data}
             studentId={selectedStudentId}
-            onChooseCourse={id => { setBookingRunId(id); setBookingSessionId(''); setPassPurchaseTarget(null); }}
+            onChooseCourse={id => { setBookingDelivery('onsite'); setBookingRunId(id); setBookingSessionId(''); setPassPurchaseTarget(null); }}
             onBrowse={() => setView('studentBooking')}
             run={run}
             busy={busy}
@@ -1260,27 +1304,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
             }
           />
         ) : null}
-        {view === "studentBooking" ? (
-          <StudentCourseBooking
-            data={data}
-            studentId={selectedStudentId}
-            delivery={bookingDelivery}
-            onDeliveryChange={setBookingDelivery}
-            onChoose={(id) => { setPassPurchaseTarget(null); setBookingSessionId(""); setBookingRunId(id); }}
-          />
-        ) : null}
-        {view === "studentLessonBooking" ? (
-          <StudentLessonBooking
-            data={data}
-            studentId={selectedStudentId}
-            delivery={bookingDelivery}
-            onDeliveryChange={setBookingDelivery}
-            onChoose={(id) => {
-              const session = data.sessions.find(item => get(item, "id") === id);
-              if (session) { setPassPurchaseTarget(null); setBookingSessionId(id); setBookingRunId(get(session, "class_run_id")); }
-            }}
-          />
-        ) : null}
+        {view === "studentBooking" || view === "studentLessonBooking" ? <StudentSelection key={selectedStudentId+bookingDelivery+view} data={data} studentId={selectedStudentId} initialMode={bookingDelivery} busy={busy} run={run} onMembership={()=>setView('registrations')} /> : null}
         {view === "studentStudy" ? <section className="student-portal"><StudentPassSummary data={data} studentId={selectedStudentId} compact onBuy={() => { setPassPurchaseTarget(null); setPassPurchaseOpen(true); }} /><StudyReservations data={data} studentId={selectedStudentId} busy={busy} run={run} /></section> : null}
         {view === "studentCalendar" ? (
           <StudentTimetableV2
@@ -1343,7 +1367,7 @@ export function ManagementPortal({ initialView = "dashboard", initialRole = "adm
         />
       ) : null}
       {loading ? <PortalLoading refreshing={data.courses.length > 0} /> : null}
-    </main></StudentDirectoryContext.Provider>
+    </main></PortalRoleContext.Provider></StudentDirectoryContext.Provider>
   );
 }
 
@@ -1380,6 +1404,9 @@ function PortalLoading({ refreshing }: { refreshing: boolean }) {
 
 function pageTitle(view: View, t: (typeof copy)[Language]) {
   const titles: Record<View, string> = {
+    registrations: "Admissions & membership",
+    operations: "Plans & billing",
+    timetables: "Monthly timetable",
     dashboard: "Dashboard",
     calendar: "Schedule",
     campus: "Campus live",
@@ -1788,7 +1815,7 @@ function StudentHome({
     <StudentPassSummary data={data} studentId={studentId} onBuy={onBuyPass} compact />
     <StudentCourses data={data} studentId={studentId} onOpenClass={onOpenClass} compact />
     <section className="student-course-entry"><div><BookOpen size={26} /><div><strong>Choose your next course</strong><span>Find your subject, teacher and weekly class.</span></div></div><button type="button" className="primary-button" onClick={onBrowse}>Choose a course <ChevronRight size={18} /></button></section>
-    <label className="form-field student-school-choice"><span>School background</span><select aria-label="School background" value={get(student, 'school_type') || 'unspecified'} disabled={busy} onChange={event => void run('updateStudentSchool', { studentId, schoolType: event.target.value })}><option value="unspecified">Choose your school type</option><option value="chinese">Chinese-medium school · SJK(C)</option><option value="malay">Malay-medium school · SK / SMK</option><option value="independent">Independent school · UEC</option></select></label>
+    <p className="student-school-choice">School background: {get(student,'school_system') || get(student,'school_type') || 'Awaiting registration'} · Contact the campus to update your school details.</p>
     <StudentCourseBooking data={data} studentId={studentId} delivery="onsite" onDeliveryChange={() => {}} onChoose={onChooseCourse} recommended />
     <section className="student-learning-section">
       <div className="student-section-title"><div><span>ONLINE DROP-IN</span><h3>Live & coming up{grade ? " · " + grade : ""}</h3></div><BookOpen size={20} /></div>
@@ -1980,7 +2007,7 @@ function OrderList({ rows, busy, onConfirm, onExtra, allowConfirm = false }: { r
     if (column.key === "course_title") return <div>{get(order, "course_title") || get(order, "product_name")}{get(order, "valid_from") && get(order, "valid_until") ? <small style={{ display: "block" }}>{malaysiaDate(order.valid_from)} - {malaysiaDate(order.valid_until)}</small> : null}</div>;
     if (column.key === "total_amount") return amount(order.total_amount);
     if (column.key === "due_at") return get(order, "due_at") ? malaysiaDate(order.due_at) : "-";
-    if (column.key === "status") return <><Status value={get(order, "status")} />{get(order, "status") !== "paid" && get(order, "due_at") && get(order, "due_at") < malaysiaDay() ? <small className="dialog-error">Overdue · place reserved</small> : null}</>;
+    if (column.key === "status") return <><Status value={get(order, "status")} />{get(order, "status") !== "paid" && get(order, "due_at") && get(order, "due_at") < malaysiaDay() ? <small className="dialog-error">Overdue · check seat status in Plans & billing</small> : null}</>;
     if (column.key !== "actions") return get(order, column.key) || "-";
     if (notice) return <span className="order-notice" style={{ display: "block", maxWidth: 240, whiteSpace: "normal" }}>{notice}</span>;
     let billing: { extraNeeded?: number; extraOnsite?: number; extraUnitPrice?: number; payMonthly?: boolean } | undefined;
@@ -2073,7 +2100,7 @@ function PassPurchaseDialog({
     get(booking, "status") === "booked" && get(booking, "delivery_mode") === target?.deliveryMode,
   )).map(session => get(session, "starts_at"));
   const offers = data.passProducts.filter(product => get(product, "status") === "active" && Number(product.onsite_credits) > 0 && Number(product.online_credits) > 0).flatMap(product => {
-    const schedule = courseContext && target ? courseMonthlySchedule(product, selectedSessions.map(session => get(session, "starts_at")), target.deliveryMode, malaysiaDay()) : [];
+    const schedule = courseContext && target ? courseMonthlySchedule(product, selectedSessions.map(session => get(session, "starts_at")), target.deliveryMode, malaysiaDay(), data.operations.rules.monthlyDueDay) : [];
     const extraCount = target?.deliveryMode === "onsite" ? schedule.reduce((sum, month) => sum + month.extra, 0) : 0;
     let windows: ReturnType<typeof passWindows> = [];
     let issue = "";
@@ -2129,12 +2156,12 @@ function PassPurchaseDialog({
           onClick={() => setProductId(offer.id)}
         >
           <Banknote size={21} /><strong>{offer.title}</strong>
-          <p>{target ? offer.payMonthly ? `${amount(Number(offer.product.price))} per month · ${offer.periods} payments` : `${offer.periods} months × ${amount(Number(offer.product.price))}` : `${get(offer.product, "validity_days")} days`}</p>
+          <p>{target ? offer.payMonthly ? `${amount(Number(offer.product.price))} per month · ${offer.periods} payments` : `${offer.periods} months × ${amount(Number(offer.product.price))}` : get(offer.product, "validity_type") === "calendar_month" ? "Calendar month · expires at month end" : `${get(offer.product, "validity_days")} days`}</p>
           <div>{(["onsite", "online", "study"] as const).filter(type => Number(offer.product[type + "_credits"]) > 0).map(type => <span key={type}>{Number(offer.product[type + "_credits"]) * offer.quantity} {type}</span>)}</div>
-          {target ? <small>{offer.payMonthly ? courseContext ? "All course lessons reserved. Pay each month's bill by the 7th." : "Pay for the first month now." : "One payment. Secure your place for the full course."}</small> : null}
+          {target ? <small>{offer.payMonthly ? courseContext ? "Course places are held until each bill’s stated deadline." : "Pay for the first month now." : "One payment. Secure your place for the full course."}</small> : null}
           <b>{amount(offer.total)}{offer.payMonthly ? " now" : ""}</b>
         </button>)}</div> : chosen ? <div className="pass-checkout-step">
-          <section className="pass-checkout-summary"><div><span>{chosen.payMonthly ? "FIRST MONTH" : "TOTAL"}</span><strong>{chosen.title}</strong></div><b>{amount(chosen.total)}</b><p>{(["onsite", "online", "study"] as const).filter(type => Number(chosen.product[type + "_credits"]) > 0).map(type => Number(chosen.product[type + "_credits"]) * chosen.quantity + " " + type).join(" + ")} credits{includeExtraOnsite && chosen.extraCount ? " + selected extra onsite credits" : ""}</p>{chosen.payMonthly ? <p>Remaining payments: {amount(chosen.courseTotal - chosen.total)}. Your full course is reserved. Pay each month by the 7th; no automatic charge.</p> : null}</section>
+          <section className="pass-checkout-summary"><div><span>{chosen.payMonthly ? "FIRST MONTH" : "TOTAL"}</span><strong>{chosen.title}</strong></div><b>{amount(chosen.total)}</b><p>{(["onsite", "online", "study"] as const).filter(type => Number(chosen.product[type + "_credits"]) > 0).map(type => Number(chosen.product[type + "_credits"]) * chosen.quantity + " " + type).join(" + ")} credits{includeExtraOnsite && chosen.extraCount ? " + selected extra onsite credits" : ""}</p>{chosen.payMonthly ? <p>Remaining payments: {amount(chosen.courseTotal - chosen.total)}. Your full course is reserved. Each bill shows its payment deadline. Unpaid places may be released after that date.</p> : null}</section>
           {!courseContext ? <label className="form-field"><span>First pass start date</span><input type="date" min={malaysiaDay()} max={target ? firstDay : undefined} value={startDay} disabled={busy || paidOrder} required onChange={event => setStartDay(event.target.value)} /></label> : null}
           {chosen.issue ? <p className="dialog-error" role="alert">{chosen.issue}</p> : null}
           {courseContext ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Month</th><th>Lessons</th><th>Extra onsite</th><th>Payment due</th><th>Total</th></tr></thead><tbody>{chosen.schedule.map(month => <tr key={month.month}><td>{month.month}</td><td>{month.lessons}</td><td>{target?.deliveryMode === "onsite" ? month.extra : 0}</td><td>{malaysiaDate(month.dueAt)}</td><td>{amount(Number(chosen.product.price) + (includeExtraOnsite && target?.deliveryMode === "onsite" ? month.extra * (extraPrice || 0) : 0))}</td></tr>)}</tbody></table></div> : null}
@@ -2492,9 +2519,9 @@ function CourseBookingDialog({
         <div className="booking-selection-summary"><CalendarDays size={20} /><div><strong>{shownSessions.length ? malaysiaDate(shownSessions[0].starts_at) + (sessionId ? " · " + timePart(shownSessions[0].starts_at) : " - " + malaysiaDate(shownSessions.at(-1)!.starts_at)) : "No upcoming lessons"}</strong><small>{shownSessions.length} reserved lesson{shownSessions.length === 1 ? "" : "s"}</small></div></div>
         {teacher ? <div className="booking-teacher"><Avatar person={teacher} alt={get(teacher, "name")} /><div><strong>{get(teacher, "name")}</strong><p>{get(teacher, "bio")}</p></div></div> : null}
         {error ? <p className="dialog-error" role="alert">{error}</p> : null}
-        {entryRequested ? <section className="booking-already-purchased"><BookOpen size={22} /><div><strong>{ownsOnline ? "Your booked online lesson" : "Join with 1 online credit"}</strong><p>{ownsOnline ? "No additional ticket beyond your existing booking." : `${onlineBalance} online credits available`}</p>{entryState === "link_pending" ? <p>Waiting for the teacher's classroom link. No credit will be used.</p> : entryState === "ended" ? <p>This lesson has ended.</p> : booking && !ownsOnline ? <p>You have an onsite place. Contact the campus to change it.</p> : !ownsOnline && !gradeMatches ? <p>Online drop-in is for your grade.</p> : !ownsOnline ? <small>Confirm to use one ticket. Re-entering this lesson will not use another.</small> : null}</div></section>
+        {entryRequested ? <section className="booking-already-purchased"><BookOpen size={22} /><div><strong>{ownsOnline ? "Your booked online lesson" : "Join with 1 online credit"}</strong><p>{ownsOnline ? "No additional ticket beyond your existing booking." : `${onlineBalance} online credits available`}</p>{entryState === "link_pending" ? <p>Waiting for the teacher’s classroom link. No credit will be used.</p> : entryState === "ended" ? <p>This lesson has ended.</p> : booking && !ownsOnline ? <p>You have an onsite place. Contact the campus to change it.</p> : !ownsOnline && !gradeMatches ? <p>Online drop-in is for your grade.</p> : !ownsOnline ? <small>Confirm to use one ticket. Re-entering this lesson will not use another.</small> : null}</div></section>
         : owns && !awaitingPayment ? <section className="booking-already-purchased"><Check size={20} /><div><strong>{sessionId ? "Lesson booked" : "Already purchased"}</strong><p>Your lessons are in My timetable.</p></div></section>
-        : awaitingPayment ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment confirmation</strong><p>{amount(courseBills.length ? courseBills.reduce((sum, order) => sum + Number(order.total_amount) - Number(order.paid_amount), 0) : Number((pendingPass || enrollment)?.total_amount || 0) - Number((pendingPass || enrollment)?.paid_amount || 0))} remaining · Pay at campus</p><small>Your selected lessons are reserved. Monthly payments are due by the 7th.</small></div></section>
+        : awaitingPayment ? <section className="booking-already-purchased is-unpaid"><ReceiptText size={20} /><div><strong>Awaiting payment confirmation</strong><p>{amount(courseBills.length ? courseBills.reduce((sum, order) => sum + Number(order.total_amount) - Number(order.paid_amount), 0) : Number((pendingPass || enrollment)?.total_amount || 0) - Number((pendingPass || enrollment)?.paid_amount || 0))} remaining · Pay at campus</p><small>Your selected lessons are reserved. Check each bill’s deadline in My bills & plans. Overdue places may be released.</small></div></section>
         : step === 2 ? <section className="booking-delivery" aria-label="Attendance mode">{(["onsite", "online"] as const).map(mode => <button key={mode} type="button" disabled={busy} className={delivery === mode ? "selected" : ""} aria-pressed={delivery === mode} onClick={() => onDeliveryChange(mode)}>{mode === "onsite" ? <Building2 size={20} /> : <BookOpen size={20} />}<strong>{mode === "onsite" ? "Onsite class" : "Live online"}</strong></button>)}</section>
         : <section className="booking-payment-options" aria-label="Payment choice">
           <button className={payment === "balance" ? "selected" : ""} type="button" aria-pressed={payment === "balance"} disabled={busy} onClick={() => setPayment("balance")}>
@@ -6773,6 +6800,7 @@ function CourseRunLibrary({
   t: (typeof copy)[Language];
   onOpenCourse: (id: string) => void;
 }) {
+  const canManage = useContext(PortalRoleContext) === "admin";
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("");
@@ -6843,18 +6871,17 @@ function CourseRunLibrary({
         <div>
           <h2>Courses</h2>
           <p>
-            Each card is one course product. Open it to switch, edit and
-            schedule its named classes.
+            {canManage ? "Open a course to manage its classes and schedule." : "Open a course to view your assigned classes and learners."}
           </p>
         </div>
-        <button
+        {canManage ? <button
           className="primary-button"
           type="button"
           onClick={() => setAdding(!adding)}
         >
           <Plus size={16} />
           Open class
-        </button>
+        </button> : null}
       </div>
       <div className="course-catalogue-filters">
         <label className="course-search">
@@ -7609,9 +7636,10 @@ function EnrollmentManager({
     ),
   ).sort();
   const requested = Math.max(1, Number(people || 1));
-  function chooseMonth(month: number) {
-    const start = `2026-${String(month).padStart(2, "0")}-01`;
-    const end = new Date(2026, month, 0).toISOString().slice(0, 10);
+  function chooseMonth(offset: number) {
+    const [year,month] = malaysiaDay().split('-').map(Number);
+    const start = new Date(Date.UTC(year,month-1+offset,1)).toISOString().slice(0,10);
+    const end = new Date(Date.UTC(year,month+offset,0)).toISOString().slice(0,10);
     setStartAfter(start);
     setEndBefore(end);
   }
@@ -7620,7 +7648,7 @@ function EnrollmentManager({
     nextWeekPattern = weekPattern,
     nextDaypart = daypart,
   ) {
-    if (get(runItem, "status") === "finished") return false;
+    if (get(runItem, "status") !== "open") return false;
     const lessons = lessonsForRun(data, get(runItem, "id"));
     const first = lessons[0];
     const course = data.courses.find(
@@ -7688,14 +7716,14 @@ function EnrollmentManager({
             <span>seats available</span>
           </div>
           <div className="month-shortcuts">
-            <button type="button" onClick={() => chooseMonth(7)}>
-              July
+            <button type="button" onClick={() => chooseMonth(0)}>
+              This month
             </button>
-            <button type="button" onClick={() => chooseMonth(8)}>
-              August
+            <button type="button" onClick={() => chooseMonth(1)}>
+              Next month
             </button>
-            <button type="button" onClick={() => chooseMonth(9)}>
-              September
+            <button type="button" onClick={() => chooseMonth(2)}>
+              In two months
             </button>
             <button
               type="button"
@@ -8443,39 +8471,21 @@ function PaymentWorkspace({
   data,
   run,
   busy,
+  onNavigate,
 }: {
   data: PortalData;
   run: (action: string, values?: Row) => Promise<boolean>;
   busy: boolean;
+  onNavigate: (view: View) => void;
 }) {
   const [statementOpen, setStatementOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("all");
   const [paymentQuery, setPaymentQuery] = useState("");
   const [paymentFrom, setPaymentFrom] = useState("");
   const [paymentTo, setPaymentTo] = useState("");
-  const invoiced = [...data.invoices, ...data.passOrders].reduce(
-    (sum, item) => sum + Number(item.total_amount || 0),
-    0,
-  );
-  const received = [...data.invoices, ...data.passOrders].reduce(
-    (sum, item) => sum + Number(item.paid_amount || 0),
-    0,
-  );
-  const outstanding = Math.max(0, invoiced - received);
-  const allInvoices = data.invoices
-    .map(
-      (item) =>
-        ({
-          ...item,
-          balance: Math.max(
-            0,
-            Number(item.total_amount || 0) - Number(item.paid_amount || 0),
-          ),
-        }) as Row,
-    )
-    .sort(
-      (left, right) => Number(right.balance || 0) - Number(left.balance || 0),
-    );
+  const ledger = buildFinanceLedger(data);
+  const { invoiced, received, outstanding } = ledger.totals;
+  const allInvoices = ledger.invoices;
   const openInvoices = allInvoices.filter(
     (item) => Number(item.balance || 0) > 0,
   );
@@ -8491,9 +8501,9 @@ function PaymentWorkspace({
     const statusMatches =
       paymentStatus === "all" ||
       (paymentStatus === "unpaid"
-        ? balance > 0
+        ? status === "unpaid" || status === "partly_paid" || balance > 0
         : paymentStatus === "paid"
-          ? balance <= 0 || status === "paid"
+          ? status === "paid"
           : status === paymentStatus);
     const dateMatches =
       (!paymentFrom || !issued || issued >= paymentFrom) &&
@@ -8512,8 +8522,8 @@ function PaymentWorkspace({
         <div>
           <h2>Payments</h2>
           <p>
-            Review paid and unpaid invoices, collect balances and preview
-            statements.
+            Review course, package and membership fees together, with actual
+            payment records and outstanding balances.
           </p>
         </div>
         <button
@@ -8530,7 +8540,7 @@ function PaymentWorkspace({
           icon={<ReceiptText size={19} />}
           label="Invoiced"
           value={amount(invoiced)}
-          note="Course and pass orders"
+          note="Courses, packages and membership"
           tone="blue"
         />
         <DashboardMetric
@@ -8544,27 +8554,27 @@ function PaymentWorkspace({
           icon={<Clock3 size={19} />}
           label="Outstanding"
           value={amount(outstanding)}
-          note={`${openInvoices.length} families to follow up`}
+          note={`${new Set(openInvoices.map(item => get(item, "student_id"))).size} students with open balances`}
           tone="amber"
         />
         <DashboardMetric
           icon={<Check size={19} />}
           label="Paid invoices"
-          value={String(
-            data.invoices.filter((item) => get(item, "status") === "paid")
-              .length,
-          )}
+          value={String(ledger.totals.paidInvoices)}
           note="Fully settled"
           tone="purple"
         />
       </div>
       <section className="management-panel payment-ledger-panel">
-        <OrderList rows={data.passOrders} busy={busy} allowConfirm onConfirm={id => run("recordPassPayment", { passOrderId: id, method: "cash" })} onExtra={id => run("addCourseExtra", { passOrderId: id })} />
+        <div className="workflow-actions" style={{ padding: "0 12px" }}>
+          <button type="button" className="primary-button" onClick={() => onNavigate("operations")}>Record course / package payment</button>
+          <button type="button" className="quiet-button" onClick={() => onNavigate("registrations")}>Manage membership payment</button>
+        </div>
         <div className="panel-row">
           <div>
             <h3>Payment records</h3>
             <p className="panel-hint">
-              Filter paid and unpaid invoices, then record received amounts.
+              Filter all fee types. Confirm package and membership payments in their dedicated workspaces.
             </p>
           </div>
           <span className="record-count">{paymentRows.length}</span>
@@ -8624,19 +8634,20 @@ function PaymentWorkspace({
       <section className="management-panel">
         <div className="panel-row">
           <h3>Recent payment activity</h3>
-          <span className="record-count">{data.payments.length}</span>
+          <span className="record-count">{ledger.payments.length}</span>
         </div>
         <Table
           columns={[
             ["received_at", "Received"],
             ["student_name", "Student"],
-            ["course_title", "Course"],
+            ["ledger_label", "Source"],
+            ["course_title", "Fee / course"],
             ["method", "Method"],
             ["amount", "Amount"],
             ["proof_reference", "Proof"],
             ["status", "Status"],
           ]}
-          rows={data.payments}
+          rows={ledger.payments}
           moneyKeys={["amount"]}
           empty="No payments recorded yet."
         />
@@ -8644,7 +8655,7 @@ function PaymentWorkspace({
       {statementOpen ? (
         <CollectionStatementDialog
           openInvoices={openInvoices}
-          payments={data.payments}
+          payments={ledger.payments}
           totals={{ invoiced, received, outstanding }}
           onClose={() => setStatementOpen(false)}
         />
@@ -9006,15 +9017,8 @@ function buildReports(
   const activeStudents = data.students.filter(
     (student) => get(student, "status") === "active",
   ).length;
-  const totalInvoiced = data.invoices.reduce(
-    (sum, invoice) => sum + Number(invoice.total_amount || 0),
-    0,
-  );
-  const totalReceived = data.invoices.reduce(
-    (sum, invoice) => sum + Number(invoice.paid_amount || 0),
-    0,
-  );
-  const outstanding = Math.max(0, totalInvoiced - totalReceived);
+  const ledger = buildFinanceLedger(data);
+  const { invoiced: totalInvoiced, received: totalReceived, outstanding } = ledger.totals;
   const attendanceTaken = data.attendance.filter(
     (item) => get(item, "status") !== "pending",
   );
@@ -9041,18 +9045,12 @@ function buildReports(
     const attended = records.filter((item) =>
       ["present", "late"].includes(get(item, "status")),
     ).length;
-    const balance = data.invoices
+    const balance = ledger.invoices
       .filter((item) => get(item, "student_id") === studentId)
       .reduce(
-        (sum, invoice) =>
-          sum +
-          Math.max(
-            0,
-            Number(invoice.total_amount || 0) -
-              Number(invoice.paid_amount || 0),
-          ),
+        (sum, invoice) => sum + Math.round(invoice.balance * 100),
         0,
-      );
+      ) / 100;
     return {
       ...student,
       courses: enrolled.length,
@@ -9074,13 +9072,7 @@ function buildReports(
         .length,
     };
   });
-  const financeRows = data.invoices.map((invoice) => ({
-    ...invoice,
-    balance: Math.max(
-      0,
-      Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0),
-    ),
-  }));
+  const financeRows = ledger.invoices;
   const resourceRows = data.classrooms.map((room) => {
     const sessions = data.sessions.filter(
       (item) => get(item, "classroom_name") === get(room, "name"),
@@ -9194,7 +9186,7 @@ function buildReports(
         {
           label: "Balances due",
           value: amount(outstanding),
-          note: "Across student invoices",
+          note: "Course, package and membership balances",
           tone: "amber",
           icon: <Banknote size={19} />,
         },
@@ -9309,7 +9301,7 @@ function buildReports(
         {
           label: "Invoiced",
           value: amount(totalInvoiced),
-          note: "Course contracts",
+          note: "Courses, packages and membership",
           tone: "blue",
           icon: <ReceiptText size={19} />,
         },
@@ -9329,8 +9321,7 @@ function buildReports(
         },
         {
           label: "Paid invoices",
-          value: data.invoices.filter((item) => get(item, "status") === "paid")
-            .length,
+          value: ledger.totals.paidInvoices,
           note: "Fully settled",
           tone: "purple",
           icon: <Check size={19} />,
@@ -9338,16 +9329,15 @@ function buildReports(
       ],
       bars: [
         {
-          label: "Cash collected",
+          label: "Payments received",
           value: totalReceived,
           total: Math.max(1, totalInvoiced),
           tone: "#18a786",
         },
         {
           label: "Invoices settled",
-          value: data.invoices.filter((item) => get(item, "status") === "paid")
-            .length,
-          total: Math.max(1, data.invoices.length),
+          value: ledger.totals.paidInvoices,
+          total: Math.max(1, ledger.invoices.length),
           tone: "#3182ce",
         },
         {
@@ -9360,8 +9350,9 @@ function buildReports(
       columns: [
         { key: "invoice_no", label: "Invoice" },
         { key: "student_name", label: "Student" },
-        { key: "course_title", label: "Course" },
-        { key: "total_amount", label: "Original price", money: true },
+        { key: "ledger_label", label: "Source" },
+        { key: "course_title", label: "Fee / course" },
+        { key: "total_amount", label: "Agreed amount", money: true },
         { key: "paid_amount", label: "Received", money: true },
         { key: "balance", label: "Balance", money: true },
         { key: "status", label: "Status", status: true },
@@ -9971,6 +9962,8 @@ function DetailEditAction({ onClick, disabled, label = "Edit", editing = false }
   label?: string;
   editing?: boolean;
 }) {
+  const role = useContext(PortalRoleContext);
+  if (role !== 'admin') return null;
   return <button className="quiet-button detail-edit-action" type="button" disabled={disabled} onClick={onClick}>
     {editing ? <X size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
     {editing ? "Cancel editing" : label}
@@ -14514,11 +14507,11 @@ function EntityDetailSheet({
       : [];
   const studentInvoices =
     detail.kind === "student"
-      ? data.invoices.filter((row) => get(row, "student_id") === detail.id)
+      ? buildFinanceLedger(data).invoices.filter((row) => get(row, "student_id") === detail.id)
       : [];
   const studentPayments =
     detail.kind === "student"
-      ? data.payments.filter((row) => get(row, "student_id") === detail.id)
+      ? buildFinanceLedger(data).payments.filter((row) => get(row, "student_id") === detail.id)
       : [];
   const studentAttendance =
     detail.kind === "student"
@@ -14846,138 +14839,9 @@ function NotificationDrawer({
   );
 }
 
-function StudentCreateDrawer({
-  busy,
-  run,
-  close,
-}: {
-  busy: boolean;
-  run: (action: string, values?: Row) => Promise<boolean>;
-  close: () => void;
-}) {
-  const [error, setError] = useState("");
-  async function createStudent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      const form = new FormData(event.currentTarget);
-      const photo = form.get("avatarFile");
-      const avatarUrl =
-        photo instanceof File && photo.size
-          ? await fileAsDataUrl(photo)
-          : String(form.get("avatarUrl") || "sprite:0");
-      const saved = await run("createStudent", {
-        name: String(form.get("name") || ""),
-        level: String(form.get("level") || ""),
-        phone: String(form.get("phone") || ""),
-        email: String(form.get("email") || ""),
-        avatarUrl,
-      });
-      if (saved) close();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Student could not be added.",
-      );
-    }
-  }
-  return (
-    <div className="sheet-backdrop" role="presentation" onMouseDown={close}>
-      <aside
-        className="detail-sheet detail-student detail-create"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="entity-header">
-          <div className="entity-heading">
-            <div className="entity-icon">
-              <UserRoundPlus size={22} />
-            </div>
-            <div>
-              <span className="sheet-eyebrow">Student</span>
-              <h2>Add student</h2>
-              <p>Create a learner profile and choose a photo.</p>
-            </div>
-          </div>
-        </header>
-        <div className="entity-workspace detail-workspace">
-          <main className="entity-main">
-            <section className="detail-metrics">
-              <DetailMetric label="Profile" value="New learner" />
-              <DetailMetric label="Photo" value="Ready to choose" />
-            </section>
-            <section className="sheet-section">
-              <div className="sheet-section-title">
-                <h3>Student details</h3>
-                <span>New</span>
-              </div>
-              <form
-                className="detail-edit-form create-student-drawer-form"
-                onSubmit={createStudent}
-              >
-                <FormField name="name" label="Student name" required />
-                <FormField
-                  name="level"
-                  label="Level"
-                  defaultValue="Year 7"
-                  required
-                />
-                <FormField name="phone" label="Guardian phone" />
-                <FormField name="email" label="Family email" type="email" />
-                <label className="form-field">
-                  <span>Starter photo</span>
-                  <select name="avatarUrl" defaultValue="sprite:0">
-                    <option value="sprite:0">Generated portrait 1</option>
-                    <option value="sprite:1">Generated portrait 2</option>
-                    <option value="sprite:2">Generated portrait 3</option>
-                    <option value="sprite:3">Generated portrait 4</option>
-                    <option value="sprite:4">Generated portrait 5</option>
-                    <option value="sprite:5">Generated portrait 6</option>
-                    <option value="sprite:6">Generated portrait 7</option>
-                    <option value="sprite:7">Generated portrait 8</option>
-                  </select>
-                </label>
-                <label className="form-field photo-upload">
-                  <span>Replace with photo</span>
-                  <input
-                    name="avatarFile"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                  />
-                </label>
-                {error ? <p className="form-error">{error}</p> : null}
-                <div className="detail-form-actions">
-                  <button
-                    className="quiet-button"
-                    type="button"
-                    onClick={close}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="primary-button"
-                    disabled={busy}
-                    type="submit"
-                  >
-                    <Check size={16} />
-                    Save student
-                  </button>
-                </div>
-              </form>
-            </section>
-          </main>
-          <DetailTabs
-            active="summary"
-            onChange={() => undefined}
-            tabs={[{ id: "summary", label: "Details" }]}
-            onClose={close}
-          />
-        </div>
-      </aside>
-    </div>
-  );
+function StudentCreateDrawer({busy,run,close}:{busy:boolean;run:(action:string,values?:Row)=>Promise<boolean>;close:()=>void}) {
+  const ref=useDialogFocus<HTMLElement>(close,busy);
+  return <div className="detail-backdrop" onMouseDown={()=>{if(!busy)close();}}><aside ref={ref} className="workflow-dialog" role="dialog" aria-modal="true" aria-label="Student registration" onMouseDown={event=>event.stopPropagation()}><header><h2>Student registration</h2><button type="button" className="quiet-button" disabled={busy} onClick={close}>Close</button></header><RegistrationForm busy={busy} onSubmit={async values=>{const ok=await run('submitRegistration',values);if(ok)close();return ok;}}/></aside></div>;
 }
 
 function DetailTabs({
@@ -17067,7 +16931,7 @@ function ResizableDataTableBody({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={get(row, "id")} onClick={() => onRowClick?.(row)}>
+            <tr key={get(row, "ledger_id") || get(row, "id")} onClick={() => onRowClick?.(row)}>
               {columns.map((column) => (
                 <td key={column.key}>{renderCell(row, column)}</td>
               ))}
@@ -17183,6 +17047,8 @@ function InvoiceTable({
             return amount(row[column.key]);
           if (column.key === "status")
             return <Status value={get(row, "status")} />;
+          if (column.key === 'actions' && row.ledger_kind && row.ledger_kind !== 'course')
+            return <span className="muted">{row.ledger_kind === 'membership' ? 'Manage in Admissions' : 'Manage in Plans & billing'}</span>;
           if (column.key === "actions")
             return balance > 0 ? (
               <button

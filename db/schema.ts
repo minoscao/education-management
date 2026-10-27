@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const courses = sqliteTable("courses", {
   id: text("id").primaryKey(),
@@ -550,4 +550,195 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: text("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Admissions and monthly scheduling workflows. SQL migrations also enforce status checks and partial uniqueness.
+
+export const portalAccounts = sqliteTable("portal_accounts", {
+  id: text("id").primaryKey(),
+  email: text("email").unique().notNull(),
+  passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull(),
+  studentId: text("student_id").unique().references(() => students.id),
+  teacherId: text("teacher_id").unique().references(() => teachers.id),
+  disabled: integer("disabled").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const portalSessions = sqliteTable("portal_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  accountId: text("account_id").notNull().references(() => portalAccounts.id, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at").notNull(),
+}, table => [index("portal_sessions_account").on(table.accountId)]);
+
+export const portalLoginAttempts = sqliteTable("portal_login_attempts", {
+  key: text("key").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  blockedUntil: integer("blocked_until").notNull().default(0),
+});
+
+export const studentProfiles = sqliteTable("student_profiles", {
+  studentId: text("student_id").primaryKey().references(() => students.id),
+  gender: text("gender").notNull().default(""),
+  dateOfBirth: text("date_of_birth").notNull().default(""),
+  enrollmentDate: text("enrollment_date").notNull().default(""),
+  studentPhone: text("student_phone").notNull().default(""),
+  preferredLanguage: text("preferred_language").notNull().default(""),
+  schoolName: text("school_name").notNull().default(""),
+  schoolSystem: text("school_system").notNull().default(""),
+  chineseName: text("chinese_name").notNull().default(""),
+  remarks: text("remarks").notNull().default(""),
+});
+
+export const studentGuardians = sqliteTable("student_guardians", {
+  studentId: text("student_id").primaryKey().references(() => students.id),
+  fullName: text("full_name").notNull().default(""),
+  relationship: text("relationship").notNull().default(""),
+  gender: text("gender").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  email: text("email").notNull().default(""),
+  dateOfBirth: text("date_of_birth").notNull().default(""),
+  address1: text("address1").notNull().default(""),
+  address2: text("address2").notNull().default(""),
+  city: text("city").notNull().default(""),
+  postCode: text("post_code").notNull().default(""),
+  state: text("state").notNull().default(""),
+  country: text("country").notNull().default(""),
+});
+
+export const studentRegistrations = sqliteTable("student_registrations", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").unique().notNull().references(() => students.id),
+  status: text("status").notNull(),
+  reviewNote: text("review_note").notNull().default(""),
+  reviewedBy: text("reviewed_by"),
+  submittedAt: text("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  reviewedAt: text("reviewed_at"),
+});
+
+export const registrationHistory = sqliteTable("registration_history", {
+  id: integer("id").primaryKey(),
+  registrationId: text("registration_id").notNull().references(() => studentRegistrations.id),
+  status: text("status").notNull(),
+  note: text("note").notNull().default(""),
+  actorId: text("actor_id").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const studentMemberships = sqliteTable("student_memberships", {
+  studentId: text("student_id").primaryKey().references(() => students.id),
+  status: text("status").notNull().default("pending"),
+  validUntil: text("valid_until"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const membershipInvoices = sqliteTable("membership_invoices", {
+  id: text("id").primaryKey(),
+  requestKey: text("request_key").unique().notNull(),
+  invoiceNo: text("invoice_no").unique().notNull(),
+  studentId: text("student_id").notNull().references(() => students.id),
+  amountCents: integer("amount_cents").notNull(),
+  status: text("status").notNull().default("unpaid"),
+  validUntil: text("valid_until"),
+  note: text("note").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  paidAt: text("paid_at"),
+}, table => [uniqueIndex("membership_one_open_invoice").on(table.studentId).where(sql`${table.status} = 'unpaid'`)]);
+
+export const membershipReceipts = sqliteTable("membership_receipts", {
+  id: text("id").primaryKey(),
+  invoiceId: text("invoice_id").unique().notNull().references(() => membershipInvoices.id),
+  receiptNo: text("receipt_no").unique().notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  method: text("method").notNull(),
+  reference: text("reference").notNull().default(""),
+  receivedBy: text("received_by").notNull(),
+  receivedAt: text("received_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const membershipAccessPasses = sqliteTable("membership_access_passes", {
+  id: text("id").primaryKey(),
+  invoiceId: text("invoice_id").unique().notNull().references(() => membershipInvoices.id),
+  studentId: text("student_id").notNull().references(() => students.id),
+  validUntil: text("valid_until"),
+  issuedAt: text("issued_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const onboardingTasks = sqliteTable("onboarding_tasks", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").notNull().references(() => students.id),
+  title: text("title").notNull(),
+  scheduledAt: text("scheduled_at").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  note: text("note").notNull().default(""),
+});
+
+export const notificationOutbox = sqliteTable("notification_outbox", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").notNull().references(() => students.id),
+  recipient: text("recipient").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const teacherProfiles = sqliteTable("teacher_profiles", {
+  teacherId: text("teacher_id").primaryKey().references(() => teachers.id),
+  reviewStatus: text("review_status").notNull().default("candidate"),
+  nickname: text("nickname").notNull().default(""),
+  gender: text("gender").notNull().default(""),
+  dateOfBirth: text("date_of_birth").notNull().default(""),
+  qualifications: text("qualifications").notNull().default(""),
+  university: text("university").notNull().default(""),
+  experienceYears: integer("experience_years").notNull().default(0),
+  allowedCourses: text("allowed_courses").notNull().default("[]"),
+  availability: text("availability").notNull().default("[]"),
+  reviewNote: text("review_note").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const classroomTimeSlots = sqliteTable("classroom_time_slots", {
+  id: text("id").primaryKey(),
+  classroomId: text("classroom_id").notNull().references(() => classrooms.id),
+  weekday: integer("weekday").notNull(),
+  startsTime: text("starts_time").notNull(),
+  endsTime: text("ends_time").notNull(),
+  kind: text("kind").notNull(),
+  courseId: text("course_id").references(() => courseCatalogs.id),
+  teacherId: text("teacher_id").references(() => teachers.id),
+  languageId: text("language_id").references(() => teachingLanguages.id),
+  label: text("label").notNull().default(""),
+  capacity: integer("capacity").notNull().default(16),
+  deliveryMode: text("delivery_mode").notNull().default("onsite"),
+  active: integer("active").notNull().default(1),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const timetableBatches = sqliteTable("timetable_batches", {
+  id: text("id").primaryKey(),
+  requestKey: text("request_key").unique().notNull(),
+  classroomId: text("classroom_id").notNull().references(() => classrooms.id),
+  startsMonth: text("starts_month").notNull(),
+  repeats: integer("repeats").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const timetableBatchRuns = sqliteTable("timetable_batch_runs", {
+  batchId: text("batch_id").notNull().references(() => timetableBatches.id),
+  runId: text("run_id").unique().notNull().references(() => classRuns.id),
+}, table => [primaryKey({ columns: [table.batchId, table.runId] })]);
+
+export const timetableConflictGuards = sqliteTable("timetable_conflict_guards", {
+  id: text("id").primaryKey(),
+  valid: integer("valid").notNull(),
+});
+
+export const courseRequirements = sqliteTable("course_requirements", {
+  courseId: text("course_id").primaryKey().references(() => courseCatalogs.id),
+  prerequisites: text("prerequisites").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

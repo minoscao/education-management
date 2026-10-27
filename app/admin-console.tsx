@@ -114,6 +114,21 @@ const emptyData: Record<TableKey, Row[]> = {
   studentBookings: [],
 };
 
+async function fetchAdminData() {
+  const response = await fetch("/api/admin-data", { cache: "no-store" });
+  const payload = (await response.json()) as Partial<Record<TableKey, Row[]>> & { error?: string };
+  if (payload.error) return null;
+  return {
+    courses: payload.courses ?? [],
+    sessions: payload.sessions ?? [],
+    classrooms: payload.classrooms ?? [],
+    students: payload.students ?? [],
+    teachers: payload.teachers ?? [],
+    teacherBookings: payload.teacherBookings ?? [],
+    studentBookings: payload.studentBookings ?? [],
+  };
+}
+
 export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
   const [data, setData] = useState<Record<TableKey, Row[]>>(emptyData);
   const [loading, setLoading] = useState(true);
@@ -123,37 +138,32 @@ export function AdminConsole({ activeTable }: { activeTable: TableKey }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [savingCell, setSavingCell] = useState<string | null>(null);
+  const [previousTable, setPreviousTable] = useState(activeTable);
 
   const columns = tableColumns[activeTable];
 
-  useEffect(() => {
+  if (previousTable !== activeTable) {
+    setPreviousTable(activeTable);
     setSort({ column: tableColumns[activeTable][0], direction: "asc" });
     setFilter("");
     setVisibleColumns(Object.fromEntries(tableColumns[activeTable].map((column) => [column, true])));
     setMenuOpen(false);
     setEditingCell(null);
-  }, [activeTable]);
+  }
 
   async function loadData() {
-    setLoading(true);
-    const response = await fetch("/api/admin-data", { cache: "no-store" });
-    const payload = (await response.json()) as Partial<Record<TableKey, Row[]>> & { error?: string };
-    if (!payload.error) {
-      setData({
-        courses: payload.courses ?? [],
-        sessions: payload.sessions ?? [],
-        classrooms: payload.classrooms ?? [],
-        students: payload.students ?? [],
-        teachers: payload.teachers ?? [],
-        teacherBookings: payload.teacherBookings ?? [],
-        studentBookings: payload.studentBookings ?? [],
-      });
-    }
+    const next = await fetchAdminData();
+    if (next) setData(next);
     setLoading(false);
   }
 
   useEffect(() => {
-    loadData().catch(() => setLoading(false));
+    let active = true;
+    fetchAdminData()
+      .then((next) => { if (active && next) setData(next); })
+      .catch(() => undefined)
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const visible = columns.filter((column) => visibleColumns[column] !== false);

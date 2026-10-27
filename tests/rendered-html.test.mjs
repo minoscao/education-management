@@ -9,7 +9,7 @@ test("student home shares lesson cards, attendance mode and compact balance view
   const css = await readProjectFile("app/student-learning.css");
   const page = await readProjectFile("app/student/page.tsx");
   const home = portal.slice(portal.indexOf('function StudentHome('), portal.indexOf('function activePasses('));
-  assert.match(page, /initialRole="student"/);
+  assert.match(page, /<PortalEntry student/);
   assert.match(home, /<StudentCourses[^>]+compact/);
   assert.match(home, /<StudentPassSummary[^>]+compact/);
   assert.match(home, /<StudentLessonCard/);
@@ -44,7 +44,7 @@ test("renders the teaching portal from the home route", async () => {
     readProjectFile("app/management-portal.tsx"),
   ]);
 
-  assert.match(page, /<ManagementPortal\s+initialView=/);
+  assert.match(page, /<PortalEntry\s+initialView=/);
   assert.match(portal, /export function ManagementPortal/);
   assert.match(portal, /fetch\("\/api\/portal-data"/);
   assert.match(portal, /setData\(/);

@@ -1,0 +1,514 @@
+.recording-operations {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.recording-operations h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.recording-operations h4 {
+  margin: 12px 0 8px;
+  font-size: 15px;
+}
+.recording-operations p {
+  overflow-wrap: anywhere;
+}
+.recording-operations fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.recording-operations .form-field {
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+}
+.recording-operations .form-field small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #526d79;
+}
+.recording-operations .form-field input,
+.recording-operations .form-field select,
+.recording-operations .form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.4;
+}
+.recording-operations .form-field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.recording-operations button {
+  min-height: 40px;
+}
+.recording-operations :focus-visible,
+.recording-receipt :focus-visible {
+  outline: 3px solid #168aa5;
+  outline-offset: 3px;
+}
+.recording-operations fieldset:disabled {
+  opacity: 0.7;
+}
+.recording-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: end;
+  margin: 14px 0;
+}
+.recording-toolbar > .form-field {
+  width: min(100%, 360px);
+}
+.recording-toolbar > p {
+  margin: 10px 0;
+}
+.recording-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.recording-summary > div {
+  border: 1px solid #d8e5e9;
+  border-radius: 10px;
+  background: #f5fafb;
+  padding: 16px 20px;
+}
+.recording-summary span {
+  display: block;
+  font-size: 13px;
+  color: #526d79;
+}
+.recording-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.recording-billing-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.8fr);
+  gap: 20px;
+  align-items: start;
+}
+.recording-operations .recording-order-list {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  max-height: 820px;
+  overflow: auto;
+}
+.recording-order-list > button {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  border: 1px solid #d3e1e6;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+  color: #234856;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.recording-order-list > button.active {
+  background: #e9f5f7;
+  border-color: #237d91;
+  box-shadow: inset 3px 0 #237d91;
+}
+.recording-order-list small {
+  color: #526d79;
+}
+.recording-list-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.recording-list-top > strong {
+  font-size: 18px;
+}
+.recording-badge {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 4px 9px;
+  background: #eef2f4;
+  color: #465f6a;
+  text-transform: capitalize;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.recording-badge-paid,
+.recording-badge-confirmed,
+.recording-badge-arranged {
+  background: #e8f5ec;
+  color: #226142;
+}
+.recording-badge-unpaid,
+.recording-badge-held,
+.recording-badge-pending {
+  background: #fff1d8;
+  color: #77500e;
+}
+.recording-badge-released,
+.recording-badge-cancelled {
+  background: #faeaea;
+  color: #973b3b;
+}
+.recording-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+.recording-section-heading p {
+  margin: 4px 0 12px;
+  color: #526d79;
+}
+.recording-note {
+  white-space: pre-wrap;
+  background: #f5f8fa;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.recording-form-section {
+  border-top: 1px solid #d8e5e9;
+  padding: 18px 0 0;
+  margin: 20px 0 8px;
+}
+.recording-form-section > summary,
+.recording-payment-instructions > summary {
+  font-weight: 700;
+  cursor: pointer;
+  padding: 5px 0;
+}
+.recording-form-section > form {
+  margin-top: 14px;
+}
+.recording-form-section .primary-button,
+.recording-form-section .recording-danger,
+.recording-operations form > fieldset > .primary-button {
+  margin-top: 12px;
+}
+.recording-credit-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.recording-price-preview {
+  border: 1px solid #cbdfe5;
+  border-radius: 8px;
+  background: #f1f8fa;
+  padding: 16px;
+  margin: 16px 0;
+}
+.recording-price-preview h4 {
+  margin-top: 0;
+}
+.recording-price-preview dl {
+  margin: 0;
+}
+.recording-price-preview dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 0;
+}
+.recording-price-preview dt {
+  text-transform: capitalize;
+}
+.recording-price-preview dt small {
+  display: block;
+  text-transform: none;
+  font-weight: 400;
+  color: #526d79;
+  margin-top: 3px;
+}
+.recording-future-plan {
+  border-top: 1px solid #d8e5e9;
+  border-bottom: 1px solid #d8e5e9;
+  padding: 8px 0;
+  margin: 18px 0;
+}
+.recording-price-preview dd {
+  margin: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recording-price-preview .recording-suggested-total {
+  border-top: 1px solid #c3dce4;
+  margin-top: 8px;
+  padding-top: 12px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.recording-price-adjustment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+.recording-price-adjustment p {
+  flex: 1 1 220px;
+}
+.recording-check {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+  font-size: 13px;
+  margin: 16px 0;
+  cursor: pointer;
+}
+.recording-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 2px 0 0;
+  accent-color: #155e70;
+}
+.recording-danger {
+  border: 1px solid #b64c48;
+  border-radius: 6px;
+  background: #fff;
+  color: #983a36;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recording-danger:hover {
+  background: #fff3f2;
+}
+.recording-empty {
+  padding: 28px 18px;
+  border: 1px dashed #cbdce3;
+  border-radius: 8px;
+  background: #f8fbfc;
+  text-align: center;
+  color: #526d79;
+}
+.recording-hold-groups {
+  display: grid;
+  gap: 6px;
+}
+.recording-lesson-list {
+  display: grid;
+}
+.recording-lesson-list > article {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid #e0e9ed;
+}
+.recording-lesson-list > article:first-child {
+  border-top: 0;
+}
+.recording-lesson-list > article > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.recording-lesson-list small,
+.recording-lesson-list time {
+  color: #526d79;
+  font-size: 12px;
+}
+.recording-lesson-list time {
+  white-space: nowrap;
+}
+.recording-two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.recording-learner-picker {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #d8e5e9;
+  border-radius: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.recording-learner-picker .recording-check {
+  margin: 12px 0;
+}
+.recording-mode-change {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  background: #edf6f8;
+  border-radius: 6px;
+  text-transform: capitalize;
+}
+.recording-receipt {
+  color: #17384a;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.recording-receipt-brand {
+  display: grid;
+  gap: 4px;
+  border-bottom: 2px solid #216b7b;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+.recording-receipt-brand strong {
+  font-size: 24px;
+}
+.recording-receipt-brand span {
+  font-size: 12px;
+  color: #526d79;
+}
+.recording-receipt h2 {
+  font-size: 22px;
+}
+.recording-receipt dd,
+.recording-receipt p {
+  overflow-wrap: anywhere;
+}
+.recording-receipt-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 14px;
+}
+.recording-receipt-table th,
+.recording-receipt-table td {
+  text-align: left;
+  padding: 12px 8px;
+  border-bottom: 1px solid #d8e5e9;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.recording-receipt-table th:last-child,
+.recording-receipt-table td:last-child {
+  width: 130px;
+  text-align: right;
+  white-space: nowrap;
+}
+.recording-document-close {
+  float: right;
+  margin: 0 0 12px 12px;
+}
+.recording-receipt-table small {
+  display: block;
+  color: #526d79;
+  margin-top: 4px;
+}
+.recording-receipt-table .recording-total {
+  background: #eff6f8;
+  font-weight: 700;
+}
+.recording-receipt-payment {
+  margin-top: 20px;
+  border-top: 1px solid #d8e5e9;
+  padding-top: 14px;
+  font-size: 13px;
+}
+.recording-receipt-payment p {
+  white-space: pre-wrap;
+}
+@media (max-width: 1050px) {
+  .recording-two-columns {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 750px) {
+  .recording-billing-grid {
+    grid-template-columns: 1fr;
+  }
+  .recording-operations .recording-order-list {
+    max-height: 340px;
+  }
+  .recording-summary {
+    gap: 8px;
+  }
+  .recording-summary > div {
+    padding: 12px;
+  }
+  .recording-summary strong {
+    font-size: 20px;
+  }
+  .recording-summary span {
+    font-size: 11px;
+  }
+  .recording-credit-fields {
+    gap: 8px;
+  }
+  .recording-lesson-list > article {
+    flex-wrap: wrap;
+  }
+  .recording-section-heading {
+    flex-wrap: wrap;
+  }
+  .recording-document-overlay {
+    padding: 12px;
+  }
+  .recording-document-overlay > .workflow-card {
+    padding: 20px;
+  }
+}
+@media (max-width: 430px) {
+  .recording-summary {
+    grid-template-columns: 1fr;
+  }
+  .recording-summary > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .recording-summary strong {
+    margin: 0;
+  }
+  .recording-summary span {
+    font-size: 12px;
+  }
+}
+@media print {
+  .recording-document-overlay {
+    overflow: visible !important;
+  }
+  .recording-receipt {
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  .recording-receipt .workflow-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .recording-receipt-table {
+    break-inside: avoid;
+  }
+  .recording-receipt .no-print {
+    display: none !important;
+  }
+}
